@@ -1,6 +1,9 @@
 import { getSessions } from "@/app/actions/session"
 import { CalendarPage } from "@/components/admin/calendar-page"
 
+// Force dynamic rendering since we use auth() which requires headers
+export const dynamic = 'force-dynamic'
+
 export default async function Page() {
   const { data: sessions, error } = await getSessions()
 
