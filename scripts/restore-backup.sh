@@ -43,17 +43,56 @@ echo "Backup file: $BACKUP_FILE"
 echo "Target: [connection string hidden]"
 echo ""
 
-# Restore the backup
-psql -d "$CONNECTION_STRING" -f "$BACKUP_FILE" 2>&1 | grep -v "already exists" | grep -v "constraint" || true
+# Test connection first
+echo "Testing database connection..."
+if ! psql -d "$CONNECTION_STRING" -c "SELECT 1;" > /dev/null 2>&1; then
+  echo ""
+  echo "ERROR: Failed to connect to database!"
+  echo ""
+  echo "Common issues:"
+  echo "1. Project reference in connection string is incorrect"
+  echo "2. Database password is incorrect"
+  echo "3. Connection string format is wrong"
+  echo ""
+  echo "To get the correct connection string:"
+  echo "1. Go to your Supabase project dashboard"
+  echo "2. Settings → Database → Connection string"
+  echo "3. Use the 'Session pooler' connection string"
+  echo "4. Replace [YOUR-PASSWORD] with your actual database password"
+  echo ""
+  echo "Connection string format should be:"
+  echo "postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres"
+  exit 1
+fi
 
+echo "Connection successful!"
 echo ""
-echo "Restoration complete!"
-echo ""
-echo "Note: Some 'already exists' errors are expected and can be ignored."
-echo ""
-echo "Next steps:"
-echo "1. Verify your data in Supabase Studio"
-echo "2. Update environment variables in Vercel"
-echo "3. Deploy Edge Functions to the new project"
-echo "4. Test your application"
+
+# Restore the backup
+echo "Restoring backup (this may take a few minutes)..."
+RESTORE_OUTPUT=$(psql -d "$CONNECTION_STRING" -f "$BACKUP_FILE" 2>&1)
+RESTORE_EXIT_CODE=$?
+
+# Filter out expected errors but keep actual failures
+echo "$RESTORE_OUTPUT" | grep -v "already exists" | grep -v "constraint" | grep -v "already exists" || true
+
+if [ $RESTORE_EXIT_CODE -eq 0 ]; then
+  echo ""
+  echo "✓ Restoration completed successfully!"
+  echo ""
+  echo "Note: Some 'already exists' errors are expected and can be ignored."
+  echo ""
+  echo "Next steps:"
+  echo "1. Verify your data in Supabase Studio (Table Editor)"
+  echo "2. Update environment variables in Vercel"
+  echo "3. Deploy Edge Functions to the new project"
+  echo "4. Test your application"
+else
+  echo ""
+  echo "⚠ Restoration completed with some errors (exit code: $RESTORE_EXIT_CODE)"
+  echo "Check the output above for details."
+  echo "Many errors are expected (like 'already exists') and can be ignored."
+  echo ""
+  echo "Verify your data in Supabase Studio to confirm restoration was successful."
+fi
 
