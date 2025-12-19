@@ -93,4 +93,8 @@ export type Sauna = typeof saunas.$inferSelect;
 export type SessionTemplate = typeof sessionTemplates.$inferSelect;
 export type SessionSchedule = typeof sessionSchedules.$inferSelect;
 export type SessionInstance = typeof sessionInstances.$inferSelect;
-export type Booking = typeof bookings.$inferSelect; 
+export type Booking = typeof bookings.$inferSelect;
+
+// Insert types (for creating new records)
+export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
+export type NewSessionSchedule = typeof sessionSchedules.$inferInsert; 

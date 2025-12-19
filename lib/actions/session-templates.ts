@@ -1,5 +1,5 @@
 import { revalidatePath } from 'next/cache';
-import { sessionTemplates, sessionSchedules, NewSessionTemplate, NewSessionSchedule } from '@/lib/db/schema';
+import { NewSessionTemplate, NewSessionSchedule } from '../src/lib/db/schema';
 import { createClient } from '@supabase/supabase-js';
 
 // These should come from your environment variables
@@ -17,7 +17,7 @@ export async function saveSessionTemplate(
   if (!userId) {
     return { success: false, error: 'User not authenticated.' };
   }
-  if (!templateData.name || templateData.duration <= 0) {
+  if (!templateData.name || !templateData.durationMinutes || templateData.durationMinutes <= 0) {
     return { success: false, error: 'Invalid template data.' };
   }
 
@@ -45,9 +45,9 @@ export async function saveSessionTemplate(
         .from('session_templates')
         .update({
           ...templateData,
-          userId,
-          organizationId: orgId,
-          updatedAt: new Date(),
+          created_by: userId,
+          organization_id: orgId,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', templateIdToUpdate)
         .select('id')
@@ -63,8 +63,8 @@ export async function saveSessionTemplate(
         .from('session_templates')
         .insert({
           ...templateData,
-          userId,
-          organizationId: orgId,
+          created_by: userId,
+          organization_id: orgId,
         })
         .select('id')
         .single();
@@ -81,7 +81,7 @@ export async function saveSessionTemplate(
     const { error: deleteError } = await supabase
       .from('session_schedules')
       .delete()
-      .eq('sessionTemplateId', savedTemplateId);
+      .eq('session_template_id', savedTemplateId);
 
     if (deleteError) {
       console.error('Error deleting existing schedules:', deleteError);
@@ -91,7 +91,8 @@ export async function saveSessionTemplate(
     if (schedulesData && schedulesData.length > 0) {
       const schedulesToInsert = schedulesData.map((schedule) => ({
         ...schedule,
-        sessionTemplateId: savedTemplateId,
+        session_template_id: savedTemplateId,
+        organization_id: orgId,
       }));
       
       const { error: insertError } = await supabase
