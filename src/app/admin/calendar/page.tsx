@@ -5,12 +5,18 @@ import { CalendarPage } from "@/components/admin/calendar-page"
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
+  console.log("[admin/calendar] Page component rendering...")
   const { data: sessions, error } = await getSessions()
+  console.log("[admin/calendar] getSessions result:", { hasData: !!sessions, dataLength: sessions?.length, error })
 
   if (error) {
+    console.error("[admin/calendar] Error loading sessions:", error)
     return (
       <div className="flex-1 space-y-4 p-8 pt-6">
         <div className="text-red-500">Error loading sessions: {error}</div>
+        <div className="text-sm text-gray-500 mt-2">
+          Check server logs for more details. Error code and details should be logged in the terminal.
+        </div>
       </div>
     )
   }

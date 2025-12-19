@@ -28,6 +28,12 @@ if (typeof window === 'undefined') {
     if (!('Accept' in headersObj)) {
       headersObj['Accept'] = 'application/json';
     }
+    // Add Prefer header for Supabase queries (needed for .maybeSingle() and .single())
+    if (url.includes('supabase.co') || url.includes('localhost:54321')) {
+      if (!('Prefer' in headersObj)) {
+        headersObj['Prefer'] = 'return=representation';
+      }
+    }
     init.headers = headersObj;
     console.log(`[GlobalFetch] ${init.method || 'GET'} ${url} | Headers:`, headersObj);
     return originalFetch(input, init);
@@ -556,15 +562,69 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
 
     const supabase = createSupabaseClient()
 
-    // Get the user's clerk_users record
+    // Get the user's clerk_users record (use maybeSingle to handle missing users)
+    console.log("Querying clerk_users for userId:", userId)
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
       .select("id")
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
-    if (userError || !userData) {
-      return { data: null, error: "Failed to get clerk user" }
+    console.log("Clerk user query result:", { 
+      hasData: !!userData, 
+      data: userData,
+      hasError: !!userError,
+      error: userError ? {
+        message: userError.message,
+        details: userError.details,
+        hint: userError.hint,
+        code: userError.code
+      } : null
+    })
+
+    if (userError) {
+      console.error("Error getting clerk user - full details:", {
+        error: userError,
+        message: userError.message,
+        details: userError.details,
+        hint: userError.hint,
+        code: userError.code,
+        userId: userId
+      })
+      return { data: null, error: `Failed to get clerk user: ${userError.message} (code: ${userError.code})` }
+    }
+
+    // If user doesn't exist, create them
+    let clerkUserId: string
+    if (!userData) {
+      console.log("Clerk user not found in database, creating...")
+      const user = await currentUser()
+      if (!user) {
+        return { data: null, error: "Failed to get user info from Clerk" }
+      }
+
+      const email = user.emailAddresses[0]?.emailAddress
+      if (!email) {
+        return { data: null, error: "User email not found" }
+      }
+
+      const ensureResult = await ensureClerkUser(
+        userId,
+        email,
+        user.firstName,
+        user.lastName
+      )
+
+      if (!ensureResult.success || !ensureResult.id) {
+        console.error("Failed to ensure clerk user:", ensureResult.error)
+        return { data: null, error: `Failed to create clerk user: ${ensureResult.error}` }
+      }
+
+      clerkUserId = ensureResult.id
+      console.log("Created clerk user with ID:", clerkUserId)
+    } else {
+      clerkUserId = userData.id
+      console.log("Found existing clerk user with ID:", clerkUserId)
     }
 
     // Get templates
@@ -587,7 +647,7 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
         created_by,
         organization_id
       `)
-      .eq('created_by', userData.id)
+      .eq('created_by', clerkUserId)
       .order("created_at", { ascending: false })
 
     if (templatesError) {
