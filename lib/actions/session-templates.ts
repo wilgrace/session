@@ -1,5 +1,5 @@
 import { revalidatePath } from 'next/cache';
-import { NewSessionTemplate, NewSessionSchedule } from '../src/lib/db/schema';
+import { NewSessionTemplate, NewSessionSchedule } from '@/lib/db/schema';
 import { createClient } from '@supabase/supabase-js';
 
 // These should come from your environment variables
