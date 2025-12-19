@@ -272,6 +272,299 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Production Deployment
+
+### Prerequisites
+
+Before deploying to production, ensure you have:
+
+1. **A Supabase project** (create one at https://supabase.com/dashboard)
+2. **A Vercel account** (sign up at https://vercel.com)
+3. **Supabase CLI installed and logged in**: `supabase login`
+
+### Step 1: Set Up Production Supabase Project
+
+1. **Create a new project** at https://supabase.com/dashboard
+2. **Run database migrations**:
+   ```bash
+   # Link to your production project
+   supabase link --project-ref [YOUR-PROJECT-REF]
+   
+   # Push migrations
+   supabase db push
+   ```
+   
+   **To get your project reference:**
+   - It's in your project URL: `https://[PROJECT-REF].supabase.co`
+   - Or in Settings → General → Reference ID
+
+3. **Deploy Edge Functions**:
+   ```bash
+   # Deploy all functions
+   supabase functions deploy generate-instances
+   supabase functions deploy clerk-webhook-handler
+   
+   # Or use the automated script
+   ./scripts/deploy-functions.sh [YOUR-PROJECT-REF]
+   ```
+
+### Step 2: Get Production API Keys
+
+1. In your Supabase project dashboard, go to **Settings** → **API**
+2. Copy these values:
+   - **Project URL** (e.g., `https://xxxxx.supabase.co`)
+   - **anon/public key** (for `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+   - **service_role key** (secret) (for `SUPABASE_SERVICE_ROLE_KEY`)
+
+### Step 3: Deploy to Vercel
+
+#### Option 1: Connect GitHub Repository (Recommended)
+
+1. Go to https://vercel.com/dashboard
+2. Click **Add New** → **Project**
+3. Import your GitHub repository
+4. Configure environment variables (see Step 4)
+5. Click **Deploy**
+
+#### Option 2: Deploy via CLI
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+
+# For production deployment
+vercel --prod
+```
+
+### Step 4: Configure Vercel Environment Variables
+
+1. Go to your Vercel project → **Settings** → **Environment Variables**
+2. Add these variables for **Production**, **Preview**, and **Development**:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://[YOUR-PROJECT-REF].supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
+   SUPABASE_SERVICE_ROLE_KEY=[YOUR-SERVICE-ROLE-KEY]
+   ```
+
+3. **Important**: Make sure to set these for all environments (Production, Preview, Development)
+4. After adding variables, **redeploy** your application
+
+### Step 5: Verify Deployment
+
+1. **Check Vercel deployment logs**:
+   - Go to your project → **Deployments** → Click on latest deployment → **Build Logs**
+   - Ensure build completes without errors
+
+2. **Test your application**:
+   - Visit your Vercel deployment URL
+   - Test the booking calendar at `/booking`
+   - Verify sessions load correctly
+   - Test creating a booking
+
+3. **Check Edge Functions**:
+   - Go to Supabase Dashboard → **Edge Functions**
+   - Verify `generate-instances` and `clerk-webhook-handler` are deployed
+   - Check function logs for any errors
+
+## Viewing Production Database
+
+### Supabase Studio (Web UI)
+
+The easiest way to view your production database:
+
+1. Go to https://supabase.com/dashboard
+2. Select your project
+3. Click **Table Editor** in the left sidebar
+4. Browse tables and data
+5. Use **SQL Editor** to run custom queries
+
+### Using psql (Command Line)
+
+Connect directly to your production database:
+
+```bash
+# Get connection string from Supabase Dashboard:
+# Settings → Database → Connection string → Session mode
+
+psql "postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-[REGION].pooler.supabase.com:5432/postgres"
+```
+
+**Example queries:**
+
+```sql
+-- View all session templates
+SELECT * FROM session_templates;
+
+-- Count instances by status
+SELECT status, COUNT(*) FROM session_instances GROUP BY status;
+
+-- View recent bookings
+SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10;
+```
+
+### Using Supabase CLI
+
+```bash
+# Link to your project (if not already linked)
+supabase link --project-ref [YOUR-PROJECT-REF]
+
+# Open Supabase Studio in browser
+supabase studio
+
+# Or run SQL queries directly
+supabase db execute "SELECT * FROM session_templates;"
+```
+
+## Production Troubleshooting
+
+### "TypeError: fetch failed" on Production
+
+**Problem**: The app can't connect to Supabase.
+
+**Solutions**:
+
+1. **Check environment variables in Vercel**:
+   - Go to Vercel → Settings → Environment Variables
+   - Verify `NEXT_PUBLIC_SUPABASE_URL` is set correctly (should be `https://...`, not `http://localhost`)
+   - Ensure all three Supabase variables are set for Production environment
+
+2. **Verify Supabase project is active**:
+   - Check Supabase Dashboard → ensure project is not paused
+   - If paused, you'll need to migrate to a new project (see Migration Guide)
+
+3. **Check Vercel deployment logs**:
+   - Look for errors during build or runtime
+   - Check if environment variables are being read correctly
+
+4. **Test connection manually**:
+   ```bash
+   curl https://[YOUR-PROJECT-REF].supabase.co/rest/v1/ \
+     -H "apikey: [YOUR-ANON-KEY]"
+   ```
+
+### Edge Functions Not Working
+
+**Problem**: `generate-instances` or `clerk-webhook-handler` fail.
+
+**Solutions**:
+
+1. **Verify functions are deployed**:
+   ```bash
+   supabase functions list
+   ```
+
+2. **Check function logs**:
+   - Supabase Dashboard → Edge Functions → Select function → Logs
+   - Look for error messages
+
+3. **Redeploy functions**:
+   ```bash
+   supabase functions deploy generate-instances
+   supabase functions deploy clerk-webhook-handler
+   ```
+
+4. **Test function manually**:
+   ```bash
+   curl -X POST https://[PROJECT-REF].supabase.co/functions/v1/generate-instances \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer [SERVICE-ROLE-KEY]" \
+     -d '{"template_id_to_process": "[TEMPLATE-ID]"}'
+   ```
+
+### Database Connection Issues
+
+**Problem**: Can't connect to production database.
+
+**Solutions**:
+
+1. **Check connection string format**:
+   - Use the **Session mode** connection string (not Transaction mode)
+   - Format: `postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-[REGION].pooler.supabase.com:5432/postgres`
+   - Ensure region matches your project (e.g., `aws-1-eu-west-1`)
+
+2. **Verify database password**:
+   - Reset password in Supabase Dashboard → Settings → Database → Reset database password
+
+3. **Check IP allowlist** (if enabled):
+   - Supabase Dashboard → Settings → Database → Connection pooling
+   - Ensure your IP is allowed (or disable IP restrictions for testing)
+
+### Build Failures on Vercel
+
+**Problem**: Vercel deployment fails during build.
+
+**Solutions**:
+
+1. **Check build logs**:
+   - Vercel Dashboard → Deployments → Failed deployment → Build Logs
+   - Look for specific error messages
+
+2. **Common issues**:
+   - **Type errors**: Fix TypeScript errors locally first
+   - **Missing dependencies**: Ensure all dependencies are in `package.json`
+   - **Environment variables**: Some build-time variables might be missing
+
+3. **Test build locally**:
+   ```bash
+   npm run build
+   ```
+   - Fix any errors before pushing to Vercel
+
+### Instances Not Generating in Production
+
+**Problem**: Session instances aren't being created automatically.
+
+**Solutions**:
+
+1. **Check Edge Function logs**:
+   - Supabase Dashboard → Edge Functions → `generate-instances` → Logs
+   - Look for errors or warnings
+
+2. **Verify function is being triggered**:
+   - Check if `getPublicSessions` is calling the function
+   - Look for logs in Vercel function logs
+
+3. **Manually trigger generation**:
+   ```bash
+   curl -X POST https://[PROJECT-REF].supabase.co/functions/v1/generate-instances \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer [SERVICE-ROLE-KEY]" \
+     -d '{"template_id_to_process": "[TEMPLATE-ID]"}'
+   ```
+
+4. **Check template configuration**:
+   - Verify `is_recurring = true`
+   - Ensure `session_schedules` exist for the template
+   - Check `recurrence_end_date` isn't in the past
+
+### Performance Issues
+
+**Problem**: Slow page loads or timeouts.
+
+**Solutions**:
+
+1. **Check database query performance**:
+   - Supabase Dashboard → Database → Query Performance
+   - Look for slow queries
+   - Add indexes if needed
+
+2. **Review Edge Function execution time**:
+   - Supabase Dashboard → Edge Functions → Logs
+   - Check execution duration
+   - Optimize if functions take too long
+
+3. **Check Vercel function logs**:
+   - Vercel Dashboard → Functions → Logs
+   - Look for timeout errors
+
+4. **Enable connection pooling**:
+   - Use Supabase connection pooler (Session mode)
+   - Reduces connection overhead
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
