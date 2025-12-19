@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils"
 import { Home, Calendar, Users, Settings, ChevronDown, ChevronRight, ExternalLink, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { UserButton } from "@clerk/nextjs"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -50,9 +49,6 @@ export function Sidebar() {
           <ExternalLink className="mr-3 h-5 w-5" />
           Booking Page
         </Link>
-        <div className="flex items-center mt-4 px-3">
-          <UserButton afterSignOutUrl="/sign-in" />
-        </div>
       </div>
     </div>
   )
