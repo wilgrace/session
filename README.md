@@ -277,3 +277,17 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Migrating Supabase Projects
+
+If you need to migrate from a paused Supabase project to a new one, see:
+
+- **[MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)** - Complete step-by-step migration guide
+- **[MIGRATION_CHECKLIST.md](./MIGRATION_CHECKLIST.md)** - Quick checklist for migration
+
+The guide covers:
+- Downloading backups from paused projects
+- Restoring to a new Supabase project
+- Deploying Edge Functions
+- Updating environment variables
+- Troubleshooting common issues
