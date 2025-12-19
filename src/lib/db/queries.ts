@@ -1,7 +1,6 @@
 import { and, eq, gte, lte } from 'drizzle-orm';
 import { supabase } from '@/lib/supabase';
 import { bookings, clerkUsers, sessionInstances, sessionTemplates } from './schema';
-import { SessionInstanceWithBookings } from './schema';
 
 export type SessionInstanceWithBookings = typeof sessionInstances.$inferSelect & {
   template: typeof sessionTemplates.$inferSelect;
