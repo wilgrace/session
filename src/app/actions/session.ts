@@ -1257,42 +1257,75 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       }
     }
 
-    // Find the existing instance for this time slot
+    // Find or create the instance for this time slot
     const startTime = new Date(params.start_time)
     const endTime = new Date(startTime.getTime() + template.duration_minutes * 60000)
 
-    const { data: instance, error: instanceError } = await supabase
+    let instance;
+    const { data: existingInstance, error: instanceError } = await supabase
       .from("session_instances")
       .select("id")
       .eq("template_id", params.session_template_id)
       .eq("start_time", startTime.toISOString())
       .eq("end_time", endTime.toISOString())
       .eq("status", "scheduled")
-      .single()
+      .maybeSingle()
 
+    // Handle errors
     if (instanceError) {
-      console.error("Error finding session instance:", {
-        error: instanceError,
-        message: instanceError.message,
-        details: instanceError.details,
-        hint: instanceError.hint,
-        code: instanceError.code
-      });
-      return {
-        success: false,
-        error: "Failed to find session instance"
+      // If it's a "no rows" error (PGRST116), we'll create the instance below
+      // Otherwise, it's a real error
+      if (instanceError.code !== 'PGRST116') {
+        console.error("Error finding session instance:", {
+          error: instanceError,
+          message: instanceError.message,
+          details: instanceError.details,
+          hint: instanceError.hint,
+          code: instanceError.code
+        });
+        return {
+          success: false,
+          error: "Failed to find session instance"
+        }
       }
     }
 
-    if (!instance) {
-      console.error("No instance found for template at time:", params.start_time);
-      return {
-        success: false,
-        error: "This session time slot is not available"
-      }
-    }
+    // If instance doesn't exist (no data and either no error or PGRST116), create it
+    if (!existingInstance) {
+      console.log("Instance not found, creating new instance for this time slot");
+      
+      const { data: newInstance, error: createError } = await supabase
+        .from("session_instances")
+        .insert({
+          template_id: params.session_template_id,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          status: "scheduled",
+          organization_id: template.organization_id
+        })
+        .select("id")
+        .single()
 
-    console.log("Found existing instance:", instance);
+      if (createError || !newInstance) {
+        console.error("Error creating session instance:", {
+          error: createError,
+          message: createError?.message,
+          details: createError?.details,
+          hint: createError?.hint,
+          code: createError?.code
+        });
+        return {
+          success: false,
+          error: "Failed to create session instance"
+        }
+      }
+
+      instance = newInstance;
+      console.log("Created new instance:", instance);
+    } else {
+      instance = existingInstance;
+      console.log("Found existing instance:", instance);
+    }
 
     // Create a new Supabase client for the booking to ensure fresh auth state
     const bookingSupabase = createSupabaseClient();
@@ -1412,6 +1445,63 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
     if (schedulesError) {
       console.error("Schedules query error:", schedulesError)
       return { data: null, error: `Schedules query failed: ${schedulesError.message}` }
+    }
+
+    // Check for recurring templates that need instances generated
+    // Generate instances for templates that have no instances in the next 3 months
+    const threeMonthsFromNow = new Date()
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+    
+    const recurringTemplates = templates.filter(t => t.is_recurring)
+    const templatesNeedingGeneration: string[] = []
+    
+    for (const template of recurringTemplates) {
+      // Check if this template has any instances in the next 3 months
+      const { data: existingInstances, error: checkError } = await supabase
+        .from("session_instances")
+        .select("id")
+        .eq("template_id", template.id)
+        .gte("start_time", new Date().toISOString())
+        .lte("start_time", threeMonthsFromNow.toISOString())
+        .limit(1)
+
+      // If no instances found and template has schedules, mark for generation
+      if (!checkError && (!existingInstances || existingInstances.length === 0)) {
+        const hasSchedules = schedules?.some(s => s.session_template_id === template.id)
+        if (hasSchedules) {
+          templatesNeedingGeneration.push(template.id)
+        }
+      }
+    }
+
+    // Trigger generation for templates that need it (in parallel, but don't wait)
+    if (templatesNeedingGeneration.length > 0) {
+      console.log(`Triggering instance generation for ${templatesNeedingGeneration.length} templates...`)
+      const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
+      const functionUrl = IS_DEVELOPMENT 
+        ? 'http://localhost:54321/functions/v1/generate-instances'
+        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
+
+      // Trigger generation for all templates in parallel (fire and forget)
+      Promise.all(
+        templatesNeedingGeneration.map(templateId =>
+          fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE_KEY
+            },
+            body: JSON.stringify({ template_id_to_process: templateId }),
+          }).catch(err => {
+            console.error(`Error triggering instance generation for template ${templateId}:`, err)
+          })
+        )
+      ).catch(err => {
+        console.error('Error triggering instance generation:', err)
+      })
+      
+      // Wait a short time for generation to start (instances may be available on next fetch)
+      await new Promise(resolve => setTimeout(resolve, 500))
     }
 
     // Get instances for all templates with their bookings
@@ -1916,5 +2006,55 @@ export async function getUserBookings(userId: string) {
     // ... existing code ...
   } catch (error) {
     // ... existing code ...
+  }
+}
+
+export async function checkInBooking(bookingId: string) {
+  try {
+    console.log("\n=== checkInBooking Debug ===");
+    console.log("Input parameters:", { bookingId });
+
+    const supabase = createSupabaseClient();
+
+    // First verify the booking exists and get current status
+    const { data: existingBooking, error: checkError } = await supabase
+      .from('bookings')
+      .select('id, status')
+      .eq('id', bookingId)
+      .single();
+
+    if (checkError) {
+      console.error("Error checking booking:", checkError);
+      return { success: false, error: `Failed to verify booking: ${checkError.message}` };
+    }
+
+    if (!existingBooking) {
+      console.error("No booking found with ID:", bookingId);
+      return { success: false, error: "Booking not found" };
+    }
+
+    // Toggle between confirmed and completed status
+    const newStatus = existingBooking.status === 'confirmed' ? 'completed' : 'confirmed';
+
+    // Update the booking status
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating booking:', error);
+      return { success: false, error: `Failed to update booking: ${error.message}` };
+    }
+
+    return { success: true, data: booking };
+  } catch (error: any) {
+    console.error('Error in checkInBooking:', error);
+    return { success: false, error: error.message };
   }
 } 

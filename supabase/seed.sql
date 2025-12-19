@@ -190,5 +190,4 @@ INSERT INTO public.clerk_users (
   is_super_admin
 )
 VALUES 
-  ('4e376853-0880-4b3e-a669-edf561e116dc', 'user_2xe2sYKNiaAGyXeJsG3CrCvk7vZ', 'wil.grace@gmail..com', 'Wil', 'Grace', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', true),
-  ('33333333-3333-3333-3333-333333333333', 'user_3def456', 'user@example.com', 'Regular', 'User', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', false);
+  ('4e376853-0880-4b3e-a669-edf561e116dc', 'user_2y6VL5FKMg9cwwlLvbjg01GPlxT', 'wil.grace@gmail..com', 'Wil', 'Grace', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', true)
