@@ -49,13 +49,19 @@ function createSupabaseClient() {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const keyType = supabaseServiceKey && supabaseServiceKey.startsWith('eyJhbGciOiJIUzI1Ni') ? 'service_role' : 'unknown';
   console.log(`[Supabase] Creating client with key type: ${keyType}`);
+  console.log(`[Supabase] URL: ${supabaseUrl ? (supabaseUrl.includes('localhost') ? 'localhost (local)' : 'production') : 'MISSING'}`);
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("Missing Supabase environment variables:", {
-      hasUrl: !!supabaseUrl,
-      hasServiceKey: !!supabaseServiceKey
-    });
-    throw new Error("Missing required Supabase environment variables");
+    const errorMsg = `Missing Supabase environment variables. URL: ${supabaseUrl ? 'set' : 'MISSING'}, ServiceKey: ${supabaseServiceKey ? 'set' : 'MISSING'}`;
+    console.error("[Supabase] " + errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  // Check if URL is localhost in production
+  if (supabaseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+    const errorMsg = 'Supabase URL is pointing to localhost in production. Please set NEXT_PUBLIC_SUPABASE_URL to your production Supabase URL in Vercel environment variables.';
+    console.error("[Supabase] " + errorMsg);
+    throw new Error(errorMsg);
   }
 
   return createClient(supabaseUrl, supabaseServiceKey, {
@@ -1413,7 +1419,15 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
     if (templatesError) {
       console.error("Templates query error:", templatesError)
-      return { data: null, error: `Templates query failed: ${templatesError.message}` }
+      // Provide more helpful error message
+      const errorMessage = templatesError.message || 'Unknown error';
+      if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
+        return { 
+          data: null, 
+          error: `Cannot connect to Supabase. Please check that NEXT_PUBLIC_SUPABASE_URL is set correctly in your Vercel environment variables. Error: ${errorMessage}` 
+        }
+      }
+      return { data: null, error: `Templates query failed: ${errorMessage}` }
     }
 
     console.log("Templates query successful:", { 
