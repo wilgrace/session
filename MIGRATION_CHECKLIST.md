@@ -71,3 +71,4 @@ Use this checklist to ensure you complete all steps for migrating to a new Supab
 - [ ] Check database connection in Supabase Studio
 - [ ] Review MIGRATION_GUIDE.md troubleshooting section
 
+

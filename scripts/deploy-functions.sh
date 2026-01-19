@@ -63,3 +63,4 @@ echo "1. Update environment variables in Vercel"
 echo "2. Redeploy your Vercel application"
 echo "3. Test your application"
 
+

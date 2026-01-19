@@ -33,17 +33,22 @@ export function useIsSuperAdmin(): boolean {
   return useHasRole(ROLES.SUPER_ADMIN);
 }
 
-export async function requireRole(requiredRole: UserRole | UserRole[]): Promise<void> {
-  const hasRequiredRole = await useHasRole(requiredRole);
-  if (!hasRequiredRole) {
-    throw new Error('Unauthorized: Insufficient permissions');
+// For server-side role checking, use these non-hook functions
+// that accept the role directly instead of calling hooks
+export function checkRole(userRole: UserRole | null, requiredRole: UserRole | UserRole[]): boolean {
+  if (!userRole) return false;
+
+  if (Array.isArray(requiredRole)) {
+    return requiredRole.includes(userRole);
   }
+
+  return userRole === requiredRole;
 }
 
-export async function requireAdmin(): Promise<void> {
-  await requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN]);
+export function checkIsAdmin(userRole: UserRole | null): boolean {
+  return checkRole(userRole, [ROLES.SUPER_ADMIN, ROLES.ADMIN]);
 }
 
-export async function requireSuperAdmin(): Promise<void> {
-  await requireRole(ROLES.SUPER_ADMIN);
+export function checkIsSuperAdmin(userRole: UserRole | null): boolean {
+  return checkRole(userRole, ROLES.SUPER_ADMIN);
 } 
