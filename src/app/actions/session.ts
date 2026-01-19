@@ -29,7 +29,7 @@ if (typeof window === 'undefined') {
       headersObj['Accept'] = 'application/json';
     }
     // Add Prefer header for Supabase queries (needed for .maybeSingle() and .single())
-    if (url.includes('supabase.co') || url.includes('localhost:54321')) {
+    if (url.includes('supabase.co') || url.includes('localhost:54321') || url.includes('127.0.0.1:54321')) {
       if (!('Prefer' in headersObj)) {
         headersObj['Prefer'] = 'return=representation';
       }
@@ -48,13 +48,8 @@ async function getAuthenticatedUser() {
   return userId
 }
 
-// Singleton Supabase client for server-side operations
-let _supabaseClient: ReturnType<typeof createClient> | null = null;
-
-// Helper function to create Supabase client (cached singleton)
+// Helper function to create Supabase client
 function createSupabaseClient() {
-  if (_supabaseClient) return _supabaseClient;
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -67,14 +62,17 @@ function createSupabaseClient() {
     throw new Error('Supabase URL is pointing to localhost in production');
   }
 
-  _supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
+  return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      headers: {
+        'Prefer': 'return=representation'
+      }
     }
   });
-
-  return _supabaseClient;
 }
 
 interface CreateSessionTemplateParams {

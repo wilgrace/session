@@ -3,18 +3,28 @@
 import { createClient } from "@supabase/supabase-js"
 import { clerkClient } from "@clerk/clerk-sdk-node"
 
-async function getClerkUser(clerkUserId: string) {
-  try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
+// Helper function to create Supabase client with proper headers
+function createSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        headers: {
+          'Prefer': 'return=representation'
         }
       }
-    )
+    }
+  )
+}
+
+async function getClerkUser(clerkUserId: string) {
+  try {
+    const supabase = createSupabaseClient()
 
     const { data, error } = await supabase
       .from("clerk_users")
@@ -57,16 +67,7 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
       };
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabase = createSupabaseClient()
 
     // First check if the user already exists
     const { data: existingUser, error: checkError } = await supabase
@@ -98,7 +99,6 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
         error: "No valid organization_id found for clerk user creation."
       }
     }
-
 
     // Create new user
     const { data, error } = await supabase
@@ -134,7 +134,6 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
 
 async function ensureClerkUser(clerkUserId: string, email: string, firstName: string | null, lastName: string | null) {
   try {
-
     if (!email) {
       return {
         success: false,
@@ -142,16 +141,7 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
       }
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabase = createSupabaseClient()
 
     // First try to get the user
     const { data: existingUser, error: getError } = await supabase
@@ -174,7 +164,6 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
         id: existingUser.id
       }
     }
-
 
     // If user doesn't exist, create them
     // Use the default organization ID from environment variables
@@ -205,7 +194,6 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
       }
     }
 
-
     return {
       success: true,
       id: newUser.id
@@ -220,16 +208,7 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
 
 async function listClerkUsers() {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabase = createSupabaseClient()
 
     const { data, error } = await supabase
       .from("clerk_users")
@@ -256,16 +235,7 @@ async function listClerkUsers() {
 
 async function updateClerkUser(id: string, data: any) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabase = createSupabaseClient()
 
     // If role is being updated, update it in Clerk first
     if (data.role) {
@@ -319,16 +289,7 @@ async function updateClerkUser(id: string, data: any) {
 
 async function deleteClerkUser(id: string) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabase = createSupabaseClient()
 
     // First get the user's Clerk ID
     const { data: userData, error: userError } = await supabase
@@ -387,16 +348,7 @@ async function deleteClerkUser(id: string) {
 
 async function syncOrganizationToClerk(organizationId: string) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabase = createSupabaseClient()
 
     // Get organization details from Supabase
     const { data: org, error: orgError } = await supabase
@@ -468,10 +420,9 @@ async function syncOrganizationToClerk(organizationId: string) {
 
 async function handleOrganizationChange(organizationId: string) {
   try {
-    const result = await syncOrganizationToClerk(organizationId)
-    if (!result.success) {
-    }
+    await syncOrganizationToClerk(organizationId)
   } catch (error) {
+    // Silently fail - this is a fire-and-forget operation
   }
 }
 
@@ -484,4 +435,4 @@ export {
   deleteClerkUser,
   syncOrganizationToClerk,
   handleOrganizationChange
-} 
+}
