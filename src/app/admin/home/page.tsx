@@ -28,10 +28,7 @@ export default function AdminHomePage() {
   const sessions = rawSessions ?? [];
 
   // Debug logging
-  console.log('Selected day:', selectedDay);
-  console.log('Sessions returned:', sessions);
   sessions.forEach((s) => {
-    console.log('Session:', s.id, 'startTime:', (s as any).start_time, 'as date:', (s as any).start_time ? new Date((s as any).start_time) : null);
   });
 
   // Map: date string -> array of sessions (group by local day)
@@ -67,7 +64,6 @@ export default function AdminHomePage() {
   const handleCheckIn = useCallback(() => {
     // Refresh sessions data after check-in
     // The actual check-in is handled inside BookingsList component
-    console.log('Check-in completed, refreshing data...');
   }, []);
 
   return (

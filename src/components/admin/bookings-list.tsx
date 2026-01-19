@@ -32,7 +32,6 @@ export function BookingsList({ bookings, onSelect, onCheckIn }: {
   const [localBookings, setLocalBookings] = useState<Booking[]>(bookings);
 
   // Debug: log bookings prop
-  console.log('BookingsList bookings:', bookings);
 
   // Update local state when props change
   useEffect(() => {

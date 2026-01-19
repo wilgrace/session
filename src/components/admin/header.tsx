@@ -14,7 +14,6 @@ export function Header() {
   // Get the current page title based on the pathname
   const getPageTitle = () => {
     // Add console.log to debug pathname
-    console.log('Current pathname:', pathname)
     
     if (pathname === "/admin/home") return "Home"
     if (pathname === "/admin/users") return "Users"

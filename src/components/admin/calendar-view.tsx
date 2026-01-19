@@ -98,7 +98,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
 
   // Debug logging for sessions data
   useEffect(() => {
-    console.log("Sessions data:", sessions)
   }, [sessions])
 
   // Handle responsive view
@@ -257,15 +256,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
   events.sort((a, b) => a.start.getTime() - b.start.getTime());
 
   // Debug logging
-  console.log("Final events array:", {
-    count: events.length,
-    events: events.map(e => ({
-      id: e.id,
-      title: e.title,
-      start: e.start.toISOString(),
-      end: e.end.toISOString()
-    }))
-  });
 
   // Calculate time range based on sessions
   const calculateTimeRange = () => {

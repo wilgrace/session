@@ -85,23 +85,19 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
         })
 
         if (!result.success || !result.id) {
-          console.error("Error creating guest user:", result.error)
           throw new Error(`Failed to create guest user: ${result.error}`)
         }
 
         clerkUserId = result.id
-        console.log("Created or found guest user with ID:", clerkUserId)
       } else {
         // For logged in users, get or create their clerk user record
         const clerkUserResult = await getClerkUser(user.id)
 
         if (!clerkUserResult.success) {
-          console.error("Error getting clerk user:", clerkUserResult.error)
           throw new Error(`Failed to get clerk user: ${clerkUserResult.error}`)
         }
 
         if (!clerkUserResult.id) {
-          console.log("No clerk user found, creating one...")
           // Create the user using the server action
           const result = await createClerkUser({
             email: user.emailAddresses[0].emailAddress,
@@ -110,15 +106,12 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
           })
 
           if (!result.success || !result.id) {
-            console.error("Error creating clerk user:", result.error)
             throw new Error(`Failed to create clerk user: ${result.error}`)
           }
 
           clerkUserId = result.id
-          console.log("Created new clerk user with ID:", clerkUserId)
         } else {
           clerkUserId = clerkUserResult.id
-          console.log("Using existing clerk user with ID:", clerkUserId)
         }
       }
 
@@ -175,7 +168,6 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
         router.push(`/booking/confirmation?bookingId=${result.id}`)
       }
     } catch (error: any) {
-      console.error("Error managing booking:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to manage booking. Please try again.",
@@ -191,9 +183,7 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
 
     setLoading(true)
     try {
-      console.log("Attempting to cancel booking:", bookingId);
       const result = await deleteBooking(bookingId)
-      console.log("Delete booking result:", result);
 
       if (!result.success) {
         throw new Error(result.error || "Failed to cancel booking")
@@ -218,7 +208,6 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
         description: "Booking cancelled successfully",
       })
     } catch (error: any) {
-      console.error("Error cancelling booking:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to cancel booking. Please try again.",

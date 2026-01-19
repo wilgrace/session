@@ -7,7 +7,7 @@ import { mapDayStringToInt, mapIntToDayString } from "@/lib/day-utils"
 import { ensureClerkUser } from "./clerk"
 import { Booking } from "@/types/booking"
 
-// Global fetch wrapper for logging and Accept header enforcement (server-side only)
+// Global fetch wrapper for Accept header enforcement (server-side only)
 if (typeof window === 'undefined') {
   const originalFetch = global.fetch;
   global.fetch = async (input, init = {}) => {
@@ -35,7 +35,6 @@ if (typeof window === 'undefined') {
       }
     }
     init.headers = headersObj;
-    console.log(`[GlobalFetch] ${init.method || 'GET'} ${url} | Headers:`, headersObj);
     return originalFetch(input, init);
   };
 }
@@ -49,33 +48,33 @@ async function getAuthenticatedUser() {
   return userId
 }
 
-// Helper function to create Supabase client
+// Singleton Supabase client for server-side operations
+let _supabaseClient: ReturnType<typeof createClient> | null = null;
+
+// Helper function to create Supabase client (cached singleton)
 function createSupabaseClient() {
+  if (_supabaseClient) return _supabaseClient;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const keyType = supabaseServiceKey && supabaseServiceKey.startsWith('eyJhbGciOiJIUzI1Ni') ? 'service_role' : 'unknown';
-  console.log(`[Supabase] Creating client with key type: ${keyType}`);
-  console.log(`[Supabase] URL: ${supabaseUrl ? (supabaseUrl.includes('localhost') ? 'localhost (local)' : 'production') : 'MISSING'}`);
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    const errorMsg = `Missing Supabase environment variables. URL: ${supabaseUrl ? 'set' : 'MISSING'}, ServiceKey: ${supabaseServiceKey ? 'set' : 'MISSING'}`;
-    console.error("[Supabase] " + errorMsg);
-    throw new Error(errorMsg);
+    throw new Error(`Missing Supabase environment variables`);
   }
 
   // Check if URL is localhost in production
   if (supabaseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
-    const errorMsg = 'Supabase URL is pointing to localhost in production. Please set NEXT_PUBLIC_SUPABASE_URL to your production Supabase URL in Vercel environment variables.';
-    console.error("[Supabase] " + errorMsg);
-    throw new Error(errorMsg);
+    throw new Error('Supabase URL is pointing to localhost in production');
   }
 
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  _supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
     }
   });
+
+  return _supabaseClient;
 }
 
 interface CreateSessionTemplateParams {
@@ -244,7 +243,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return {
         success: false,
         error: "Failed to get clerk user"
@@ -252,7 +250,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return {
         success: false,
         error: "No clerk user found"
@@ -280,7 +277,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
       .single()
 
     if (error) {
-      console.error("Error creating session template:", error)
       return {
         success: false,
         error: error.message
@@ -304,7 +300,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         })));
 
       if (scheduleError) {
-        console.error("Error creating schedules:", scheduleError);
         return {
           success: false,
           error: `Failed to create schedules: ${scheduleError.message}`
@@ -318,7 +313,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         .eq("session_template_id", data.id);
 
       if (verifyError || !createdSchedules || createdSchedules.length === 0) {
-        console.error("Failed to verify schedule creation:", verifyError);
         return {
           success: false,
           error: "Failed to verify schedule creation"
@@ -344,10 +338,8 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         });
 
         if (!response.ok) {
-          console.error("Error calling edge function:", await response.text());
         }
       } catch (error) {
-        console.error("Error triggering instance generation:", error);
         // Don't fail the template creation if instance generation fails
       }
     }
@@ -357,7 +349,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
       id: data.id
     }
   } catch (error) {
-    console.error("Error in createSessionTemplate:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -378,12 +369,10 @@ export async function createSessionInstance(params: CreateSessionInstanceParams)
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -425,7 +414,6 @@ export async function createSessionInstance(params: CreateSessionInstanceParams)
       .single()
 
     if (error) {
-      console.error("Error creating session instance:", error)
       return {
         success: false,
         error: error.message
@@ -444,7 +432,6 @@ export async function createSessionInstance(params: CreateSessionInstanceParams)
       id: data.id
     }
   } catch (error) {
-    console.error("Error in createSessionInstance:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -465,12 +452,10 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -508,7 +493,6 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
     const schedulePromises = params.days.map(async (day) => {
       const dayOfWeek = mapDayStringToInt(day)
 
-      console.log(`Creating schedule for day ${day} (day_of_week: ${dayOfWeek})`);
 
       const { data, error } = await supabase
         .from("session_schedules")
@@ -522,11 +506,9 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
         .single()
 
       if (error) {
-        console.error(`Error creating schedule for day ${day}:`, error);
         throw error
       }
 
-      console.log(`Successfully created schedule:`, data);
       return data
     })
 
@@ -540,11 +522,9 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
     }
 
     // Log the created schedules
-    console.log("Created schedules:", results);
 
     return { success: true }
   } catch (error) {
-    console.error("Error in createSessionSchedule:", error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error occurred" 
@@ -553,7 +533,6 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
 }
 
 export async function getSessions(): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
-  console.log("=== getSessions CALLED ===");
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -563,41 +542,20 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
     const supabase = createSupabaseClient()
 
     // Get the user's clerk_users record (use maybeSingle to handle missing users)
-    console.log("Querying clerk_users for userId:", userId)
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
       .select("id")
       .eq("clerk_user_id", userId)
       .maybeSingle()
 
-    console.log("Clerk user query result:", { 
-      hasData: !!userData, 
-      data: userData,
-      hasError: !!userError,
-      error: userError ? {
-        message: userError.message,
-        details: userError.details,
-        hint: userError.hint,
-        code: userError.code
-      } : null
-    })
 
     if (userError) {
-      console.error("Error getting clerk user - full details:", {
-        error: userError,
-        message: userError.message,
-        details: userError.details,
-        hint: userError.hint,
-        code: userError.code,
-        userId: userId
-      })
       return { data: null, error: `Failed to get clerk user: ${userError.message} (code: ${userError.code})` }
     }
 
     // If user doesn't exist, create them
     let clerkUserId: string
     if (!userData) {
-      console.log("Clerk user not found in database, creating...")
       const user = await currentUser()
       if (!user) {
         return { data: null, error: "Failed to get user info from Clerk" }
@@ -616,15 +574,12 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
       )
 
       if (!ensureResult.success || !ensureResult.id) {
-        console.error("Failed to ensure clerk user:", ensureResult.error)
         return { data: null, error: `Failed to create clerk user: ${ensureResult.error}` }
       }
 
       clerkUserId = ensureResult.id
-      console.log("Created clerk user with ID:", clerkUserId)
     } else {
       clerkUserId = userData.id
-      console.log("Found existing clerk user with ID:", clerkUserId)
     }
 
     // Get templates
@@ -775,7 +730,6 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
 
     return { data: transformedData, error: null }
   } catch (error) {
-    console.error("Error in getSessions:", error)
     return { 
       data: null, 
       error: error instanceof Error ? error.message : "Unknown error occurred" 
@@ -784,25 +738,19 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
 }
 
 export async function getSession(id: string): Promise<{ data: SessionTemplate | null; error: string | null }> {
-  console.log("=== getSession CALLED ===");
-  console.log("Session ID:", id);
   
   try {
     // Check authentication state
     const { userId } = await auth();
-    console.log("Authenticated user ID:", userId);
 
     if (!userId) {
-      console.error("No user ID from Clerk");
       return { 
         data: null, 
         error: "No user ID from Clerk" 
       };
     }
 
-    console.log("Creating Supabase client...");
     const supabase = createSupabaseClient();
-    console.log("Supabase client created successfully");
 
     // Get the user's clerk_users record
     const { data: userData, error: userError } = await supabase
@@ -811,25 +759,15 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
       .eq("clerk_user_id", userId)
       .single();
 
-    console.log("Clerk user lookup result:", { 
-      userData,
-      userError,
-      query: {
-        clerk_user_id: userId
-      }
-    });
 
     if (userError) {
-      console.error("Error getting clerk user:", userError);
       return { data: null, error: "Failed to get clerk user" };
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId);
       return { data: null, error: "No clerk user found" };
     }
 
-    console.log("Querying session template...");
     // First get the template
     const { data: template, error: templateError } = await supabase
       .from("session_templates")
@@ -854,12 +792,10 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
       .single();
 
     if (templateError) {
-      console.error("Error fetching template:", templateError);
       return { data: null, error: templateError.message };
     }
 
     if (!template) {
-      console.log("No template found with ID:", id);
       return { data: null, error: "Template not found" };
     }
 
@@ -878,7 +814,6 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
       .eq("session_template_id", id);
 
     if (schedulesError) {
-      console.error("Error fetching schedules:", schedulesError);
       return { data: null, error: schedulesError.message };
     }
 
@@ -895,7 +830,6 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
       .eq("template_id", id);
 
     if (instancesError) {
-      console.error("Error fetching instances:", instancesError);
       return { data: null, error: instancesError.message };
     }
 
@@ -933,14 +867,8 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
       })) || []
     };
 
-    console.log("Transformed data:", transformedData);
     return { data: transformedData, error: null };
   } catch (error) {
-    console.error("Error in getSession:", {
-      error,
-      message: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined
-    });
     return { 
       data: null, 
       error: error instanceof Error ? error.message : "Unknown error occurred" 
@@ -961,12 +889,10 @@ export async function updateSessionTemplate(params: UpdateSessionTemplateParams)
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -996,12 +922,10 @@ export async function updateSessionTemplate(params: UpdateSessionTemplateParams)
       .eq("id", id)
 
     if (error) {
-      console.error("Error updating session template:", error)
       return { success: false, error: error.message }
     }
     return { success: true }
   } catch (error) {
-    console.error("Error in updateSessionTemplate:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
   }
 }
@@ -1019,12 +943,10 @@ export async function deleteSessionSchedules(templateId: string): Promise<Delete
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -1049,13 +971,11 @@ export async function deleteSessionSchedules(templateId: string): Promise<Delete
       .eq("session_template_id", templateId)
 
     if (error) {
-      console.error("Error deleting schedules:", error)
       return { success: false, error: error.message }
     }
 
     return { success: true }
   } catch (error) {
-    console.error("Error in deleteSessionSchedules:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
   }
 }
@@ -1073,12 +993,10 @@ export async function deleteSessionInstances(templateId: string): Promise<Delete
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -1103,13 +1021,11 @@ export async function deleteSessionInstances(templateId: string): Promise<Delete
       .eq("template_id", templateId)
 
     if (error) {
-      console.error("Error deleting instances:", error)
       return { success: false, error: error.message }
     }
 
     return { success: true }
   } catch (error) {
-    console.error("Error in deleteSessionInstances:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
   }
 }
@@ -1127,12 +1043,10 @@ export async function deleteSessionTemplate(templateId: string): Promise<{ succe
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -1157,13 +1071,11 @@ export async function deleteSessionTemplate(templateId: string): Promise<{ succe
       .eq("id", templateId)
 
     if (error) {
-      console.error("Error deleting template:", error)
       return { success: false, error: error.message }
     }
 
     return { success: true }
   } catch (error) {
-    console.error("Error in deleteSessionTemplate:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
   }
 }
@@ -1181,12 +1093,10 @@ export async function deleteSchedule(scheduleId: string): Promise<DeleteSchedule
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return { success: false, error: "Failed to get clerk user" }
     }
 
     if (!userData) {
-      console.error("No clerk user found for ID:", userId)
       return { success: false, error: "No clerk user found" }
     }
 
@@ -1223,21 +1133,17 @@ export async function deleteSchedule(scheduleId: string): Promise<DeleteSchedule
       .eq("id", scheduleId)
 
     if (error) {
-      console.error("Error deleting schedule:", error)
       return { success: false, error: error.message }
     }
 
     return { success: true }
   } catch (error) {
-    console.error("Error in deleteSchedule:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
   }
 }
 
 export async function createBooking(params: CreateBookingParams): Promise<CreateBookingResult> {
   try {
-    console.log("=== createBooking CALLED ===");
-    console.log("Booking params:", params);
     
     const supabase = createSupabaseClient()
 
@@ -1249,13 +1155,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       .single()
 
     if (userError) {
-      console.error("Error verifying user:", {
-        error: userError,
-        message: userError.message,
-        details: userError.details,
-        hint: userError.hint,
-        code: userError.code
-      });
       return {
         success: false,
         error: "User not found"
@@ -1263,14 +1162,12 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     }
 
     if (!userData) {
-      console.error("No user data found for ID:", params.user_id);
       return {
         success: false,
         error: "User not found"
       }
     }
 
-    console.log("User data found:", userData);
 
     // Get the session template to verify it exists and is open
     const { data: template, error: templateError } = await supabase
@@ -1280,13 +1177,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       .single()
 
     if (templateError) {
-      console.error("Error fetching session template:", {
-        error: templateError,
-        message: templateError.message,
-        details: templateError.details,
-        hint: templateError.hint,
-        code: templateError.code
-      });
       return {
         success: false,
         error: "Failed to verify session availability"
@@ -1294,17 +1184,14 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     }
 
     if (!template) {
-      console.error("No template found for ID:", params.session_template_id);
       return {
         success: false,
         error: "Session not found"
       }
     }
 
-    console.log("Template data found:", template);
 
     if (!template.is_open) {
-      console.error("Template is not open for booking:", params.session_template_id);
       return {
         success: false,
         error: "This session is not available for booking"
@@ -1313,10 +1200,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
     // Verify the user belongs to the same organization as the template
     if (userData.organization_id !== template.organization_id) {
-      console.error("Organization mismatch:", {
-        userOrgId: userData.organization_id,
-        templateOrgId: template.organization_id
-      });
       return {
         success: false,
         error: "You can only book sessions from your organization"
@@ -1342,13 +1225,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       // If it's a "no rows" error (PGRST116), we'll create the instance below
       // Otherwise, it's a real error
       if (instanceError.code !== 'PGRST116') {
-        console.error("Error finding session instance:", {
-          error: instanceError,
-          message: instanceError.message,
-          details: instanceError.details,
-          hint: instanceError.hint,
-          code: instanceError.code
-        });
         return {
           success: false,
           error: "Failed to find session instance"
@@ -1358,7 +1234,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
     // If instance doesn't exist (no data and either no error or PGRST116), create it
     if (!existingInstance) {
-      console.log("Instance not found, creating new instance for this time slot");
       
       const { data: newInstance, error: createError } = await supabase
         .from("session_instances")
@@ -1373,13 +1248,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         .single()
 
       if (createError || !newInstance) {
-        console.error("Error creating session instance:", {
-          error: createError,
-          message: createError?.message,
-          details: createError?.details,
-          hint: createError?.hint,
-          code: createError?.code
-        });
         return {
           success: false,
           error: "Failed to create session instance"
@@ -1387,10 +1255,8 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       }
 
       instance = newInstance;
-      console.log("Created new instance:", instance);
     } else {
       instance = existingInstance;
-      console.log("Found existing instance:", instance);
     }
 
     // Create a new Supabase client for the booking to ensure fresh auth state
@@ -1406,7 +1272,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       organization_id: template.organization_id
     };
 
-    console.log("Creating booking with data:", bookingData);
 
     const { data, error } = await bookingSupabase
       .from("bookings")
@@ -1415,32 +1280,18 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       .single()
 
     if (error) {
-      console.error("Error creating booking:", {
-        error,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-        data: bookingData
-      });
       return {
         success: false,
         error: error.message || "Failed to create booking"
       }
     }
 
-    console.log("Booking created successfully:", data);
 
     return {
       success: true,
       id: data.id
     }
   } catch (error) {
-    console.error("Error in createBooking:", {
-      error,
-      message: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined
-    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -1449,10 +1300,8 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 }
 
 export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
-  console.log("=== getPublicSessions CALLED ===");
   try {
     const supabase = createSupabaseClient()
-    console.log("Supabase client created successfully")
 
     // Get all open templates
     const { data: templates, error: templatesError } = await supabase
@@ -1478,7 +1327,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       .order("created_at", { ascending: false })
 
     if (templatesError) {
-      console.error("Templates query error:", templatesError)
       // Provide more helpful error message
       const errorMessage = templatesError.message || 'Unknown error';
       if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
@@ -1490,10 +1338,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       return { data: null, error: `Templates query failed: ${errorMessage}` }
     }
 
-    console.log("Templates query successful:", { 
-      count: templates?.length,
-      firstTemplate: templates?.[0]
-    })
 
     if (!templates || templates.length === 0) {
       return { data: [], error: null }
@@ -1501,7 +1345,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
     // Get schedules for all templates
     const templateIds = templates.map(t => t.id)
-    console.log("Querying schedules for template IDs:", templateIds)
     
     const { data: schedules, error: schedulesError } = await supabase
       .from("session_schedules")
@@ -1517,7 +1360,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       .in('session_template_id', templateIds)
 
     if (schedulesError) {
-      console.error("Schedules query error:", schedulesError)
       return { data: null, error: `Schedules query failed: ${schedulesError.message}` }
     }
 
@@ -1525,32 +1367,33 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
     // Generate instances for templates that have no instances in the next 3 months
     const threeMonthsFromNow = new Date()
     threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
-    
+
     const recurringTemplates = templates.filter(t => t.is_recurring)
-    const templatesNeedingGeneration: string[] = []
-    
-    for (const template of recurringTemplates) {
-      // Check if this template has any instances in the next 3 months
-      const { data: existingInstances, error: checkError } = await supabase
+    const recurringTemplateIds = recurringTemplates.map(t => t.id)
+
+    // Build a Set of template IDs that have schedules for O(1) lookup
+    const templatesWithSchedules = new Set(schedules?.map(s => s.session_template_id) || [])
+
+    // Single batch query to check which templates have instances (instead of N queries)
+    let templatesWithInstances = new Set<string>()
+    if (recurringTemplateIds.length > 0) {
+      const { data: existingInstances } = await supabase
         .from("session_instances")
-        .select("id")
-        .eq("template_id", template.id)
+        .select("template_id")
+        .in("template_id", recurringTemplateIds)
         .gte("start_time", new Date().toISOString())
         .lte("start_time", threeMonthsFromNow.toISOString())
-        .limit(1)
 
-      // If no instances found and template has schedules, mark for generation
-      if (!checkError && (!existingInstances || existingInstances.length === 0)) {
-        const hasSchedules = schedules?.some(s => s.session_template_id === template.id)
-        if (hasSchedules) {
-          templatesNeedingGeneration.push(template.id)
-        }
-      }
+      templatesWithInstances = new Set(existingInstances?.map(i => i.template_id) || [])
     }
+
+    // Find templates that need generation: recurring + has schedules + no instances
+    const templatesNeedingGeneration = recurringTemplateIds.filter(
+      id => templatesWithSchedules.has(id) && !templatesWithInstances.has(id)
+    )
 
     // Trigger generation for templates that need it (in parallel, but don't wait)
     if (templatesNeedingGeneration.length > 0) {
-      console.log(`Triggering instance generation for ${templatesNeedingGeneration.length} templates...`)
       const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
       const functionUrl = IS_DEVELOPMENT 
         ? 'http://localhost:54321/functions/v1/generate-instances'
@@ -1567,11 +1410,9 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
             },
             body: JSON.stringify({ template_id_to_process: templateId }),
           }).catch(err => {
-            console.error(`Error triggering instance generation for template ${templateId}:`, err)
           })
         )
       ).catch(err => {
-        console.error('Error triggering instance generation:', err)
       })
       
       // Wait a short time for generation to start (instances may be available on next fetch)
@@ -1601,7 +1442,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       .order('start_time', { ascending: true })
 
     if (instancesError) {
-      console.error("Instances query error:", instancesError)
       return { data: null, error: `Instances query failed: ${instancesError.message}` }
     }
 
@@ -1662,7 +1502,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
     return { data: transformedData, error: null }
   } catch (error) {
-    console.error("Error in getPublicSessions:", error)
     return { 
       data: null, 
       error: error instanceof Error ? error.message : "Unknown error occurred" 
@@ -1680,8 +1519,6 @@ export async function updateBooking({
   number_of_spots: number
 }) {
   try {
-    console.log("\n=== updateBooking Debug ===");
-    console.log("Input parameters:", { booking_id, notes, number_of_spots });
 
     const supabase = createSupabaseClient();
 
@@ -1693,12 +1530,10 @@ export async function updateBooking({
       .maybeSingle();
 
     if (checkError) {
-      console.error("Error checking booking:", checkError);
       return { success: false, error: `Failed to verify booking: ${checkError.message}` };
     }
 
     if (!existingBooking) {
-      console.error("No booking found with ID:", booking_id);
       return { success: false, error: "Booking not found" };
     }
 
@@ -1715,40 +1550,30 @@ export async function updateBooking({
       .maybeSingle();
 
     if (error) {
-      console.error('Error updating booking:', error);
       return { success: false, error: `Failed to update booking: ${error.message}` };
     }
 
     if (!booking) {
-      console.error("No booking returned after update");
       return { success: false, error: "Failed to update booking: No data returned" };
     }
 
     return { success: true, data: booking };
   } catch (error: any) {
-    console.error('Error in updateBooking:', error);
     return { success: false, error: error.message };
   }
 }
 
 export async function deleteBooking(booking_id: string) {
   try {
-    console.log("\n=== deleteBooking Debug ===");
-    console.log("Input parameters:", { booking_id });
 
     // Create a new Supabase client with service role key
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("Missing Supabase environment variables:", {
-        hasUrl: !!supabaseUrl,
-        hasServiceKey: !!supabaseServiceKey
-      });
       return { success: false, error: "Missing required Supabase environment variables" };
     }
 
-    console.log("Creating Supabase client with service role...");
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -1757,71 +1582,34 @@ export async function deleteBooking(booking_id: string) {
     });
 
     // First verify the booking exists
-    console.log("\nStep 1: Verifying booking exists...");
     const { data: existingBooking, error: checkError } = await supabase
       .from('bookings')
       .select('id, user_id, session_instance_id')
       .eq('id', booking_id)
       .single();
 
-    console.log("Booking check result:", { existingBooking, checkError });
 
     if (checkError) {
-      console.error("Error checking booking:", {
-        error: checkError,
-        message: checkError.message,
-        details: checkError.details,
-        hint: checkError.hint,
-        code: checkError.code
-      });
       return { success: false, error: `Failed to verify booking: ${checkError.message}` };
     }
 
     if (!existingBooking) {
-      console.error("No booking found with ID:", booking_id);
       return { success: false, error: "Booking not found" };
     }
 
     // Now delete the booking
-    console.log("\nStep 2: Deleting booking...");
     const { error: deleteError } = await supabase
       .from('bookings')
       .delete()
       .eq('id', booking_id);
 
-    console.log("Delete result:", { 
-      error: deleteError,
-      errorDetails: deleteError ? {
-        message: deleteError.message,
-        details: deleteError.details,
-        hint: deleteError.hint,
-        code: deleteError.code
-      } : null
-    });
 
     if (deleteError) {
-      console.error('Error deleting booking:', {
-        error: deleteError,
-        message: deleteError.message,
-        details: deleteError.details,
-        hint: deleteError.hint,
-        code: deleteError.code
-      });
       return { success: false, error: `Failed to delete booking: ${deleteError.message}` };
     }
 
-    console.log("\n=== deleteBooking Success ===");
     return { success: true };
   } catch (error: any) {
-    console.error('\n=== deleteBooking Error ===');
-    console.error('Error details:', {
-      error,
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-      stack: error.stack
-    });
     return { success: false, error: error.message };
   }
 }
@@ -1829,8 +1617,6 @@ export async function deleteBooking(booking_id: string) {
 export async function getBookingDetails(bookingId: string) {
   try {
     const supabase = createSupabaseClient();
-    console.log("\n=== getBookingDetails Debug ===");
-    console.log("Input bookingId:", bookingId);
 
     // First get the booking with its session instance and template
     const { data: bookingData, error: bookingError } = await supabase
@@ -1846,13 +1632,6 @@ export async function getBookingDetails(bookingId: string) {
       .single();
 
     if (bookingError) {
-      console.error("Error fetching booking:", {
-        error: bookingError,
-        message: bookingError.message,
-        details: bookingError.details,
-        hint: bookingError.hint,
-        code: bookingError.code
-      });
       return {
         success: false,
         error: "Failed to fetch booking details"
@@ -1860,29 +1639,21 @@ export async function getBookingDetails(bookingId: string) {
     }
 
     if (!bookingData) {
-      console.error("No booking data found for ID:", bookingId);
       return {
         success: false,
         error: "No bookings found"
       };
     }
 
-    console.log("Booking data found:", {
-      id: bookingData.id,
-      user_id: bookingData.user_id,
-      session_instance_id: bookingData.session_instance_id
-    });
 
     // Check for missing session_instance or template
     if (!bookingData.session_instance) {
-      console.error("No session_instance found for booking:", bookingData);
       return {
         success: false,
         error: "No session instance found for this booking. It may have been deleted or is missing."
       };
     }
     if (!bookingData.session_instance.template) {
-      console.error("No session template found for booking's session_instance:", bookingData.session_instance);
       return {
         success: false,
         error: "No session template found for this booking's session instance. It may have been deleted or is missing."
@@ -1897,14 +1668,6 @@ export async function getBookingDetails(bookingId: string) {
       .single();
 
     if (userError) {
-      console.error("Error fetching user:", {
-        error: userError,
-        message: userError.message,
-        details: userError.details,
-        hint: userError.hint,
-        code: userError.code,
-        user_id: bookingData.user_id
-      });
       return {
         success: false,
         error: "Failed to fetch user details"
@@ -1912,17 +1675,12 @@ export async function getBookingDetails(bookingId: string) {
     }
 
     if (!userData) {
-      console.error("No user data found for ID:", bookingData.user_id);
       return {
         success: false,
         error: "User not found"
       };
     }
 
-    console.log("User data found:", {
-      id: userData.id,
-      clerk_user_id: userData.clerk_user_id
-    });
 
     // Transform the response to match the expected format
     const response = {
@@ -1949,14 +1707,8 @@ export async function getBookingDetails(bookingId: string) {
       }
     };
 
-    console.log("Successfully constructed response");
     return response;
   } catch (error) {
-    console.error("Error in getBookingDetails:", {
-      error,
-      message: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined
-    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -1977,12 +1729,10 @@ export async function getUserUpcomingBookings(userId: string): Promise<{ data: B
       .single()
 
     if (userError) {
-      console.error('Error getting clerk user:', userError)
       return { data: null, error: userError.message }
     }
 
     if (!userData) {
-      console.error('No clerk user found for ID:', userId)
       return { data: null, error: 'User not found' }
     }
 
@@ -2008,7 +1758,6 @@ export async function getUserUpcomingBookings(userId: string): Promise<{ data: B
       .gte('session_instance.end_time', now)
 
     if (error) {
-      console.error('Error fetching user bookings:', error)
       return { data: null, error: error.message }
     }
 
@@ -2069,7 +1818,6 @@ export async function getUserUpcomingBookings(userId: string): Promise<{ data: B
 
     return { data: transformedBookings, error: null }
   } catch (error) {
-    console.error('Error in getUserUpcomingBookings:', error)
     return { data: null, error: error instanceof Error ? error.message : 'An error occurred' }
   }
 }
@@ -2085,8 +1833,6 @@ export async function getUserBookings(userId: string) {
 
 export async function checkInBooking(bookingId: string) {
   try {
-    console.log("\n=== checkInBooking Debug ===");
-    console.log("Input parameters:", { bookingId });
 
     const supabase = createSupabaseClient();
 
@@ -2098,12 +1844,10 @@ export async function checkInBooking(bookingId: string) {
       .single();
 
     if (checkError) {
-      console.error("Error checking booking:", checkError);
       return { success: false, error: `Failed to verify booking: ${checkError.message}` };
     }
 
     if (!existingBooking) {
-      console.error("No booking found with ID:", bookingId);
       return { success: false, error: "Booking not found" };
     }
 
@@ -2122,13 +1866,11 @@ export async function checkInBooking(bookingId: string) {
       .single();
 
     if (error) {
-      console.error('Error updating booking:', error);
       return { success: false, error: `Failed to update booking: ${error.message}` };
     }
 
     return { success: true, data: booking };
   } catch (error: any) {
-    console.error('Error in checkInBooking:', error);
     return { success: false, error: error.message };
   }
 } 

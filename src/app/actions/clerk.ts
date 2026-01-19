@@ -23,7 +23,6 @@ async function getClerkUser(clerkUserId: string) {
       .maybeSingle()
 
     if (error) {
-      console.error("Error getting clerk user:", error)
       return {
         success: false,
         error: error.message
@@ -42,7 +41,6 @@ async function getClerkUser(clerkUserId: string) {
       id: data.id
     }
   } catch (error) {
-    console.error("Error in getClerkUser:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -78,7 +76,6 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
       .single()
 
     if (checkError && checkError.code !== "PGRST116") { // PGRST116 is "no rows returned"
-      console.error("Error checking for existing user:", checkError)
       return {
         success: false,
         error: "Failed to check for existing user"
@@ -96,20 +93,12 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
     // Get the organization ID to use
     const orgId = params.organization_id || process.env.DEFAULT_ORGANIZATION_ID;
     if (!orgId) {
-      console.error("No valid organization_id found for clerk user creation.", { params })
       return {
         success: false,
         error: "No valid organization_id found for clerk user creation."
       }
     }
 
-    console.log("Creating clerk user with:", {
-      clerk_user_id: params.clerk_user_id,
-      email: params.email,
-      first_name: params.first_name,
-      last_name: params.last_name,
-      organization_id: orgId
-    });
 
     // Create new user
     const { data, error } = await supabase
@@ -125,7 +114,6 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
       .single()
 
     if (error) {
-      console.error("Error creating clerk user:", error)
       return {
         success: false,
         error: error.message
@@ -137,7 +125,6 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
       id: data.id
     }
   } catch (error) {
-    console.error("Error in createClerkUser:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -147,15 +134,8 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
 
 async function ensureClerkUser(clerkUserId: string, email: string, firstName: string | null, lastName: string | null) {
   try {
-    console.log("Ensuring clerk user exists:", {
-      clerkUserId,
-      email,
-      firstName,
-      lastName
-    })
 
     if (!email) {
-      console.error("Email is required for clerk user")
       return {
         success: false,
         error: "Email is required for clerk user"
@@ -181,7 +161,6 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
       .maybeSingle()
 
     if (getError) {
-      console.error("Error getting clerk user:", getError)
       return {
         success: false,
         error: getError.message
@@ -190,20 +169,17 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
 
     // If user exists, return their ID
     if (existingUser) {
-      console.log("Found existing clerk user:", existingUser)
       return {
         success: true,
         id: existingUser.id
       }
     }
 
-    console.log("Creating new clerk user...")
 
     // If user doesn't exist, create them
     // Use the default organization ID from environment variables
     const orgId = process.env.DEFAULT_ORGANIZATION_ID;
     if (!orgId) {
-      console.error("DEFAULT_ORGANIZATION_ID environment variable is not set")
       return {
         success: false,
         error: "DEFAULT_ORGANIZATION_ID environment variable is not set"
@@ -223,21 +199,18 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
       .single();
 
     if (createError) {
-      console.error("Error creating clerk user:", createError)
       return {
         success: false,
         error: createError.message
       }
     }
 
-    console.log("Successfully created new clerk user:", newUser)
 
     return {
       success: true,
       id: newUser.id
     }
   } catch (error) {
-    console.error("Error in ensureClerkUser:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -263,7 +236,6 @@ async function listClerkUsers() {
       .select("*")
 
     if (error) {
-      console.error("Error listing clerk users:", error)
       return {
         success: false,
         error: error.message
@@ -275,7 +247,6 @@ async function listClerkUsers() {
       users: data
     }
   } catch (error) {
-    console.error("Error in listClerkUsers:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -313,7 +284,6 @@ async function updateClerkUser(id: string, data: any) {
           });
         }
       } catch (clerkError) {
-        console.error("Error updating role in Clerk:", clerkError);
         return {
           success: false,
           error: "Failed to update role in Clerk"
@@ -330,7 +300,6 @@ async function updateClerkUser(id: string, data: any) {
       .eq("id", id)
 
     if (error) {
-      console.error("Error updating clerk user:", error)
       return {
         success: false,
         error: error.message
@@ -341,7 +310,6 @@ async function updateClerkUser(id: string, data: any) {
       success: true
     }
   } catch (error) {
-    console.error("Error in updateClerkUser:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -370,7 +338,6 @@ async function deleteClerkUser(id: string) {
       .single()
 
     if (userError) {
-      console.error("Error getting clerk user:", userError)
       return {
         success: false,
         error: userError.message
@@ -378,7 +345,6 @@ async function deleteClerkUser(id: string) {
     }
 
     if (!userData?.clerk_user_id) {
-      console.error("No clerk_user_id found for user:", id)
       return {
         success: false,
         error: "No Clerk user ID found"
@@ -389,7 +355,6 @@ async function deleteClerkUser(id: string) {
     try {
       await clerkClient.users.deleteUser(userData.clerk_user_id)
     } catch (clerkError) {
-      console.error("Error deleting user from Clerk:", clerkError)
       return {
         success: false,
         error: "Failed to delete user from Clerk"
@@ -403,7 +368,6 @@ async function deleteClerkUser(id: string) {
       .eq("id", id)
 
     if (error) {
-      console.error("Error deleting clerk user from Supabase:", error)
       return {
         success: false,
         error: error.message
@@ -414,7 +378,6 @@ async function deleteClerkUser(id: string) {
       success: true
     }
   } catch (error) {
-    console.error("Error in deleteClerkUser:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -443,7 +406,6 @@ async function syncOrganizationToClerk(organizationId: string) {
       .single()
 
     if (orgError) {
-      console.error("Error getting organization:", orgError)
       return {
         success: false,
         error: orgError.message
@@ -464,7 +426,6 @@ async function syncOrganizationToClerk(organizationId: string) {
       .eq("organization_id", organizationId)
 
     if (usersError) {
-      console.error("Error getting organization users:", usersError)
       return {
         success: false,
         error: usersError.message
@@ -492,14 +453,12 @@ async function syncOrganizationToClerk(organizationId: string) {
         organizationId: clerkOrg.id
       }
     } catch (clerkError) {
-      console.error("Error syncing with Clerk:", clerkError)
       return {
         success: false,
         error: clerkError instanceof Error ? clerkError.message : "Unknown error occurred"
       }
     }
   } catch (error) {
-    console.error("Error in syncOrganizationToClerk:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred"
@@ -511,10 +470,8 @@ async function handleOrganizationChange(organizationId: string) {
   try {
     const result = await syncOrganizationToClerk(organizationId)
     if (!result.success) {
-      console.error("Failed to sync organization to Clerk:", result.error)
     }
   } catch (error) {
-    console.error("Error in handleOrganizationChange:", error)
   }
 }
 

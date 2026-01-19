@@ -30,7 +30,6 @@ import { localToUTC, SAUNA_TIMEZONE } from '@/lib/time-utils'
 
 async function generateInstances() {
   try {
-    console.log("Starting instance generation...")
     const response = await fetch('/functions/v1/generate-instances', {
       method: 'POST',
       headers: {
@@ -40,19 +39,13 @@ async function generateInstances() {
     })
     
     if (!response.ok) {
-      console.error('Failed to generate instances:', {
-        status: response.status,
-        statusText: response.statusText
-      })
       // Don't throw, just log the warning
       return
     }
     
     const result = await response.json()
-    console.log("Instance generation response:", result)
     return result
   } catch (error) {
-    console.error('Error generating instances:', error)
     // Don't throw, just log the warning
     return
   }
@@ -156,11 +149,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   useEffect(() => {
     if (template) {
-      console.log("Template data:", {
-        one_off_start_time: template.one_off_start_time,
-        is_recurring: template.is_recurring,
-        schedules: template.schedules
-      })
 
       setName(template.name)
       setDescription(template.description || "")
@@ -213,18 +201,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted with data:", {
-      name,
-      description,
-      capacity,
-      duration,
-      isOpen,
-      scheduleType,
-      date,
-      recurrenceStartDate,
-      recurrenceEndDate,
-      schedules
-    });
 
     try {
       if (!user) {
@@ -238,7 +214,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       let templateId: string;
 
       if (template) {
-        console.log("Updating existing template...");
         // Update existing template
         const result = await updateSessionTemplate({
           id: template.id,
@@ -255,21 +230,17 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         });
 
         if (!result.success) {
-          console.error("Error updating template:", result.error);
           throw new Error(`Failed to update template: ${result.error}`);
         }
 
         templateId = template.id;
-        console.log("Updated template with ID:", templateId);
 
         // Delete existing schedules and instances
-        console.log("Deleting existing schedules and instances...");
         await Promise.all([
           deleteSessionSchedules(templateId),
           deleteSessionInstances(templateId)
         ]);
       } else {
-        console.log("Creating new template...");
         // Create new template using server action
         const result = await createSessionTemplate({
           name,
@@ -286,16 +257,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         });
 
         if (!result.success || !result.id) {
-          console.error("Error creating template:", result.error);
           throw new Error(`Failed to create template: ${result.error}`);
         }
 
         templateId = result.id;
-        console.log("Created template with ID:", templateId);
       }
 
       if (scheduleType === "once" && date) {
-        console.log("Creating single instance...");
         // Create single instance using the template's one_off_start_time and one_off_date
         const [hours, minutes] = (schedules[0]?.time || "09:00").split(':').map(Number);
         
@@ -324,16 +292,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         const instanceStartTimeUTC = localToUTC(localStartTime, SAUNA_TIMEZONE);
         const instanceEndTimeUTC = localToUTC(localEndTime, SAUNA_TIMEZONE);
 
-        console.log("Creating instance with times:", {
-          localStartTime: localStartTime.toISOString(),
-          localEndTime: localEndTime.toISOString(),
-          startTime: instanceStartTimeUTC.toISOString(),
-          endTime: instanceEndTimeUTC.toISOString(),
-          durationMinutes,
-          timezone: SAUNA_TIMEZONE,
-          inputTime: schedules[0]?.time,
-          inputDate: date.toISOString()
-        });
 
         // Create the instance with the calculated times
         const instanceResult = await createSessionInstance({
@@ -344,15 +302,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         });
 
         if (!instanceResult.success) {
-          console.error("Error creating instance:", instanceResult.error);
           throw new Error(`Failed to create instance: ${instanceResult.error}`);
         }
       } else if (scheduleType === "repeat") {
-        console.log("Creating recurring schedules...", {
-          templateId,
-          schedules,
-          scheduleType
-        });
 
         // Validate schedules before creating
         if (!schedules || schedules.length === 0) {
@@ -369,15 +321,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                 throw new Error("No days selected for schedule.");
               }
               if (mappedDays.some(d => !isValidDayString(d))) {
-                console.error("Invalid day in schedule.days:", schedule.days);
                 throw new Error("Invalid day selected in schedule.");
               }
 
-              console.log("Creating schedule:", {
-                session_template_id: templateId,
-                time: schedule.time,
-                days: mappedDays
-              });
 
               const result = await createSessionSchedule({
                 session_template_id: templateId,
@@ -385,29 +331,23 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                 days: mappedDays
               });
 
-              console.log("Schedule creation result:", result);
               return result;
             } catch (error) {
-              console.error("Error creating individual schedule:", error);
               throw error;
             }
           })
         );
 
-        console.log("All schedule creation results:", scheduleResults);
 
         const errors = scheduleResults.filter(r => !r.success);
         if (errors.length > 0) {
-          console.error("Errors creating schedules:", errors);
           throw new Error(`Failed to create schedules: ${errors[0].error}`);
         }
 
         // Wait a moment to ensure database consistency
-        console.log("Waiting for database consistency...");
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Generate instances for recurring template
-        console.log("Generating instances for template:", templateId);
         const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-instances`, {
           method: 'POST',
           headers: {
@@ -422,14 +362,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("Error generating instances:", errorData);
           toast({
             title: "Warning",
             description: "Template created but instance generation failed. Instances will be generated by the scheduled job.",
             variant: "destructive",
           });
         } else {
-          console.log("Instance generation triggered successfully");
         }
       }
 
@@ -441,7 +379,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       onSuccess?.();
       onClose();
     } catch (error: any) {
-      console.error("Error in handleSubmit:", error);
       toast({
         title: "Error",
         description: error.message || "An error occurred. Please try again.",
@@ -467,7 +404,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         await deleteSessionSchedules(template.id)
         await deleteSessionInstances(template.id)
       } catch (error) {
-        console.warn("Error deleting schedules/instances:", error)
         // Don't throw here as the template was already deleted
       }
 
@@ -479,7 +415,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       onSuccess()
       onClose()
     } catch (error: any) {
-      console.error("Error deleting session:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to delete session. Please try again.",
@@ -513,7 +448,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       // Update local state
       setSchedules(schedules.filter((schedule) => schedule.id !== id))
     } catch (error: any) {
-      console.error("Error deleting schedule:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to delete schedule. Please try again.",

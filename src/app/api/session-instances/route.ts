@@ -55,7 +55,6 @@ export async function GET(request: Request) {
       .eq('is_open', true);
 
     if (templatesError) {
-      console.error('Error fetching templates:', templatesError);
       return NextResponse.json(
         { error: 'Failed to fetch session templates' },
         { status: 500 }
@@ -89,7 +88,6 @@ export async function GET(request: Request) {
       .order('start_time', { ascending: true });
 
     if (instancesError) {
-      console.error('Error fetching instances:', instancesError);
       return NextResponse.json(
         { error: 'Failed to fetch session instances' },
         { status: 500 }
@@ -109,7 +107,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json(events);
   } catch (error) {
-    console.error('Error in session-instances API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

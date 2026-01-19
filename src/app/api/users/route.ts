@@ -14,7 +14,6 @@ export async function GET() {
   try {
     const session = await auth();
     if (!session.orgId) {
-      console.error("No organization ID in session");
       return NextResponse.json({ error: "Organization ID not configured" }, { status: 500 });
     }
 
@@ -29,14 +28,13 @@ export async function GET() {
       }
     );
 
-    // Get users from Supabase
+    // Get users from Supabase (select only needed columns)
     const { data: supabaseUsers, error } = await supabase
       .from("clerk_users")
-      .select("*")
+      .select("id, clerk_user_id, email, first_name, last_name, organization_id, created_at")
       .eq("organization_id", session.orgId);
 
     if (error) {
-      console.error("Error listing clerk users:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -65,7 +63,6 @@ export async function GET() {
 
     return NextResponse.json({ users });
   } catch (error) {
-    console.error("Error in users API route:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error occurred' },
       { status: 500 }

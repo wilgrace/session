@@ -29,7 +29,6 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
 
         router.replace(`/booking/${session.id}?${queryParams.toString()}`)
       } catch (error) {
-        console.error("Error redirecting:", error)
         router.replace("/booking")
       }
     }

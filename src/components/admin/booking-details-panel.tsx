@@ -38,7 +38,6 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
   const [localBooking, setLocalBooking] = useState<Booking>(booking);
 
   // Debug: log booking prop
-  console.log('BookingDetailsPanel booking:', booking);
 
   const handleCheckIn = async () => {
     try {

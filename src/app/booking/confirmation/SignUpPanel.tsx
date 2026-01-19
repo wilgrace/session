@@ -37,12 +37,6 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
   };
 
   // Debug log
-  console.log("SignUpPanel initialValues:", safeInitialValues);
-  console.log("Types:", {
-    emailAddress: typeof safeInitialValues.emailAddress,
-    firstName: typeof safeInitialValues.firstName,
-    lastName: typeof safeInitialValues.lastName,
-  });
 
   const { user, isLoaded } = useUser();
   const router = useRouter();

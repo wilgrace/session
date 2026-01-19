@@ -39,13 +39,9 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        console.log("Debug - sessionId:", sessionId)
-        console.log("Debug - sessionId type:", typeof sessionId)
-        console.log("Debug - searchParams:", searchParams)
 
         // Validate sessionId
         if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
-          console.error("Invalid session ID provided", { sessionId, searchParams })
           setError("Invalid session ID provided")
           setLoading(false)
           return
@@ -57,13 +53,10 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
           try {
             const parsedDate = new Date(decodeURIComponent(startParam))
             if (!isNaN(parsedDate.getTime())) {
-              console.log("Setting start time to:", parsedDate)
               setStartTime(parsedDate)
             } else {
-              console.error("Invalid start time format:", startParam)
             }
           } catch (err) {
-            console.error("Error parsing start time:", err)
           }
         }
 
@@ -71,14 +64,6 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
         const edit = searchParams.edit
         const bookingId = searchParams.bookingId
         
-        console.log("=== Session Page Debug ===")
-        console.log("Raw URL Parameters:", {
-          sessionId,
-          start: startParam,
-          edit,
-          bookingId,
-          fullUrl: window.location.href
-        })
         
         if (!edit && user && startParam) {
           // Check if user already has a booking for this session instance
@@ -119,12 +104,6 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
         }
 
         if (edit === 'true' && bookingId && user) {
-          console.log("Processing edit mode with:", {
-            bookingId,
-            userId: user.id,
-            edit,
-            sessionId
-          })
 
           try {
             const result = await getBookingDetails(bookingId)
@@ -132,7 +111,6 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
               throw new Error("Failed to fetch booking details")
             }
             const { booking, session, startTime: bookingStartTime } = (result as { success: true; data: any }).data
-            console.log("Successfully fetched booking:", { booking, session })
             
             // Verify that the booking belongs to the current user
             if (!booking.user || booking.user.clerk_user_id !== user.id) {
@@ -148,7 +126,6 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
               userId: user.id
             })
           } catch (error: any) {
-            console.error("Error fetching booking details:", error)
             setError(error.message)
             setDebugInfo((prev: any) => ({ 
               ...(prev || {}), 
@@ -188,7 +165,6 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
           setSession(sessionData as unknown as SessionTemplate)
         }
       } catch (err: any) {
-        console.error("Error in fetchSession:", err)
         setError(err.message)
         setDebugInfo((prev: any) => ({ 
           ...(prev || {}), 
