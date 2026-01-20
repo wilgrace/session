@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { SessionInstanceWithBookings } from '@/lib/db/queries';
-import { getSessionInstancesForDateRange } from '@/lib/db/queries';
+import { getAdminSessionsForDateRange } from '@/app/actions/session';
 
 export function useSessions(startDate: Date, endDate: Date) {
   const [sessions, setSessions] = useState<SessionInstanceWithBookings[]>([]);
@@ -11,14 +11,21 @@ export function useSessions(startDate: Date, endDate: Date) {
   useEffect(() => {
     let isMounted = true;
 
-    // Initial fetch
+    // Initial fetch using server action
     const fetchSessions = async () => {
       try {
         setLoading(true);
-        const data = await getSessionInstancesForDateRange(startDate, endDate);
+        const result = await getAdminSessionsForDateRange(
+          startDate.toISOString(),
+          endDate.toISOString()
+        );
         if (isMounted) {
-          setSessions(data ?? []);
-          setError(null);
+          if (result.success) {
+            setSessions((result.data as SessionInstanceWithBookings[]) ?? []);
+            setError(null);
+          } else {
+            setError(new Error(result.error || 'Failed to fetch sessions'));
+          }
         }
       } catch (err) {
         if (isMounted) {

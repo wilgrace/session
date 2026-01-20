@@ -18,6 +18,7 @@ export default function AdminHomePage() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [selectedDay, setSelectedDay] = useState(today);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const isMobile = useIsMobile();
 
   // Generate visible days
@@ -52,41 +53,79 @@ export default function AdminHomePage() {
 
   // Find sessions for the selected day
   const selectedDayKey = format(selectedDay, 'yyyy-MM-dd');
-  const sessionsForDay = sessionsByDay[selectedDayKey] || [];
-  // Pick the next session (first by time)
-  const nextSession = useMemo(() => {
-    if (!sessionsForDay.length) return null;
+  const sessionsForDay = useMemo(() => {
+    const sessions = sessionsByDay[selectedDayKey] || [];
     // Sort by start_time ascending
-    return [...sessionsForDay].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0];
+    return [...sessions].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+  }, [sessionsByDay, selectedDayKey]);
+
+  // Get the currently selected session
+  const currentSession = useMemo(() => {
+    if (!sessionsForDay.length) return null;
+    // Clamp index to valid range
+    const index = Math.min(selectedSessionIndex, sessionsForDay.length - 1);
+    return sessionsForDay[index] || null;
+  }, [sessionsForDay, selectedSessionIndex]);
+
+  // Reset session index when day changes
+  const handleSelectDay = useCallback((date: Date) => {
+    setSelectedDay(date);
+    setSelectedSessionIndex(0);
+    setSelectedBooking(null);
+  }, []);
+
+  // Handle session selection from calendar
+  const handleSelectSession = useCallback((session: any) => {
+    const index = sessionsForDay.findIndex((s: any) => s.id === session.id);
+    if (index !== -1) {
+      setSelectedSessionIndex(index);
+      setSelectedBooking(null);
+    }
   }, [sessionsForDay]);
 
   // Handler for check-in notification (called after check-in completes)
-  const handleCheckIn = useCallback(() => {
-    // Refresh sessions data after check-in
-    // The actual check-in is handled inside BookingsList component
-  }, []);
+  const handleCheckIn = useCallback((bookingId: string, newStatus: 'confirmed' | 'completed') => {
+    // Update selectedBooking if it's the one that was checked in
+    if (selectedBooking && selectedBooking.id === bookingId) {
+      setSelectedBooking((prev: any) => prev ? { ...prev, status: newStatus } : null);
+    }
+  }, [selectedBooking]);
 
   return (
     <main className="flex-1 flex flex-col">
       <DayPicker
         days={days}
         selectedDay={selectedDay}
-        onSelectDay={setSelectedDay}
+        onSelectDay={handleSelectDay}
         isCollapsed={isCollapsed}
         onCollapseToggle={() => setIsCollapsed((v) => !v)}
         onPrev={() => setDayOffset((o) => Math.max(0, o - 7))}
         onNext={() => setDayOffset((o) => Math.min(NUM_DAYS - 7, o + 7))}
         sessionsByDay={sessionsByDay}
+        selectedSessionId={currentSession?.id}
+        onSelectSession={handleSelectSession}
       />
       <div className="flex-1 flex">
 
         <div className={selectedBooking && !isMobile ? 'border-r border-gray-200 flex-1' : ' flex-1 border-gray-200'}>
-          {nextSession ? (
+          {currentSession ? (
             <>
-              <SessionDetails session={nextSession} />
+              <SessionDetails
+                session={currentSession}
+                currentIndex={selectedSessionIndex}
+                totalSessions={sessionsForDay.length}
+                onPrevSession={() => {
+                  setSelectedSessionIndex((i) => Math.max(0, i - 1));
+                  setSelectedBooking(null);
+                }}
+                onNextSession={() => {
+                  setSelectedSessionIndex((i) => Math.min(sessionsForDay.length - 1, i + 1));
+                  setSelectedBooking(null);
+                }}
+              />
               <div className="p-6">
                 <BookingsList
-                  bookings={nextSession.bookings || []}
+                  bookings={currentSession.bookings || []}
                   onCheckIn={handleCheckIn}
                   onSelect={setSelectedBooking}
                 />
@@ -103,7 +142,7 @@ export default function AdminHomePage() {
               booking={selectedBooking}
               onClose={() => setSelectedBooking(null)}
               onEdit={() => {}}
-              onCheckIn={() => {}}
+              onCheckIn={handleCheckIn}
             />
           </div>
         )}
@@ -115,7 +154,7 @@ export default function AdminHomePage() {
             booking={selectedBooking}
             onClose={() => setSelectedBooking(null)}
             onEdit={() => {}}
-            onCheckIn={() => {}}
+            onCheckIn={handleCheckIn}
           />
         </div>
       )}

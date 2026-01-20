@@ -16,6 +16,8 @@ type DayPickerProps = {
   onPrev: () => void;
   onNext: () => void;
   sessionsByDay: Record<string, any[]>; // { '2024-06-01': [session, ...] }
+  selectedSessionId?: string | null;
+  onSelectSession?: (session: any) => void;
 };
 
 export function DayPicker({
@@ -27,6 +29,8 @@ export function DayPicker({
   onPrev,
   onNext,
   sessionsByDay = {},
+  selectedSessionId,
+  onSelectSession,
 }: DayPickerProps) {
   const isMobile = useIsMobile();
   // Show 4 days on mobile, 7 on desktop
@@ -78,13 +82,24 @@ export function DayPicker({
                       }
                     }
                     const spotsTaken = (session.bookings || []).reduce(
-                      (sum: number, b: any) => sum + (b.numberOfSpots || 1),
+                      (sum: number, b: any) => sum + (b.number_of_spots || 1),
                       0
                     );
+                    const isActiveSession = selectedSessionId === session.id;
                     return (
                       <div
                         key={session.id}
-                        className="flex items-center justify-between border rounded px-2 py-1 bg-blue-50 text-xs"
+                        className={cn(
+                          "flex items-center justify-between border rounded px-2 py-1 text-xs cursor-pointer transition-colors",
+                          isActiveSession
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-blue-50 hover:bg-blue-100"
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectDay(date);
+                          onSelectSession?.(session);
+                        }}
                       >
                         <span className="font-bold">{time}</span>
                         <span>{spotsTaken}</span>

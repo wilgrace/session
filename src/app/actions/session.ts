@@ -1985,4 +1985,48 @@ export async function checkUserExistingBooking(
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+// ============================================
+// ADMIN SESSION DATA (server-side, bypasses RLS)
+// Use these for admin pages
+// ============================================
+
+/**
+ * Get session instances with bookings for admin (bypasses RLS)
+ * This is a server action that can be called from client components
+ */
+export async function getAdminSessionsForDateRange(
+  startDate: string,
+  endDate: string
+): Promise<{
+  success: boolean;
+  data?: any[];
+  error?: string;
+}> {
+  try {
+    const supabase = createSupabaseClient();
+
+    const { data: instances, error } = await supabase
+      .from('session_instances')
+      .select(`
+        *,
+        template:session_templates(*),
+        bookings(
+          *,
+          user:clerk_users(*)
+        )
+      `)
+      .gte('start_time', startDate)
+      .lte('start_time', endDate)
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: instances || [] };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 } 

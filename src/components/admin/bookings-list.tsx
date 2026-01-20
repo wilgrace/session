@@ -17,7 +17,7 @@ interface Booking {
     full_name?: string;
     name?: string;
     email?: string;
-    role?: string;
+    is_super_admin?: boolean;
     image_url?: string;
     avatar_url?: string;
   };
@@ -26,7 +26,7 @@ interface Booking {
 export function BookingsList({ bookings, onSelect, onCheckIn }: {
   bookings: Booking[];
   onSelect: (booking: Booking) => void;
-  onCheckIn: () => void;
+  onCheckIn: (bookingId: string, newStatus: 'confirmed' | 'completed') => void;
 }) {
   const { toast } = useToast();
   const [localBookings, setLocalBookings] = useState<Booking[]>(bookings);
@@ -50,7 +50,7 @@ export function BookingsList({ bookings, onSelect, onCheckIn }: {
               : booking
           )
         );
-        onCheckIn(); // Notify parent
+        onCheckIn(bookingId, result.data.status); // Notify parent
         toast({
           title: "Success",
           description: result.data.status === 'completed' 
@@ -111,7 +111,7 @@ export function BookingsList({ bookings, onSelect, onCheckIn }: {
                 )}
               </p>
               <p className="text-sm text-muted-foreground">
-                {booking.user?.role === 'member' ? 'Member' : 'Guest'}
+                {booking.user?.is_super_admin ? 'Admin' : booking.user ? 'User' : 'Guest'}
               </p>
             </div>
           </div>

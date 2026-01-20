@@ -5,7 +5,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Check, Pencil, X } from 'lucide-react';
 import { checkInBooking } from '@/app/actions/session';
 import { useToast } from '@/components/ui/use-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Booking {
   id: string;
@@ -19,7 +19,7 @@ interface Booking {
     full_name?: string;
     name?: string;
     email?: string;
-    role?: string;
+    is_super_admin?: boolean;
     image_url?: string;
     avatar_url?: string;
     visits?: number;
@@ -32,12 +32,15 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
   booking: Booking;
   onClose: () => void;
   onEdit: () => void;
-  onCheckIn: () => void;
+  onCheckIn: (bookingId: string, newStatus: 'confirmed' | 'completed') => void;
 }) {
   const { toast } = useToast();
   const [localBooking, setLocalBooking] = useState<Booking>(booking);
 
-  // Debug: log booking prop
+  // Sync local state when booking prop changes (e.g., from list check-in)
+  useEffect(() => {
+    setLocalBooking(booking);
+  }, [booking]);
 
   const handleCheckIn = async () => {
     try {
@@ -48,7 +51,7 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
           ...prev,
           status: result.data.status
         }));
-        onCheckIn(); // Notify parent
+        onCheckIn(localBooking.id, result.data.status); // Notify parent
         toast({
           title: "Success",
           description: result.data.status === 'completed' 
@@ -112,7 +115,9 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
             : user.full_name || user.name || 'Guest'}
         </div>
         <div className="text-muted-foreground mb-2">{user.email}</div>
-        {user.role === 'member' && <Badge>Member</Badge>}
+        <Badge variant={user.is_super_admin ? 'default' : 'secondary'}>
+          {user.is_super_admin ? 'Admin' : localBooking.user ? 'User' : 'Guest'}
+        </Badge>
       </div>
       <Card className="p-4 mx-4 mb-4">
         <div className="font-semibold mb-2">Booking Details</div>

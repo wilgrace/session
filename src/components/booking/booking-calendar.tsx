@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Calendar as BigCalendar, momentLocalizer, View, Components, EventProps, Event } from 'react-big-calendar'
 import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -131,18 +131,19 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
   }, [isMobile])
 
   // Convert sessions to events format for react-big-calendar
-  const events = sessions.flatMap((template): CalendarEvent[] => {
+  // Memoize to prevent expensive recalculation on every render
+  const events = useMemo(() => sessions.flatMap((template): CalendarEvent[] => {
     if (template.instances && template.instances.length > 0) {
       return template.instances.map(instance => {
         const startTime = new Date(instance.start_time);
         const endTime = new Date(instance.end_time);
         const formattedStartTime = format(startTime, 'h:mm a');
         const formattedEndTime = format(endTime, 'h:mm a');
-        
+
         const userBooking = instance.bookings?.find(booking => {
           return booking.user && booking.user.clerk_user_id === user?.id;
         });
-        
+
         return {
           id: instance.id,
           title: `${formattedStartTime} – ${formattedEndTime}: ${template.name}`,
@@ -154,68 +155,68 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
         }
       })
     }
-    
+
     // For recurring templates without instances, use the schedules to create events
     if (template.is_recurring && template.schedules) {
       const scheduleEvents: CalendarEvent[] = []
-      
+
       template.schedules.forEach(schedule => {
         schedule.days.forEach(day => {
           const [hours, minutes] = schedule.time.split(':').map(Number)
-          
+
           // Create events for each occurrence within the date range
-          let currentDate = new Date()
-          const endDate = new Date()
-          endDate.setMonth(endDate.getMonth() + 3) // Show next 3 months
-          
-          while (currentDate <= endDate) {
+          let iterDate = new Date()
+          const rangeEndDate = new Date()
+          rangeEndDate.setMonth(rangeEndDate.getMonth() + 3) // Show next 3 months
+
+          while (iterDate <= rangeEndDate) {
             // Check if this day matches the schedule day
-            const currentDay = format(currentDate, 'EEEE').toLowerCase()
+            const iterDay = format(iterDate, 'EEEE').toLowerCase()
             const scheduleDay = day.toLowerCase()
-            
-            if (currentDay === scheduleDay) {
+
+            if (iterDay === scheduleDay) {
               // Create event date by combining the current date with the schedule time
               const eventDate = new Date(
-                currentDate.getFullYear(),
-                currentDate.getMonth(),
-                currentDate.getDate(),
+                iterDate.getFullYear(),
+                iterDate.getMonth(),
+                iterDate.getDate(),
                 hours,
                 minutes,
                 0,
                 0
               )
-              
+
               // Create end time
-              const endDate = new Date(
-                currentDate.getFullYear(),
-                currentDate.getMonth(),
-                currentDate.getDate(),
+              const eventEndDate = new Date(
+                iterDate.getFullYear(),
+                iterDate.getMonth(),
+                iterDate.getDate(),
                 hours,
                 minutes + template.duration_minutes,
                 0,
                 0
               )
-              
+
               scheduleEvents.push({
                 id: `${template.id}-${schedule.id}-${day}-${eventDate.toISOString()}`,
                 title: template.name,
                 start: eventDate,
-                end: endDate,
+                end: eventEndDate,
                 resource: template
               })
             }
-            
+
             // Move to next day
-            currentDate.setDate(currentDate.getDate() + 1)
+            iterDate.setDate(iterDate.getDate() + 1)
           }
         })
       })
-      
+
       return scheduleEvents
     }
-    
+
     return []
-  })
+  }), [sessions, user?.id])
 
   // Calculate time range based on sessions
   const calculateTimeRange = () => {

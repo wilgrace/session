@@ -1,5 +1,5 @@
 import { and, eq, gte, lte } from 'drizzle-orm';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase';
 import { bookings, clerkUsers, sessionInstances, sessionTemplates } from './schema';
 
 export type SessionInstanceWithBookings = typeof sessionInstances.$inferSelect & {
@@ -13,6 +13,7 @@ export async function getSessionInstancesForDateRange(
   startDate: Date,
   endDate: Date
 ): Promise<SessionInstanceWithBookings[]> {
+  const supabase = createSupabaseServerClient();
   const instances = await supabase
     .from('session_instances')
     .select(`
@@ -33,6 +34,7 @@ export async function getSessionInstancesForDateRange(
 export async function getSessionInstanceById(
   id: string
 ): Promise<SessionInstanceWithBookings | null> {
+  const supabase = createSupabaseServerClient();
   const instance = await supabase
     .from('session_instances')
     .select(`
@@ -53,6 +55,7 @@ export async function updateBookingStatus(
   bookingId: string,
   status: 'confirmed' | 'cancelled' | 'completed' | 'no_show'
 ): Promise<void> {
+  const supabase = createSupabaseServerClient();
   await supabase
     .from('bookings')
     .update({ status, updated_at: new Date().toISOString() })
@@ -65,6 +68,7 @@ export async function createBooking(
   numberOfSpots: number = 1,
   notes?: string
 ): Promise<void> {
+  const supabase = createSupabaseServerClient();
   await supabase.from('bookings').insert({
     session_instance_id: sessionInstanceId,
     user_id: userId,
@@ -77,6 +81,7 @@ export async function createBooking(
 export async function deleteBooking(
   bookingId: string
 ): Promise<void> {
+  const supabase = createSupabaseServerClient();
   await supabase
     .from('bookings')
     .delete()
