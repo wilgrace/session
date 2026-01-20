@@ -41,15 +41,14 @@ supabase/
 └── config.toml           # Local Supabase config
 ```
 
-## Database Schema (7 Tables)
+## Database Schema (6 Tables)
 
 1. **organizations** - Multi-tenant support
 2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase)
-3. **saunas** - Physical locations
-4. **session_templates** - Master templates (recurring or one-off)
-5. **session_schedules** - Days/times for recurring sessions
-6. **session_instances** - Individual bookable time slots (UTC)
-7. **bookings** - User reservations
+3. **session_templates** - Master templates (recurring or one-off)
+4. **session_schedules** - Days/times for recurring sessions
+5. **session_instances** - Individual bookable time slots (UTC)
+6. **bookings** - User reservations
 
 ### Key Relationships
 - Templates have many Schedules → generates Instances
@@ -72,6 +71,51 @@ npm run db:studio        # Open Drizzle Studio
 # Deployment
 ./scripts/deploy-functions.sh [PROJECT-REF]   # Deploy Edge Functions
 ./scripts/test-connection.sh                   # Test connectivity
+
+# Database Sync (Local ↔ Remote)
+supabase db diff --linked           # Check differences between local and remote
+supabase db push --linked           # Push local migrations to remote
+supabase db reset                   # Reset local DB to match migrations
+```
+
+## Database Sync Workflow
+
+Keep local and remote Supabase databases in sync with this workflow:
+
+### Before pushing to git (after schema changes)
+```bash
+# 1. Generate migration if you made Drizzle schema changes
+npm run db:generate
+
+# 2. Check what differs between local migrations and remote DB
+supabase db diff --linked
+
+# 3. Push new migrations to remote
+supabase db push --linked
+
+# 4. Commit and push
+git add supabase/migrations/
+git commit -m "chore: Add database migration"
+git push
+```
+
+### After pulling from git (or switching branches)
+```bash
+# Reset local DB to apply any new migrations
+supabase db reset
+```
+
+### Syncing remote changes to local
+If the remote DB has changes not in your local migrations:
+```bash
+# 1. Check what's different
+supabase db diff --linked
+
+# 2. Create a migration from the diff (if needed)
+supabase db diff --linked -f new_migration_name
+
+# 3. Reset local to apply the new migration
+supabase db reset
 ```
 
 ## Environment Variables
