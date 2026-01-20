@@ -18,9 +18,30 @@ interface Booking {
     name?: string;
     email?: string;
     is_super_admin?: boolean;
+    clerk_user_id?: string;
     image_url?: string;
     avatar_url?: string;
   };
+}
+
+// Helper to get display name from user
+function getUserDisplayName(user?: Booking['user']): string {
+  if (!user) return 'Guest';
+  if (user.first_name) {
+    return user.last_name
+      ? `${user.first_name} ${user.last_name}`
+      : user.first_name;
+  }
+  return user.full_name || user.name || user.email || 'Guest';
+}
+
+// Helper to determine user type from clerk_user_id prefix
+function getUserType(user?: Booking['user']): 'Admin' | 'User' | 'Guest' {
+  if (!user) return 'Guest';
+  if (user.is_super_admin) return 'Admin';
+  if (user.clerk_user_id?.startsWith('guest_')) return 'Guest';
+  if (user.clerk_user_id?.startsWith('user_')) return 'User';
+  return 'User'; // Default to User if clerk_user_id doesn't have expected prefix
 }
 
 export function BookingsList({ bookings, onSelect, onCheckIn }: {
@@ -101,9 +122,7 @@ export function BookingsList({ bookings, onSelect, onCheckIn }: {
             )}
             <div>
               <p className="font-medium">
-                {booking.user?.first_name && booking.user?.last_name 
-                  ? `${booking.user.first_name} ${booking.user.last_name}`
-                  : booking.user?.full_name || booking.user?.name || 'Guest'}
+                {getUserDisplayName(booking.user)}
                 {booking.number_of_spots > 1 && (
                   <span className="text-sm text-muted-foreground ml-2">
                     + {booking.number_of_spots - 1} guests
@@ -111,7 +130,7 @@ export function BookingsList({ bookings, onSelect, onCheckIn }: {
                 )}
               </p>
               <p className="text-sm text-muted-foreground">
-                {booking.user?.is_super_admin ? 'Admin' : booking.user ? 'User' : 'Guest'}
+                {getUserType(booking.user)}
               </p>
             </div>
           </div>

@@ -20,12 +20,33 @@ interface Booking {
     name?: string;
     email?: string;
     is_super_admin?: boolean;
+    clerk_user_id?: string;
     image_url?: string;
     avatar_url?: string;
     visits?: number;
     survey_complete?: boolean;
     joined_year?: number;
   };
+}
+
+// Helper to get display name from user
+function getUserDisplayName(user?: Booking['user']): string {
+  if (!user) return 'Guest';
+  if (user.first_name) {
+    return user.last_name
+      ? `${user.first_name} ${user.last_name}`
+      : user.first_name;
+  }
+  return user.full_name || user.name || user.email || 'Guest';
+}
+
+// Helper to determine user type from clerk_user_id prefix
+function getUserType(user?: Booking['user']): 'Admin' | 'User' | 'Guest' {
+  if (!user) return 'Guest';
+  if (user.is_super_admin) return 'Admin';
+  if (user.clerk_user_id?.startsWith('guest_')) return 'Guest';
+  if (user.clerk_user_id?.startsWith('user_')) return 'User';
+  return 'User'; // Default to User if clerk_user_id doesn't have expected prefix
 }
 
 export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
@@ -110,13 +131,11 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
           </AvatarFallback>
         </Avatar>
         <div className="text-xl font-bold">
-          {user.first_name && user.last_name 
-            ? `${user.first_name} ${user.last_name}`
-            : user.full_name || user.name || 'Guest'}
+          {getUserDisplayName(localBooking.user)}
         </div>
         <div className="text-muted-foreground mb-2">{user.email}</div>
-        <Badge variant={user.is_super_admin ? 'default' : 'secondary'}>
-          {user.is_super_admin ? 'Admin' : localBooking.user ? 'User' : 'Guest'}
+        <Badge variant={getUserType(localBooking.user) === 'Admin' ? 'default' : 'secondary'}>
+          {getUserType(localBooking.user)}
         </Badge>
       </div>
       <Card className="p-4 mx-4 mb-4">
@@ -129,7 +148,7 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
         {localBooking.created_at && <div className="text-xs text-muted-foreground">Booked: {new Date(localBooking.created_at).toLocaleString()}</div>}
       </Card>
       <Card className="p-4 mx-4">
-        <div className="font-semibold mb-2">About {user.full_name?.split(' ')[0] || user.name?.split(' ')[0] || 'Guest'}</div>
+        <div className="font-semibold mb-2">About {user.first_name || user.full_name?.split(' ')[0] || user.name?.split(' ')[0] || 'Guest'}</div>
         {user.visits && <div className="flex items-center gap-2 text-sm mb-1"><Check className="h-4 w-4 text-muted-foreground" /> {user.visits} visits</div>}
         {user.survey_complete && <div className="flex items-center gap-2 text-sm mb-1"><Check className="h-4 w-4 text-muted-foreground" /> Survey complete</div>}
         {user.joined_year && <div className="flex items-center gap-2 text-sm mb-1"><Check className="h-4 w-4 text-muted-foreground" /> Joined in {user.joined_year}</div>}
