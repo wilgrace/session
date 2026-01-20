@@ -52,7 +52,12 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
       setWaitError(null);
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: { 'Prefer': 'return=representation' }
+          }
+        }
       );
       // Only proceed if user is defined
       if (!user) return;

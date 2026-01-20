@@ -119,7 +119,12 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
       if (!user?.id) return
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: { 'Prefer': 'return=representation' }
+          }
+        }
       )
       const { data, error } = await supabase
         .from('clerk_users')
