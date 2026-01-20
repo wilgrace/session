@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { clerkClient } from '@clerk/clerk-sdk-node';
 import { auth } from '@clerk/nextjs/server';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 // Map role values to display labels
 const ROLE_LABELS: Record<string, string> = {
@@ -17,21 +17,7 @@ export async function GET() {
       return NextResponse.json({ error: "Organization ID not configured" }, { status: 500 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        },
-        global: {
-          headers: {
-            'Prefer': 'return=representation'
-          }
-        }
-      }
-    );
+    const supabase = createSupabaseServerClient();
 
     // Get users from Supabase (select only needed columns)
     const { data: supabaseUsers, error } = await supabase

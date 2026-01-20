@@ -21,7 +21,7 @@ import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
 import { useUser } from "@clerk/nextjs"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from '@supabase/supabase-js'
+import { getInternalUserId } from "@/app/actions/session"
 
 // Add custom styles to hide rbc-event-label
 const calendarStyles = `
@@ -117,22 +117,9 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
   useEffect(() => {
     const fetchInternalUserId = async () => {
       if (!user?.id) return
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: { 'Prefer': 'return=representation' }
-          }
-        }
-      )
-      const { data, error } = await supabase
-        .from('clerk_users')
-        .select('id')
-        .eq('clerk_user_id', user.id)
-        .single()
-      if (!error && data && data.id) {
-        setInternalUserId(data.id)
+      const result = await getInternalUserId(user.id)
+      if (result.success && result.userId) {
+        setInternalUserId(result.userId)
       }
     }
     fetchInternalUserId()

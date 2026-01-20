@@ -1,43 +1,11 @@
 "use server"
 
-import { createClient } from "@supabase/supabase-js"
 import { SessionTemplate, SessionSchedule } from "@/types/session"
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { mapDayStringToInt, mapIntToDayString } from "@/lib/day-utils"
 import { ensureClerkUser } from "./clerk"
 import { Booking } from "@/types/booking"
-
-// Global fetch wrapper for Accept header enforcement (server-side only)
-if (typeof window === 'undefined') {
-  const originalFetch = global.fetch;
-  global.fetch = async (input, init = {}) => {
-    let url = '';
-    if (typeof input === 'string') url = input;
-    else if (input instanceof Request) url = input.url;
-    else if (input instanceof URL) url = input.toString();
-
-    // Normalize headers to a plain object for mutation
-    let headersObj: Record<string, string> = {};
-    if (init.headers instanceof Headers) {
-      headersObj = Object.fromEntries(init.headers.entries());
-    } else if (Array.isArray(init.headers)) {
-      headersObj = Object.fromEntries(init.headers);
-    } else if (typeof init.headers === 'object' && init.headers !== null) {
-      headersObj = { ...init.headers };
-    }
-    if (!('Accept' in headersObj)) {
-      headersObj['Accept'] = 'application/json';
-    }
-    // Add Prefer header for Supabase queries (needed for .maybeSingle() and .single())
-    if (url.includes('supabase.co') || url.includes('localhost:54321') || url.includes('127.0.0.1:54321')) {
-      if (!('Prefer' in headersObj)) {
-        headersObj['Prefer'] = 'return=representation';
-      }
-    }
-    init.headers = headersObj;
-    return originalFetch(input, init);
-  };
-}
+import { createSupabaseServerClient, getUserContextWithClient, UserContext } from "@/lib/supabase"
 
 // Helper function to get authenticated user
 async function getAuthenticatedUser() {
@@ -48,32 +16,8 @@ async function getAuthenticatedUser() {
   return userId
 }
 
-// Helper function to create Supabase client
-function createSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error(`Missing Supabase environment variables`);
-  }
-
-  // Check if URL is localhost in production
-  if (supabaseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
-    throw new Error('Supabase URL is pointing to localhost in production');
-  }
-
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    },
-    global: {
-      headers: {
-        'Prefer': 'return=representation'
-      }
-    }
-  });
-}
+// Alias for backward compatibility within this file
+const createSupabaseClient = createSupabaseServerClient;
 
 interface CreateSessionTemplateParams {
   name: string
@@ -1868,6 +1812,176 @@ export async function checkInBooking(bookingId: string) {
     }
 
     return { success: true, data: booking };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// PUBLIC SESSION DATA (no auth required)
+// Use these for public booking pages
+// ============================================
+
+/**
+ * Get a single session template by ID (public, no auth required).
+ * Use this for public booking pages.
+ */
+export async function getPublicSessionById(sessionId: string): Promise<{
+  success: boolean;
+  data?: SessionTemplate;
+  error?: string;
+}> {
+  try {
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
+      return { success: false, error: "Invalid session ID provided" };
+    }
+
+    const supabase = createSupabaseClient();
+
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('session_templates')
+      .select(`
+        id,
+        name,
+        description,
+        capacity,
+        duration_minutes,
+        is_open,
+        is_recurring,
+        created_at,
+        updated_at,
+        created_by,
+        organization_id
+      `)
+      .eq('id', sessionId)
+      .eq('is_open', true)
+      .single();
+
+    if (sessionError) {
+      return { success: false, error: sessionError.message };
+    }
+
+    if (!sessionData) {
+      return { success: false, error: "Session template not found or not open for booking" };
+    }
+
+    return { success: true, data: sessionData as unknown as SessionTemplate };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check if a user has an existing booking for a session instance.
+ * Returns the booking if found, null otherwise.
+ */
+/**
+ * Get the internal Supabase user ID for a Clerk user.
+ * Used to identify current user's bookings in the calendar.
+ */
+export async function getInternalUserId(
+  clerkUserId: string
+): Promise<{ success: boolean; userId?: string; error?: string }> {
+  try {
+    const supabase = createSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('clerk_users')
+      .select('id')
+      .eq('clerk_user_id', clerkUserId)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, userId: data?.id };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check if a Clerk user has been synced to Supabase.
+ * Used during sign-up flow to wait for webhook sync.
+ */
+export async function checkClerkUserSynced(
+  clerkUserId: string,
+  email: string
+): Promise<{ success: boolean; synced: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("clerk_users")
+      .select("id")
+      .eq("email", email)
+      .eq("clerk_user_id", clerkUserId)
+      .maybeSingle();
+
+    if (error) {
+      return { success: false, synced: false, error: error.message };
+    }
+
+    return { success: true, synced: !!data?.id };
+  } catch (error: any) {
+    return { success: false, synced: false, error: error.message };
+  }
+}
+
+/**
+ * Check if a user has an existing booking for a session instance.
+ * Returns the booking if found, null otherwise.
+ */
+export async function checkUserExistingBooking(
+  clerkUserId: string,
+  sessionTemplateId: string,
+  startTime: string
+): Promise<{
+  success: boolean;
+  booking?: { id: string; number_of_spots: number; notes: string | null };
+  error?: string;
+}> {
+  try {
+    const supabase = createSupabaseClient();
+
+    // Get user's Supabase ID
+    const { data: userData, error: userError } = await supabase
+      .from('clerk_users')
+      .select('id')
+      .eq('clerk_user_id', clerkUserId)
+      .single();
+
+    if (userError || !userData) {
+      return { success: true, booking: undefined }; // User not found in DB yet, no booking
+    }
+
+    // Find the session instance
+    const { data: instance, error: instanceError } = await supabase
+      .from('session_instances')
+      .select('id')
+      .eq('template_id', sessionTemplateId)
+      .eq('start_time', startTime)
+      .single();
+
+    if (instanceError || !instance) {
+      return { success: true, booking: undefined }; // No instance found
+    }
+
+    // Check for existing booking
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('id, number_of_spots, notes')
+      .eq('user_id', userData.id)
+      .eq('session_instance_id', instance.id)
+      .eq('status', 'confirmed')
+      .maybeSingle();
+
+    if (bookingError) {
+      return { success: false, error: bookingError.message };
+    }
+
+    return { success: true, booking: booking || undefined };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

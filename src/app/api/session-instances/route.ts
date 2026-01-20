@@ -1,16 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const createSupabaseClient = () => {
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    global: {
-      headers: { 'Prefer': 'return=representation' }
-    }
-  });
-};
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 interface SessionTemplate {
   id: string;
@@ -50,7 +39,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = createSupabaseClient();
+    const supabase = createSupabaseServerClient();
 
     // Get all session templates that are open for booking
     const { data: templates, error: templatesError } = await supabase

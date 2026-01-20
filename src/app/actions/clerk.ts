@@ -1,26 +1,10 @@
 "use server"
 
-import { createClient } from "@supabase/supabase-js"
 import { clerkClient } from "@clerk/clerk-sdk-node"
+import { createSupabaseServerClient } from "@/lib/supabase"
 
-// Helper function to create Supabase client with proper headers
-function createSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      },
-      global: {
-        headers: {
-          'Prefer': 'return=representation'
-        }
-      }
-    }
-  )
-}
+// Alias for backward compatibility within this file
+const createSupabaseClient = createSupabaseServerClient;
 
 async function getClerkUser(clerkUserId: string) {
   try {

@@ -4,8 +4,7 @@ import { SignUp } from "@clerk/nextjs"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { createClient } from "@supabase/supabase-js"
-import { dark } from "@clerk/themes"
+import { checkClerkUserSynced } from "@/app/actions/session"
 
 export type SignUpPanelProps = {
   initialValues: {
@@ -36,8 +35,6 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
     lastName: initialValues.lastName || "",
   };
 
-  // Debug log
-
   const { user, isLoaded } = useUser();
   const router = useRouter();
   const [waiting, setWaiting] = useState(false);
@@ -47,44 +44,43 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
     // Only run after Clerk user is loaded and signed in
     if (!isLoaded || !user) return;
     let cancelled = false;
+
     async function waitForUpgrade() {
       setWaiting(true);
       setWaitError(null);
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: { 'Prefer': 'return=representation' }
-          }
-        }
-      );
+
       // Only proceed if user is defined
       if (!user) return;
       const email = user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress;
       const clerkUserId = user.id;
+
+      if (!email) {
+        setWaitError("No email found for user");
+        setWaiting(false);
+        return;
+      }
+
       let tries = 0;
       while (tries < 20) { // Try for up to 10 seconds (20 x 500ms)
-        const { data, error } = await supabase
-          .from("clerk_users")
-          .select("id")
-          .eq("email", email)
-          .eq("clerk_user_id", clerkUserId)
-          .maybeSingle();
-        if (data && data.id) {
+        const result = await checkClerkUserSynced(clerkUserId, email);
+
+        if (result.success && result.synced) {
           if (!cancelled) {
             router.push("/booking");
           }
           return;
         }
+
         await new Promise((res) => setTimeout(res, 500));
         tries++;
       }
+
       if (!cancelled) {
         setWaitError("Your account is taking longer than expected to upgrade. Please refresh or try again in a moment.");
         setWaiting(false);
       }
     }
+
     waitForUpgrade();
     return () => {
       cancelled = true;
@@ -110,4 +106,4 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
       )}
     </div>
   )
-} 
+}
