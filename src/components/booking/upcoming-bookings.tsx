@@ -18,9 +18,10 @@ import { Booking } from "@/types/booking"
 interface UpcomingBookingsProps {
   bookings: Booking[]
   className?: string
+  slug: string
 }
 
-export function UpcomingBookings({ bookings, className }: UpcomingBookingsProps) {
+export function UpcomingBookings({ bookings, className, slug }: UpcomingBookingsProps) {
   if (!bookings || bookings.length === 0) {
     return null
   }
@@ -54,7 +55,7 @@ export function UpcomingBookings({ bookings, className }: UpcomingBookingsProps)
               </div>
               <div className="flex items-center space-x-2">
                 <Link
-                  href={`/booking/${booking.session_instance.session_templates.id}?edit=true&bookingId=${booking.id}&start=${new Date(booking.session_instance.start_time).toISOString()}`}
+                  href={`/${slug}/${booking.session_instance.session_templates.id}?edit=true&bookingId=${booking.id}&start=${new Date(booking.session_instance.start_time).toISOString()}`}
                   className="inline-flex items-center text-sm text-blue-600 hover:text-blue-500"
                 >
                   <Edit className="mr-1.5 h-4 w-4" />
@@ -66,12 +67,6 @@ export function UpcomingBookings({ bookings, className }: UpcomingBookingsProps)
           </div>
         ))}
 
-        <div className="p-4 sm:px-6 bg-gray-50">
-          <Link href="/previous-bookings" className="text-sm text-gray-600 hover:text-gray-900 flex items-center">
-            Previous bookings
-            <ChevronRight className="ml-1 h-4 w-4" />
-          </Link>
-        </div>
       </div>
     </div>
   )

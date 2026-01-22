@@ -18,9 +18,10 @@ interface SessionPageClientProps {
     edit?: string
     bookingId?: string
   }
+  slug: string
 }
 
-export function SessionPageClient({ sessionId, searchParams }: SessionPageClientProps) {
+export function SessionPageClient({ sessionId, searchParams, slug }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
   const [session, setSession] = useState<SessionTemplate | null>(null)
@@ -29,6 +30,7 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [bookingDetails, setBookingDetails] = useState<any>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [numberOfSpots, setNumberOfSpots] = useState(1)
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -72,7 +74,7 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
               bookingId: bookingCheck.booking.id,
               start: decodeURIComponent(startParam)
             })
-            router.replace(`/booking/${sessionId}?${params.toString()}`)
+            router.replace(`/${slug}/${sessionId}?${params.toString()}`)
             return
           }
         }
@@ -150,7 +152,7 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
     return (
       <div className="container mx-auto py-8">
         <div className="mb-4">
-          <Link href="/booking">
+          <Link href={`/${slug}`}>
             <Button variant="ghost" className="gap-2">
               <ChevronLeft className="h-4 w-4" />
               Back to Calendar
@@ -175,7 +177,7 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
   return (
     <div className="container mx-auto py-4 md:py-0">
       <div>
-        <Link href="/booking">
+        <Link href={`/${slug}`}>
           <Button variant="ghost" className="gap-2">
             <ChevronLeft className="h-4 w-4" />
             Back
@@ -188,6 +190,9 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
           session={session}
           startTime={startTime || undefined}
           currentUserSpots={bookingDetails?.number_of_spots || 0}
+          numberOfSpots={numberOfSpots}
+          onSpotsChange={setNumberOfSpots}
+          showSpotsSelector={!bookingDetails && session.pricing_type === 'paid'}
         />
         <div className="md:hidden">
           <hr className="border-gray-200 my-0 mx-6" />
@@ -196,6 +201,8 @@ export function SessionPageClient({ sessionId, searchParams }: SessionPageClient
           session={session}
           startTime={startTime || undefined}
           bookingDetails={bookingDetails}
+          numberOfSpots={numberOfSpots}
+          slug={slug}
         />
       </div>
     </div>

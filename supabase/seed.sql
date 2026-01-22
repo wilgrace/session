@@ -175,9 +175,9 @@ TRUNCATE TABLE public.clerk_users CASCADE;
 TRUNCATE TABLE public.organizations CASCADE;
 
 -- Create sample organization
-INSERT INTO public.organizations (id, name, description)
-VALUES 
-  ('org_2wzj16iQknhJygxeSYnYoOX2MO4', 'Cardiff Community Sawna', 'A sample organization for testing');
+INSERT INTO public.organizations (id, name, slug, description)
+VALUES
+  ('org_2wzj16iQknhJygxeSYnYoOX2MO4', 'Cardiff Community Sawna', 'cardiff', 'A sample organization for testing');
 
 -- Create sample clerk users
 INSERT INTO public.clerk_users (

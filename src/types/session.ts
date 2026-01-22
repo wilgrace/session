@@ -39,6 +39,10 @@ export interface SessionTemplate {
   organization_id: string
   schedules: SessionSchedule[]
   instances: SessionInstance[]
+  // Pricing fields
+  pricing_type?: 'free' | 'paid'
+  drop_in_price?: number | null
+  booking_instructions?: string | null
 }
 
 export interface SessionInstance {

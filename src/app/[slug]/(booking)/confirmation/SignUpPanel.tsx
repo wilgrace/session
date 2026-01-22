@@ -12,9 +12,10 @@ export type SignUpPanelProps = {
     firstName?: string
     lastName?: string
   }
+  slug: string
 }
 
-export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
+export default function SignUpPanel({ initialValues, slug }: SignUpPanelProps) {
   // Define appearance inside the client component
   const appearance = {
     elements: {
@@ -66,7 +67,7 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
 
         if (result.success && result.synced) {
           if (!cancelled) {
-            router.push("/booking");
+            router.push(`/${slug}`);
           }
           return;
         }
@@ -91,7 +92,7 @@ export default function SignUpPanel({ initialValues }: SignUpPanelProps) {
     <div className="w-full max-w-md bg-white rounded-lg p-6 mb-6">
       <SignUp
         routing="hash"
-        fallbackRedirectUrl="/booking"
+        fallbackRedirectUrl={`/${slug}`}
         initialValues={safeInitialValues}
         appearance={appearance}
       />

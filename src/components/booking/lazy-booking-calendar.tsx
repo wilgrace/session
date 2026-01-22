@@ -15,8 +15,9 @@ const BookingCalendar = dynamic(
 
 interface LazyBookingCalendarProps {
   sessions: SessionTemplate[]
+  slug: string
 }
 
-export function LazyBookingCalendar({ sessions }: LazyBookingCalendarProps) {
-  return <BookingCalendar sessions={sessions} />
+export function LazyBookingCalendar({ sessions, slug }: LazyBookingCalendarProps) {
+  return <BookingCalendar sessions={sessions} slug={slug} />
 }

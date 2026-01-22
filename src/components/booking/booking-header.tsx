@@ -5,28 +5,30 @@ import Link from "next/link"
 
 interface BookingHeaderProps {
   isAdmin: boolean
+  slug: string
+  organizationName?: string | null
 }
 
-export function BookingHeader({ isAdmin }: BookingHeaderProps) {
+export function BookingHeader({ isAdmin, slug, organizationName }: BookingHeaderProps) {
   return (
     <header className="border-b">
       <div className="flex h-16 items-center px-4">
         <div className="flex-1">
-          <Link href="/booking" className="text-xl font-bold">
-            Community Sauna
+          <Link href={`/${slug}`} className="text-xl font-bold">
+            {organizationName || "Book a Session"}
           </Link>
         </div>
         <div className="flex items-center gap-4">
           <SignedIn>
             {isAdmin && (
               <Link
-                href="/admin/calendar"
+                href={`/${slug}/admin`}
                 className="text-sm font-medium text-muted-foreground hover:text-primary"
               >
                 Admin
               </Link>
             )}
-            <UserButton afterSignOutUrl="/booking" />
+            <UserButton afterSignOutUrl={`/${slug}`} />
           </SignedIn>
           <SignedOut>
             <Link

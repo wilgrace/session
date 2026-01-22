@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { DayPicker } from '@/components/admin/day-picker';
 import { useSessions } from '@/hooks/use-sessions';
-import { addDays, startOfDay, format, isSameDay, endOfDay } from 'date-fns';
+import { addDays, startOfDay, format, endOfDay } from 'date-fns';
 import { SessionDetails } from '@/components/admin/session-details';
 import { BookingsList } from '@/components/admin/bookings-list';
 import { BookingDetailsPanel } from '@/components/admin/booking-details-panel';
@@ -13,50 +13,56 @@ import { useIsMobile } from '@/hooks/use-mobile';
 const NUM_DAYS = 14;
 
 export default function AdminHomePage() {
-  const today = startOfDay(new Date());
+  const [today] = useState(() => startOfDay(new Date()));
   const [dayOffset, setDayOffset] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(today);
+  const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const isMobile = useIsMobile();
 
-  // Generate visible days
-  const days = Array.from({ length: 7 }, (_, i) => addDays(today, dayOffset + i));
+  // Generate visible days - memoized to prevent infinite re-fetching
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(today, dayOffset + i)),
+    [today, dayOffset]
+  );
+
+  // Memoize date range for useSessions
+  const startDate = useMemo(() => days[0], [days]);
+  const endDate = useMemo(() => endOfDay(days[days.length - 1]), [days]);
 
   // Fetch sessions for the visible range
-  const { sessions: rawSessions } = useSessions(days[0], endOfDay(days[days.length - 1]));
+  const { sessions: rawSessions } = useSessions(startDate, endDate);
   const sessions = rawSessions ?? [];
 
-  // Debug logging
-  sessions.forEach((s) => {
-  });
-
-  // Map: date string -> array of sessions (group by local day)
-  const sessionsByDay: Record<string, any[]> = {};
-  sessions.forEach((s) => {
-    if ((s as any).start_time) {
-      const dateObj = new Date((s as any).start_time);
-      if (!isNaN(dateObj.getTime())) {
-        // Use local midnight for grouping
-        const localMidnight = new Date(
-          dateObj.getFullYear(),
-          dateObj.getMonth(),
-          dateObj.getDate()
-        );
-        const key = format(localMidnight, 'yyyy-MM-dd');
-        if (!sessionsByDay[key]) sessionsByDay[key] = [];
-        sessionsByDay[key].push(s);
+  // Map: date string -> array of sessions (group by local day) - memoized
+  const sessionsByDay = useMemo(() => {
+    const result: Record<string, any[]> = {};
+    sessions.forEach((s) => {
+      if ((s as any).start_time) {
+        const dateObj = new Date((s as any).start_time);
+        if (!isNaN(dateObj.getTime())) {
+          // Use local midnight for grouping
+          const localMidnight = new Date(
+            dateObj.getFullYear(),
+            dateObj.getMonth(),
+            dateObj.getDate()
+          );
+          const key = format(localMidnight, 'yyyy-MM-dd');
+          if (!result[key]) result[key] = [];
+          result[key].push(s);
+        }
       }
-    }
-  });
+    });
+    return result;
+  }, [sessions]);
 
   // Find sessions for the selected day
   const selectedDayKey = format(selectedDay, 'yyyy-MM-dd');
   const sessionsForDay = useMemo(() => {
-    const sessions = sessionsByDay[selectedDayKey] || [];
+    const daySessions = sessionsByDay[selectedDayKey] || [];
     // Sort by start_time ascending
-    return [...sessions].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return [...daySessions].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   }, [sessionsByDay, selectedDayKey]);
 
   // Get the currently selected session

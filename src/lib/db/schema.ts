@@ -3,6 +3,7 @@ import { pgTable, text, timestamp, uuid, integer, boolean, date, time } from 'dr
 export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
   description: text('description'),
   logoUrl: text('logo_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -50,6 +51,10 @@ export const sessionTemplates = pgTable('session_templates', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   timezone: text('timezone').notNull().default('UTC'),
+  // Pricing fields
+  pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
+  dropInPrice: integer('drop_in_price'), // Price in pence for non-members
+  bookingInstructions: text('booking_instructions'), // Instructions shown on confirmation page
 });
 
 export const sessionSchedules = pgTable('session_schedules', {
@@ -80,10 +85,29 @@ export const bookings = pgTable('bookings', {
   organizationId: text('organization_id').references(() => organizations.id),
   sessionInstanceId: uuid('session_instance_id').notNull().references(() => sessionInstances.id),
   userId: uuid('user_id').notNull().references(() => clerkUsers.id),
-  status: text('status').notNull().default('confirmed'), // Enforce allowed values in app logic
+  status: text('status').notNull().default('confirmed'), // 'pending_payment' | 'confirmed' | 'cancelled' | 'completed' | 'no_show'
   numberOfSpots: integer('number_of_spots').notNull().default(1),
   notes: text('notes'),
   bookedAt: timestamp('booked_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  // Payment fields
+  paymentStatus: text('payment_status').default('not_required'), // 'not_required' | 'pending' | 'completed' | 'failed' | 'refunded'
+  stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  amountPaid: integer('amount_paid'), // Amount in pence
+});
+
+export const stripeConnectAccounts = pgTable('stripe_connect_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id).unique(),
+  stripeAccountId: text('stripe_account_id').notNull().unique(),
+  accountType: text('account_type').notNull().default('standard'),
+  detailsSubmitted: boolean('details_submitted').notNull().default(false),
+  chargesEnabled: boolean('charges_enabled').notNull().default(false),
+  payoutsEnabled: boolean('payouts_enabled').notNull().default(false),
+  country: text('country').default('GB'),
+  defaultCurrency: text('default_currency').default('gbp'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -97,4 +121,5 @@ export type Booking = typeof bookings.$inferSelect;
 
 // Insert types (for creating new records)
 export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
-export type NewSessionSchedule = typeof sessionSchedules.$inferInsert; 
+export type NewSessionSchedule = typeof sessionSchedules.$inferInsert;
+export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect; 

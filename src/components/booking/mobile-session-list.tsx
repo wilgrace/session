@@ -1,18 +1,32 @@
 "use client"
 
+import { useState } from "react"
 import { format, isSameDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@clerk/nextjs"
+import { Lock } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { LockedSessionDialog } from "./locked-session-tooltip"
 
 interface MobileSessionListProps {
   sessions: SessionTemplate[]
   selectedDate: Date
+  slug: string
 }
 
-export function MobileSessionList({ sessions, selectedDate }: MobileSessionListProps) {
+export function MobileSessionList({ sessions, selectedDate, slug }: MobileSessionListProps) {
   const router = useRouter()
+  const { has } = useAuth()
+  const [lockedDialog, setLockedDialog] = useState<{ open: boolean; sessionName: string }>({
+    open: false,
+    sessionName: ''
+  })
+
+  // Check if user is an admin
+  const isAdmin = has?.({ role: 'org:admin' }) || has?.({ role: 'org:super_admin' })
 
   // Filter sessions for the selected date
   const filteredSessions = sessions.filter((template) => {
@@ -39,7 +53,12 @@ export function MobileSessionList({ sessions, selectedDate }: MobileSessionListP
   })
 
   const handleSessionClick = (template: SessionTemplate, startTime: Date) => {
-    router.push(`/booking/${template.id}?start=${startTime.toISOString()}`)
+    // For free sessions, only admins can book - others see dialog
+    if (template.pricing_type === 'free' && !isAdmin) {
+      setLockedDialog({ open: true, sessionName: template.name })
+      return
+    }
+    router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}`)
   }
 
   if (filteredSessions.length === 0) {
@@ -79,21 +98,33 @@ export function MobileSessionList({ sessions, selectedDate }: MobileSessionListP
               0
             )
             
+            const isFreeSession = template.pricing_type === 'free'
             return (
-              <Card key={`${template.id}-${startTime.toISOString()}`}>
+              <Card
+                key={`${template.id}-${startTime.toISOString()}`}
+                className={isFreeSession && !isAdmin ? 'border-amber-300 bg-amber-50' : ''}
+              >
                 <CardContent className="p-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="font-medium">{template.name}</h3>
+                      <h3 className="font-medium flex items-center gap-1">
+                        {isFreeSession && <Lock className="h-3 w-3 text-amber-600" />}
+                        {template.name}
+                      </h3>
                       <p className="text-sm text-muted-foreground">
                         {format(startTime, "h:mm a")}
                       </p>
+                      {isFreeSession && !isAdmin && (
+                        <Badge variant="secondary" className="mt-1 bg-amber-100 text-amber-800 text-xs">
+                          Contact for details
+                        </Badge>
+                      )}
                     </div>
-                    <Button 
-                      variant="outline"
+                    <Button
+                      variant={isFreeSession && !isAdmin ? "secondary" : "outline"}
                       onClick={() => handleSessionClick(template, startTime)}
                     >
-                      Book
+                      {isFreeSession && !isAdmin ? 'Info' : 'Book'}
                     </Button>
                   </div>
                 </CardContent>
@@ -106,21 +137,33 @@ export function MobileSessionList({ sessions, selectedDate }: MobileSessionListP
         return dayInstances.map(instance => {
           // JavaScript will automatically convert UTC to local time
           const startTime = new Date(instance.start_time)
+          const isFreeSession = template.pricing_type === 'free'
           return (
-            <Card key={instance.id}>
+            <Card
+              key={instance.id}
+              className={isFreeSession && !isAdmin ? 'border-amber-300 bg-amber-50' : ''}
+            >
               <CardContent className="p-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="font-medium">{template.name}</h3>
+                    <h3 className="font-medium flex items-center gap-1">
+                      {isFreeSession && <Lock className="h-3 w-3 text-amber-600" />}
+                      {template.name}
+                    </h3>
                     <p className="text-sm text-muted-foreground">
                       {format(startTime, "h:mm a")}
                     </p>
+                    {isFreeSession && !isAdmin && (
+                      <Badge variant="secondary" className="mt-1 bg-amber-100 text-amber-800 text-xs">
+                        Contact for details
+                      </Badge>
+                    )}
                   </div>
-                  <Button 
-                    variant="outline"
+                  <Button
+                    variant={isFreeSession && !isAdmin ? "secondary" : "outline"}
                     onClick={() => handleSessionClick(template, startTime)}
                   >
-                    Book
+                    {isFreeSession && !isAdmin ? 'Info' : 'Book'}
                   </Button>
                 </div>
               </CardContent>
@@ -128,6 +171,13 @@ export function MobileSessionList({ sessions, selectedDate }: MobileSessionListP
           )
         })
       })}
+
+      {/* Locked Session Dialog */}
+      <LockedSessionDialog
+        open={lockedDialog.open}
+        sessionName={lockedDialog.sessionName}
+        onOpenChange={(open) => setLockedDialog(prev => ({ ...prev, open }))}
+      />
     </div>
   )
 } 

@@ -97,7 +97,19 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>(undefined)
   const [generalExpanded, setGeneralExpanded] = useState(true)
   const [scheduleExpanded, setScheduleExpanded] = useState(true)
+  const [paymentExpanded, setPaymentExpanded] = useState(true)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+
+  // Pricing state
+  const [pricingType, setPricingType] = useState<'free' | 'paid'>(
+    (template?.pricing_type as 'free' | 'paid') || 'free'
+  )
+  const [dropInPrice, setDropInPrice] = useState(
+    template?.drop_in_price ? (template.drop_in_price / 100).toFixed(2) : ''
+  )
+  const [bookingInstructions, setBookingInstructions] = useState(
+    template?.booking_instructions || ''
+  )
 
   // Get the day of week in lowercase (e.g., "mon", "tue")
   const getDayOfWeek = (date: Date) => {
@@ -153,12 +165,17 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       setName(template.name)
       setDescription(template.description || "")
       setCapacity(template.capacity.toString())
-      setDuration(template.duration_minutes ? 
-        `${Math.floor(template.duration_minutes / 60).toString().padStart(2, '0')}:${(template.duration_minutes % 60).toString().padStart(2, '0')}` : 
+      setDuration(template.duration_minutes ?
+        `${Math.floor(template.duration_minutes / 60).toString().padStart(2, '0')}:${(template.duration_minutes % 60).toString().padStart(2, '0')}` :
         "01:15"
       )
       setIsOpen(template.is_open)
       setScheduleType(template.is_recurring ? "repeat" : "once")
+
+      // Load pricing fields
+      setPricingType((template.pricing_type as 'free' | 'paid') || 'free')
+      setDropInPrice(template.drop_in_price ? (template.drop_in_price / 100).toFixed(2) : '')
+      setBookingInstructions(template.booking_instructions || '')
       
       if (template.is_recurring) {
         if (template.schedules) {
@@ -201,6 +218,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
     try {
       if (!user) {
@@ -226,7 +244,11 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
           one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
           recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
-          recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null
+          recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
+          // Pricing fields
+          pricing_type: pricingType,
+          drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          booking_instructions: bookingInstructions || null,
         });
 
         if (!result.success) {
@@ -253,7 +275,11 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
           recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
           recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
-          created_by: user.id
+          created_by: user.id,
+          // Pricing fields
+          pricing_type: pricingType,
+          drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          booking_instructions: bookingInstructions || null,
         });
 
         if (!result.success || !result.id) {
@@ -379,11 +405,14 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       onSuccess?.();
       onClose();
     } catch (error: any) {
+      console.error("Session form error:", error);
       toast({
         title: "Error",
         description: error.message || "An error occurred. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -822,6 +851,133 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                     step="60"
                   />
                   <p className="text-sm text-gray-500">Length of the session (hours:minutes).</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Payment Section */}
+          <div className="rounded-lg overflow-hidden">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
+              onClick={() => setPaymentExpanded(!paymentExpanded)}
+            >
+              <span>Payment</span>
+              {paymentExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </button>
+
+            {paymentExpanded && (
+              <div className="px-4 pb-4 space-y-4">
+                {/* Pricing Type Toggle */}
+                <div className="space-y-2 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Card
+                      className={cn(
+                        "cursor-pointer border",
+                        pricingType === "free" ? "border-primary bg-primary/5" : "border-gray-200",
+                      )}
+                      onClick={() => setPricingType("free")}
+                    >
+                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                        {pricingType === "free" && (
+                          <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3 w-3"
+                            >
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          </div>
+                        )}
+                        <span className="font-medium">Free</span>
+                        <span className="text-sm text-gray-500 mt-1">Contact for details</span>
+                      </CardContent>
+                    </Card>
+
+                    <Card
+                      className={cn(
+                        "cursor-pointer border",
+                        pricingType === "paid" ? "border-primary bg-primary/5" : "border-gray-200",
+                      )}
+                      onClick={() => setPricingType("paid")}
+                    >
+                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                        {pricingType === "paid" && (
+                          <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3 w-3"
+                            >
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          </div>
+                        )}
+                        <span className="font-medium">Paid</span>
+                        <span className="text-sm text-gray-500 mt-1">Stripe checkout</span>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                {pricingType === "free" && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3">
+                    <p className="text-sm text-amber-800">
+                      Free sessions are visible on the public calendar but cannot be booked online.
+                      Visitors will see a &quot;Contact us for details&quot; message.
+                    </p>
+                  </div>
+                )}
+
+                {pricingType === "paid" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dropInPrice" className="text-sm font-medium">
+                        Price <span className="text-red-500">*</span>
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
+                        <Input
+                          id="dropInPrice"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={dropInPrice}
+                          onChange={(e) => setDropInPrice(e.target.value)}
+                          className="pl-7"
+                        />
+                      </div>
+                      <p className="text-sm text-gray-500">Price per person for this session.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Booking Instructions - show for both paid and free */}
+                <div className="space-y-2">
+                  <Label htmlFor="bookingInstructions" className="text-sm font-medium">
+                    Booking Instructions
+                  </Label>
+                  <Textarea
+                    id="bookingInstructions"
+                    placeholder="Instructions shown after booking (e.g., arrival time, what to bring)..."
+                    value={bookingInstructions}
+                    onChange={(e) => setBookingInstructions(e.target.value)}
+                    rows={4}
+                  />
+                  <p className="text-sm text-gray-500">Displayed on the confirmation page after booking.</p>
                 </div>
               </div>
             )}

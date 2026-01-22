@@ -6,7 +6,7 @@ import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, Lock } from "lucide-react"
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import {
@@ -19,9 +19,10 @@ import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
-import { useUser } from "@clerk/nextjs"
+import { useUser, useAuth } from "@clerk/nextjs"
 import { Badge } from "@/components/ui/badge"
 import { getInternalUserId } from "@/app/actions/session"
+import { LockedSessionDialog } from "./locked-session-tooltip"
 
 // Add custom styles to hide rbc-event-label
 const calendarStyles = `
@@ -65,6 +66,7 @@ interface CalendarEvent extends Event {
 
 interface BookingCalendarProps {
   sessions: SessionTemplate[]
+  slug: string
 }
 
 // Add the CustomEvent component with proper typing
@@ -74,10 +76,13 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
     const instanceStart = new Date(i.start_time)
     return instanceStart.getTime() === event.start.getTime()
   })
-  
+
   // Calculate total spots booked by summing number_of_spots from all bookings
   const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
   const availableSpots = totalCapacity - totalSpotsBooked
+
+  // Check if this is a free (locked) session
+  const isFreeSession = event.resource.pricing_type === 'free'
 
   const getAvailabilityColor = (available: number, total: number) => {
     if (available === 0) return "bg-gray-500"
@@ -92,27 +97,46 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
       <div className="text-xs text-gray-500">
         {format(event.start, 'HH:mm')} - {event.resource.duration_minutes}mins
       </div>
-      <div className="font-medium">
+      <div className="font-medium flex items-center gap-1">
+        {isFreeSession && <Lock className="h-3 w-3 text-amber-600" />}
         {event.resource.name}
       </div>
-      <Badge 
-        variant="secondary" 
-        className={`${getAvailabilityColor(availableSpots, totalCapacity)} text-white px-2 py-0.5 rounded-full text-xs`}
-      >
-        {availableSpots === 0 ? 'Sold out' : `${totalSpotsBooked}/${totalCapacity}`}
-      </Badge>
+      {isFreeSession ? (
+        <Badge
+          variant="secondary"
+          className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs"
+        >
+          Contact for details
+        </Badge>
+      ) : (
+        <Badge
+          variant="secondary"
+          className={`${getAvailabilityColor(availableSpots, totalCapacity)} text-white px-2 py-0.5 rounded-full text-xs`}
+        >
+          {availableSpots === 0 ? 'Sold out' : `${totalSpotsBooked}/${totalCapacity}`}
+        </Badge>
+      )}
     </div>
   )
 }
 
-export function BookingCalendar({ sessions }: BookingCalendarProps) {
+export function BookingCalendar({ sessions, slug }: BookingCalendarProps) {
   const router = useRouter()
   const { user } = useUser()
+  const { has } = useAuth()
   const isMobile = useIsMobile()
   const [currentView, setCurrentView] = useState<View>('week')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [internalUserId, setInternalUserId] = useState<string | null>(null)
+  const [lockedSessionPopover, setLockedSessionPopover] = useState<{
+    open: boolean
+    sessionName: string
+    anchorEl: HTMLElement | null
+  }>({ open: false, sessionName: '', anchorEl: null })
+
+  // Check if user is an admin
+  const isAdmin = has?.({ role: 'org:admin' }) || has?.({ role: 'org:super_admin' })
 
   useEffect(() => {
     const fetchInternalUserId = async () => {
@@ -257,7 +281,20 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
 
   const timeRange = calculateTimeRange()
 
-  const handleSelectEvent = (event: CalendarEvent) => {
+  const handleSelectEvent = (event: CalendarEvent, e?: React.SyntheticEvent) => {
+    // Check if this is a free (locked) session
+    const isFreeSession = event.resource.pricing_type === 'free'
+
+    // For free sessions, only admins can book - others see tooltip
+    if (isFreeSession && !isAdmin) {
+      setLockedSessionPopover({
+        open: true,
+        sessionName: event.resource.name,
+        anchorEl: e?.currentTarget as HTMLElement || null
+      })
+      return
+    }
+
     if (event.isBooked && event.bookingId) {
       // Only allow editing
       const queryParams = new URLSearchParams({
@@ -265,7 +302,7 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
         edit: 'true',
         bookingId: event.bookingId
       });
-      router.push(`/booking/${event.resource.id}?${queryParams.toString()}`)
+      router.push(`/${slug}/${event.resource.id}?${queryParams.toString()}`)
       return
     }
     if (!event.isBooked) {
@@ -273,7 +310,7 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
       const queryParams = new URLSearchParams({
         start: event.start.toISOString()
       });
-      router.push(`/booking/${event.resource.id}?${queryParams.toString()}`)
+      router.push(`/${slug}/${event.resource.id}?${queryParams.toString()}`)
     }
   }
 
@@ -324,6 +361,7 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
           <MobileSessionList
             sessions={sessions}
             selectedDate={selectedDate}
+            slug={slug}
           />
         </div>
       </div>
@@ -396,24 +434,65 @@ export function BookingCalendar({ sessions }: BookingCalendarProps) {
           timeslots={2}
           min={timeRange.min}
           max={timeRange.max}
-          eventPropGetter={(event: CalendarEvent) => ({
-            className: `cursor-pointer !p-0 ${event.isBooked ? 'booked-session' : ''}`,
-            style: {
-              backgroundColor: event.isBooked ? '#dcfce7' : 'white',
-              color: event.isBooked ? '#166534' : '#111827',
-              borderWidth: '1px',
-              borderStyle: 'solid',
-              borderColor: event.isBooked ? '#86efac' : '#e5e7eb',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              borderRadius: '0.375rem',
-              '&:hover': {
-                backgroundColor: event.isBooked ? '#bbf7d0' : '#f3f4f6'
+          eventPropGetter={(event: CalendarEvent) => {
+            const isFreeSession = event.resource.pricing_type === 'free'
+
+            // Free sessions get amber styling
+            if (isFreeSession && !isAdmin) {
+              return {
+                className: 'cursor-pointer !p-0 free-session',
+                style: {
+                  backgroundColor: '#fffbeb', // amber-50
+                  color: '#92400e', // amber-800
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: '#fcd34d', // amber-300
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                  borderRadius: '0.375rem',
+                }
               }
             }
-          })}
+
+            // Booked sessions get green styling
+            if (event.isBooked) {
+              return {
+                className: 'cursor-pointer !p-0 booked-session',
+                style: {
+                  backgroundColor: '#dcfce7',
+                  color: '#166534',
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: '#86efac',
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                  borderRadius: '0.375rem',
+                }
+              }
+            }
+
+            // Default styling for paid sessions
+            return {
+              className: 'cursor-pointer !p-0',
+              style: {
+                backgroundColor: 'white',
+                color: '#111827',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                borderColor: '#e5e7eb',
+                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                borderRadius: '0.375rem',
+              }
+            }
+          }}
           components={components}
         />
       </div>
+
+      {/* Locked Session Dialog for free sessions */}
+      <LockedSessionDialog
+        open={lockedSessionPopover.open}
+        sessionName={lockedSessionPopover.sessionName}
+        onOpenChange={(open) => setLockedSessionPopover(prev => ({ ...prev, open }))}
+      />
     </div>
   )
 } 

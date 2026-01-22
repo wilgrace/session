@@ -32,6 +32,10 @@ interface CreateSessionTemplateParams {
   recurrence_end_date: string | null
   created_by: string
   schedules?: SessionSchedule[]
+  // Pricing fields
+  pricing_type?: 'free' | 'paid'
+  drop_in_price?: number | null
+  booking_instructions?: string | null
 }
 
 interface CreateSessionTemplateResult {
@@ -77,6 +81,10 @@ interface UpdateSessionTemplateParams {
   one_off_date?: string | null
   recurrence_start_date?: string | null
   recurrence_end_date?: string | null
+  // Pricing fields
+  pricing_type?: 'free' | 'paid'
+  drop_in_price?: number | null
+  booking_instructions?: string | null
 }
 
 interface UpdateSessionTemplateResult {
@@ -213,7 +221,11 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         recurrence_start_date: params.recurrence_start_date,
         recurrence_end_date: params.recurrence_end_date,
         created_by: userData.id,
-        organization_id: userData.organization_id
+        organization_id: userData.organization_id,
+        // Pricing fields
+        pricing_type: params.pricing_type || 'free',
+        drop_in_price: params.drop_in_price,
+        booking_instructions: params.booking_instructions,
       })
       .select()
       .single()
@@ -1263,7 +1275,10 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         created_at,
         updated_at,
         created_by,
-        organization_id
+        organization_id,
+        pricing_type,
+        drop_in_price,
+        booking_instructions
       `)
       .eq('is_open', true)
       .order("created_at", { ascending: false })
@@ -1451,6 +1466,211 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
   }
 }
 
+/**
+ * Get public sessions for a specific organization.
+ * Filters session templates by organization_id.
+ */
+export async function getPublicSessionsByOrg(organizationId: string): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
+  try {
+    const supabase = createSupabaseClient()
+
+    // Get all open templates for this organization
+    const { data: templates, error: templatesError } = await supabase
+      .from("session_templates")
+      .select(`
+        id,
+        name,
+        description,
+        capacity,
+        duration_minutes,
+        is_open,
+        is_recurring,
+        one_off_start_time,
+        one_off_date,
+        recurrence_start_date,
+        recurrence_end_date,
+        created_at,
+        updated_at,
+        created_by,
+        organization_id,
+        pricing_type,
+        drop_in_price,
+        booking_instructions
+      `)
+      .eq('is_open', true)
+      .eq('organization_id', organizationId)
+      .order("created_at", { ascending: false })
+
+    if (templatesError) {
+      const errorMessage = templatesError.message || 'Unknown error';
+      if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
+        return {
+          data: null,
+          error: `Cannot connect to Supabase. Please check that NEXT_PUBLIC_SUPABASE_URL is set correctly in your Vercel environment variables. Error: ${errorMessage}`
+        }
+      }
+      return { data: null, error: `Templates query failed: ${errorMessage}` }
+    }
+
+    if (!templates || templates.length === 0) {
+      return { data: [], error: null }
+    }
+
+    // Get schedules for all templates
+    const templateIds = templates.map(t => t.id)
+
+    const { data: schedules, error: schedulesError } = await supabase
+      .from("session_schedules")
+      .select(`
+        id,
+        session_template_id,
+        day_of_week,
+        is_active,
+        created_at,
+        updated_at,
+        time
+      `)
+      .in('session_template_id', templateIds)
+
+    if (schedulesError) {
+      return { data: null, error: `Schedules query failed: ${schedulesError.message}` }
+    }
+
+    // Check for recurring templates that need instances generated
+    const threeMonthsFromNow = new Date()
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+
+    const recurringTemplates = templates.filter(t => t.is_recurring)
+    const recurringTemplateIds = recurringTemplates.map(t => t.id)
+
+    const templatesWithSchedules = new Set(schedules?.map(s => s.session_template_id) || [])
+
+    let templatesWithInstances = new Set<string>()
+    if (recurringTemplateIds.length > 0) {
+      const { data: existingInstances } = await supabase
+        .from("session_instances")
+        .select("template_id")
+        .in("template_id", recurringTemplateIds)
+        .gte("start_time", new Date().toISOString())
+        .lte("start_time", threeMonthsFromNow.toISOString())
+
+      templatesWithInstances = new Set(existingInstances?.map(i => i.template_id) || [])
+    }
+
+    const templatesNeedingGeneration = recurringTemplateIds.filter(
+      id => templatesWithSchedules.has(id) && !templatesWithInstances.has(id)
+    )
+
+    if (templatesNeedingGeneration.length > 0) {
+      const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
+      const functionUrl = IS_DEVELOPMENT
+        ? 'http://localhost:54321/functions/v1/generate-instances'
+        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
+
+      Promise.all(
+        templatesNeedingGeneration.map(templateId =>
+          fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE_KEY
+            },
+            body: JSON.stringify({ template_id_to_process: templateId }),
+          }).catch(() => {})
+        )
+      ).catch(() => {})
+
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+
+    // Get instances for all templates with their bookings
+    const { data: instances, error: instancesError } = await supabase
+      .from("session_instances")
+      .select(`
+        id,
+        template_id,
+        start_time,
+        end_time,
+        status,
+        bookings (
+          id,
+          number_of_spots,
+          user:clerk_users!user_id (
+            id,
+            clerk_user_id
+          )
+        )
+      `)
+      .in('template_id', templateIds)
+      .gte('start_time', new Date().toISOString())
+      .order('start_time', { ascending: true })
+
+    if (instancesError) {
+      return { data: null, error: `Instances query failed: ${instancesError.message}` }
+    }
+
+    // Combine the data
+    const transformedData = (templates as DBSessionTemplate[]).map(template => {
+      const templateSchedules = schedules?.filter(s => s.session_template_id === template.id) || []
+      const templateInstances = (instances as unknown as DBSessionInstance[])?.filter(i => i.template_id === template.id) || []
+
+      const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups, schedule) => {
+        const time = schedule.time?.substring(0, 5)
+        if (!groups[time]) {
+          groups[time] = {
+            id: schedule.id,
+            time,
+            days: [],
+            session_id: template.id,
+            is_recurring: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        }
+        const dayName = mapIntToDayString(schedule.day_of_week, true)
+        groups[time].days.push(dayName)
+        return groups
+      }, {} as Record<string, SessionSchedule>)
+
+      const transformedInstances = templateInstances.map(instance => {
+        const bookings = instance.bookings?.map(booking => {
+          const user = booking.user;
+          return {
+            id: booking.id,
+            number_of_spots: booking.number_of_spots || 1,
+            user: {
+              clerk_user_id: user?.clerk_user_id || ''
+            }
+          };
+        }) || [];
+
+        return {
+          id: instance.id,
+          start_time: instance.start_time,
+          end_time: instance.end_time,
+          status: instance.status,
+          template_id: template.id,
+          bookings
+        };
+      });
+
+      return {
+        ...template,
+        is_recurring: template.is_recurring ?? false,
+        schedules: Object.values(scheduleGroups),
+        instances: transformedInstances
+      } as SessionTemplate
+    })
+
+    return { data: transformedData, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred"
+    }
+  }
+}
+
 export async function updateBooking({
   booking_id,
   notes,
@@ -1507,21 +1727,8 @@ export async function updateBooking({
 
 export async function deleteBooking(booking_id: string) {
   try {
-
-    // Create a new Supabase client with service role key
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return { success: false, error: "Missing required Supabase environment variables" };
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
+    console.log('[deleteBooking] Starting delete for booking_id:', booking_id);
+    const supabase = createSupabaseServerClient();
 
     // First verify the booking exists
     const { data: existingBooking, error: checkError } = await supabase
@@ -1530,6 +1737,7 @@ export async function deleteBooking(booking_id: string) {
       .eq('id', booking_id)
       .single();
 
+    console.log('[deleteBooking] Existing booking:', existingBooking, 'checkError:', checkError);
 
     if (checkError) {
       return { success: false, error: `Failed to verify booking: ${checkError.message}` };
@@ -1540,18 +1748,33 @@ export async function deleteBooking(booking_id: string) {
     }
 
     // Now delete the booking
-    const { error: deleteError } = await supabase
+    const { error: deleteError, count } = await supabase
       .from('bookings')
       .delete()
       .eq('id', booking_id);
 
+    console.log('[deleteBooking] Delete result - error:', deleteError, 'count:', count);
 
     if (deleteError) {
       return { success: false, error: `Failed to delete booking: ${deleteError.message}` };
     }
 
+    // Verify the booking was actually deleted
+    const { data: verifyDeleted } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('id', booking_id)
+      .maybeSingle();
+
+    console.log('[deleteBooking] Verify deleted - booking still exists:', !!verifyDeleted);
+
+    if (verifyDeleted) {
+      return { success: false, error: "Booking deletion failed - record still exists" };
+    }
+
     return { success: true };
   } catch (error: any) {
+    console.error('[deleteBooking] Exception:', error);
     return { success: false, error: error.message };
   }
 }
@@ -1635,6 +1858,8 @@ export async function getBookingDetails(bookingId: string) {
           status: bookingData.status,
           created_at: bookingData.created_at,
           updated_at: bookingData.updated_at,
+          amount_paid: bookingData.amount_paid,
+          payment_status: bookingData.payment_status,
           user: {
             id: userData.id,
             email: userData.email,
@@ -1660,7 +1885,7 @@ export async function getBookingDetails(bookingId: string) {
 
 export async function getUserUpcomingBookings(userId: string): Promise<{ data: Booking[] | null; error: string | null }> {
   try {
-    const supabase = createSupabaseClient()
+    const supabase = createSupabaseServerClient()
     const now = new Date().toISOString()
 
     // First get the clerk_users record
@@ -1851,7 +2076,10 @@ export async function getPublicSessionById(sessionId: string): Promise<{
         created_at,
         updated_at,
         created_by,
-        organization_id
+        organization_id,
+        pricing_type,
+        drop_in_price,
+        booking_instructions
       `)
       .eq('id', sessionId)
       .eq('is_open', true)

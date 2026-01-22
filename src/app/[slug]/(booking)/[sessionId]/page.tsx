@@ -1,9 +1,11 @@
 import { Suspense } from "react"
 import { SessionPageClient } from "./session-page-client"
-import { redirect } from "next/navigation"
+import { notFound } from "next/navigation"
+import { getTenantFromHeaders } from "@/lib/tenant-utils"
 
 interface SessionPageProps {
   params: Promise<{
+    slug: string
     sessionId: string
   }>
   searchParams: Promise<{
@@ -14,12 +16,16 @@ interface SessionPageProps {
 }
 
 export default async function SessionPage({ params, searchParams }: SessionPageProps) {
-  // Await both params and searchParams
   const [resolvedParams, resolvedSearchParams] = await Promise.all([params, searchParams])
-  
+  const tenant = await getTenantFromHeaders()
+
+  if (!tenant) {
+    notFound()
+  }
+
   // Validate sessionId
   if (!resolvedParams.sessionId) {
-    redirect('/booking')
+    notFound()
   }
 
   return (
@@ -33,10 +39,11 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
         </div>
       </div>
     }>
-      <SessionPageClient 
-        sessionId={resolvedParams.sessionId} 
-        searchParams={resolvedSearchParams} 
+      <SessionPageClient
+        sessionId={resolvedParams.sessionId}
+        searchParams={resolvedSearchParams}
+        slug={resolvedParams.slug}
       />
     </Suspense>
   )
-} 
+}

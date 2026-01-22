@@ -13,6 +13,9 @@ import { useUser } from "@clerk/nextjs"
 import { createBooking, updateBooking, deleteBooking } from "@/app/actions/session"
 import { getClerkUser } from "@/app/actions/clerk"
 import { createClerkUser } from "@/app/actions/clerk"
+import { createEmbeddedCheckoutSession } from "@/app/actions/checkout"
+import { EmbeddedCheckoutWrapper } from "./embedded-checkout"
+import { Loader2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,9 +36,11 @@ interface BookingFormProps {
     notes?: string
     number_of_spots: number
   }
+  numberOfSpots?: number
+  slug: string
 }
 
-export function BookingForm({ session, startTime, bookingDetails }: BookingFormProps) {
+export function BookingForm({ session, startTime, bookingDetails, numberOfSpots: parentNumberOfSpots, slug }: BookingFormProps) {
   const { user } = useUser()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -48,6 +53,17 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
   const [isEditMode, setIsEditMode] = useState(!!bookingDetails)
   const [bookingId, setBookingId] = useState<string | null>(bookingDetails?.id || null)
 
+  // Checkout state for embedded checkout (V2: immediate checkout)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+
+  // Determine if this is a paid session (not in edit mode)
+  const isPaidSession = session.pricing_type === 'paid' && session.drop_in_price && !isEditMode
+
+  // Use parent-controlled spots for paid sessions, local state for free/edit
+  const effectiveNumberOfSpots = isPaidSession && parentNumberOfSpots ? parentNumberOfSpots : numberOfSpots
+
   useEffect(() => {
     if (bookingDetails) {
       setNotes(bookingDetails.notes || "")
@@ -56,6 +72,30 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
       setIsEditMode(true)
     }
   }, [bookingDetails])
+
+  // V2: For paid sessions, fetch checkout session immediately on mount/spots change
+  useEffect(() => {
+    if (isPaidSession && startTime) {
+      setCheckoutLoading(true)
+      setCheckoutError(null)
+
+      createEmbeddedCheckoutSession({
+        sessionTemplateId: session.id,
+        startTime: startTime.toISOString(),
+        numberOfSpots: effectiveNumberOfSpots,
+      }).then(result => {
+        if (result.success && result.clientSecret) {
+          setClientSecret(result.clientSecret)
+        } else {
+          setCheckoutError(result.error || "Failed to load checkout")
+        }
+        setCheckoutLoading(false)
+      }).catch(err => {
+        setCheckoutError(err.message || "Failed to load checkout")
+        setCheckoutLoading(false)
+      })
+    }
+  }, [isPaidSession, session.id, startTime, effectiveNumberOfSpots])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -138,7 +178,7 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
           if (typeof window !== 'undefined') {
             localStorage.setItem('bookingAction', JSON.stringify(updateDetails))
           }
-          router.push("/booking")
+          router.push(`/${slug}`)
           return
         }
 
@@ -147,7 +187,9 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
           description: "Booking updated successfully",
         })
       } else {
-        // Create new booking
+        // Note: isPaidSession is handled above with immediate checkout
+        // This branch is only for free sessions
+        // Create new booking (for free sessions or admin booking free sessions)
         const result = await createBooking({
           session_template_id: session.id,
           user_id: clerkUserId,
@@ -161,11 +203,8 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
         }
 
         // After successful booking, redirect to confirmation page with bookingId
-        if (user) {
-          router.push(`/booking/confirmation?bookingId=${result.id}`)
-          return
-        }
-        router.push(`/booking/confirmation?bookingId=${result.id}`)
+        router.push(`/${slug}/confirmation?bookingId=${result.id}`)
+        return
       }
     } catch (error: any) {
       toast({
@@ -200,7 +239,7 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
         if (typeof window !== 'undefined') {
           localStorage.setItem('bookingAction', JSON.stringify(deleteDetails))
         }
-        router.push("/booking")
+        router.push(`/${slug}`)
         return
       }
       toast({
@@ -218,6 +257,72 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
     }
   }
 
+  // V2: For paid sessions, render embedded checkout immediately
+  if (isPaidSession) {
+    // Loading state
+    if (checkoutLoading) {
+      return (
+        <Card className="border-0 shadow-none md:border md:shadow">
+          <CardContent className="p-6 flex items-center justify-center min-h-[300px]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-muted-foreground">Loading checkout...</p>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    // Error state
+    if (checkoutError) {
+      return (
+        <Card className="border-0 shadow-none md:border md:shadow">
+          <CardContent className="p-6">
+            <div className="text-center space-y-4">
+              <p className="text-destructive">{checkoutError}</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCheckoutError(null)
+                  setCheckoutLoading(true)
+                  createEmbeddedCheckoutSession({
+                    sessionTemplateId: session.id,
+                    startTime: startTime!.toISOString(),
+                    numberOfSpots: effectiveNumberOfSpots,
+                  }).then(result => {
+                    if (result.success && result.clientSecret) {
+                      setClientSecret(result.clientSecret)
+                    } else {
+                      setCheckoutError(result.error || "Failed to load checkout")
+                    }
+                    setCheckoutLoading(false)
+                  })
+                }}
+              >
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    // Checkout ready - show embedded checkout
+    if (clientSecret) {
+      return (
+        <Card className="border-0 shadow-none md:border md:shadow">
+          <CardContent className="p-6">
+            <EmbeddedCheckoutWrapper clientSecret={clientSecret} />
+          </CardContent>
+        </Card>
+      )
+    }
+
+    // Fallback - shouldn't reach here
+    return null
+  }
+
+  // Free sessions or edit mode: render form
   return (
     <Card className="border-0 shadow-none md:border md:shadow">
       <CardContent className="p-6">
@@ -245,6 +350,7 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
             />
           </div>
 
+          {/* Number of spots for free sessions */}
           <div className="space-y-2">
             <Label htmlFor="numberOfSpots">Number of Spots</Label>
             <div className="flex items-center space-x-2">
@@ -276,7 +382,16 @@ export function BookingForm({ session, startTime, bookingDetails }: BookingFormP
               className="w-full"
               disabled={loading || !startTime || (!user && (!name || !email))}
             >
-              {loading ? "Saving..." : isEditMode ? "Update Booking" : "Book Now"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : isEditMode ? (
+                "Update Booking"
+              ) : (
+                "Book Now"
+              )}
             </Button>
 
             {isEditMode && (
