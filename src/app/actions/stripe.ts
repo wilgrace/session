@@ -34,17 +34,33 @@ interface ActionResult<T = void> {
 // ============================================
 
 async function getAuthenticatedOrg(): Promise<{ orgId: string } | { error: string }> {
-  const { userId, orgId } = await auth()
+  const { userId } = await auth()
 
   if (!userId) {
     return { error: "Unauthorized: Not logged in" }
   }
 
-  if (!orgId) {
-    return { error: "Unauthorized: No organization selected" }
+  // Get the user's organization from Supabase clerk_users table
+  const supabase = createSupabaseServerClient()
+  const { data: user, error } = await supabase
+    .from("clerk_users")
+    .select("organization_id, is_super_admin")
+    .eq("clerk_user_id", userId)
+    .single()
+
+  if (error || !user) {
+    return { error: "User not found" }
   }
 
-  return { orgId }
+  if (!user.is_super_admin) {
+    return { error: "Unauthorized: Admin access required" }
+  }
+
+  if (!user.organization_id) {
+    return { error: "No organization associated with user" }
+  }
+
+  return { orgId: user.organization_id }
 }
 
 // ============================================

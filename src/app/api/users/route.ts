@@ -1,58 +1,50 @@
 import { NextResponse } from 'next/server';
-import { clerkClient } from '@clerk/clerk-sdk-node';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseServerClient } from '@/lib/supabase';
 
-// Map role values to display labels
-const ROLE_LABELS: Record<string, string> = {
-  'org:super_admin': 'Super Admin',
-  'org:admin': 'Admin',
-  'org:user': 'User'
-};
-
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session.orgId) {
-      return NextResponse.json({ error: "Organization ID not configured" }, { status: 500 });
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized: Not logged in" }, { status: 401 });
     }
 
     const supabase = createSupabaseServerClient();
 
-    // Get users from Supabase (select only needed columns)
-    const { data: supabaseUsers, error } = await supabase
+    // Get the current user's organization from clerk_users
+    const { data: currentUser, error: userError } = await supabase
       .from("clerk_users")
-      .select("id, clerk_user_id, email, first_name, last_name, organization_id, created_at")
-      .eq("organization_id", session.orgId);
+      .select("organization_id, is_super_admin")
+      .eq("clerk_user_id", userId)
+      .single();
+
+    if (userError || !currentUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Only super admins can view users
+    if (!currentUser.is_super_admin) {
+      return NextResponse.json({ error: "Unauthorized: Admin access required" }, { status: 403 });
+    }
+
+    // Get users from Supabase for the same organization
+    const { data: users, error } = await supabase
+      .from("clerk_users")
+      .select("id, clerk_user_id, email, first_name, last_name, organization_id, is_super_admin, created_at")
+      .eq("organization_id", currentUser.organization_id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Get organization memberships from Clerk
-    const memberships = await clerkClient.organizations.getOrganizationMembershipList({
-      organizationId: session.orgId
-    });
+    // Map users with role labels based on is_super_admin
+    const usersWithRoles = users.map(user => ({
+      ...user,
+      role: user.is_super_admin ? 'super_admin' : 'user',
+      roleLabel: user.is_super_admin ? 'Super Admin' : 'User'
+    }));
 
-    // Create a map of user IDs to their roles
-    const roleMap = new Map(
-      memberships.map(membership => [
-        membership.publicUserData?.userId,
-        membership.role
-      ])
-    );
-
-    // Combine Supabase user data with Clerk roles
-    const users = supabaseUsers.map(user => {
-      const roleValue = roleMap.get(user.clerk_user_id) || 'org:user';
-      return {
-        ...user,
-        role: roleValue,
-        roleLabel: ROLE_LABELS[roleValue] || 'User'
-      };
-    });
-
-    return NextResponse.json({ users });
+    return NextResponse.json({ users: usersWithRoles });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error occurred' },
