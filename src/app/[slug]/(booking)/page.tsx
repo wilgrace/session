@@ -6,7 +6,7 @@ import { UpcomingBookings } from "@/components/booking/upcoming-bookings"
 import { Skeleton } from "@/components/ui/skeleton"
 import { auth } from "@clerk/nextjs/server"
 import { BookingConfirmationToast } from "@/components/booking/booking-confirmation-toast"
-import { getTenantFromHeaders } from "@/lib/tenant-utils"
+import { getTenantFromHeaders, isUserSuperAdmin } from "@/lib/tenant-utils"
 
 interface BookingPageProps {
   params: Promise<{ slug: string }>
@@ -27,6 +27,9 @@ export default async function BookingPage({ params }: BookingPageProps) {
     ? await getUserUpcomingBookings(userId)
     : { data: [], error: null }
 
+  // Check if user is a super admin from Supabase
+  const isAdmin = userId ? await isUserSuperAdmin(userId) : false
+
   if (sessionsError) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -43,7 +46,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
 
         <div className="flex-1 flex flex-col min-h-0 md:block">
           <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>
-            <LazyBookingCalendar sessions={sessions || []} slug={slug} />
+            <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} />
           </Suspense>
         </div>
       </div>

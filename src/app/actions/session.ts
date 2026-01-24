@@ -36,6 +36,8 @@ interface CreateSessionTemplateParams {
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
   booking_instructions?: string | null
+  // Image field
+  image_url?: string | null
 }
 
 interface CreateSessionTemplateResult {
@@ -85,6 +87,8 @@ interface UpdateSessionTemplateParams {
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
   booking_instructions?: string | null
+  // Image field
+  image_url?: string | null
 }
 
 interface UpdateSessionTemplateResult {
@@ -169,6 +173,12 @@ interface DBSessionTemplate {
   updated_at: string;
   created_by: string;
   organization_id: string;
+  // Pricing fields
+  pricing_type: string;
+  drop_in_price: number | null;
+  booking_instructions: string | null;
+  // Image field
+  image_url: string | null;
 }
 
 export async function createSessionTemplate(params: CreateSessionTemplateParams): Promise<CreateSessionTemplateResult> {
@@ -226,6 +236,8 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         pricing_type: params.pricing_type || 'free',
         drop_in_price: params.drop_in_price,
         booking_instructions: params.booking_instructions,
+        // Image field
+        image_url: params.image_url,
       })
       .select()
       .single()
@@ -554,7 +566,11 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
         created_at,
         updated_at,
         created_by,
-        organization_id
+        organization_id,
+        pricing_type,
+        drop_in_price,
+        booking_instructions,
+        image_url
       `)
       .eq('created_by', clerkUserId)
       .order("created_at", { ascending: false })
@@ -676,7 +692,13 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
         created_by: template.created_by,
         organization_id: template.organization_id,
         schedules: Object.values(scheduleGroups),
-        instances: transformedInstances
+        instances: transformedInstances,
+        // Pricing fields
+        pricing_type: template.pricing_type,
+        drop_in_price: template.drop_in_price,
+        booking_instructions: template.booking_instructions,
+        // Image field
+        image_url: template.image_url,
       } as unknown as SessionTemplate
 
       return transformedTemplate
@@ -740,7 +762,11 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         created_at,
         updated_at,
         created_by,
-        organization_id
+        organization_id,
+        pricing_type,
+        drop_in_price,
+        booking_instructions,
+        image_url
       `)
       .eq("id", id)
       .single();
@@ -1278,7 +1304,8 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         organization_id,
         pricing_type,
         drop_in_price,
-        booking_instructions
+        booking_instructions,
+        image_url
       `)
       .eq('is_open', true)
       .order("created_at", { ascending: false })
@@ -1495,7 +1522,8 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         organization_id,
         pricing_type,
         drop_in_price,
-        booking_instructions
+        booking_instructions,
+        image_url
       `)
       .eq('is_open', true)
       .eq('organization_id', organizationId)
@@ -2079,7 +2107,8 @@ export async function getPublicSessionById(sessionId: string): Promise<{
         organization_id,
         pricing_type,
         drop_in_price,
-        booking_instructions
+        booking_instructions,
+        image_url
       `)
       .eq('id', sessionId)
       .eq('is_open', true)

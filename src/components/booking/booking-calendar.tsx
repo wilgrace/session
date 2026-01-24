@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
-import { useUser, useAuth } from "@clerk/nextjs"
+import { useUser } from "@clerk/nextjs"
 import { Badge } from "@/components/ui/badge"
 import { getInternalUserId } from "@/app/actions/session"
 import { LockedSessionDialog } from "./locked-session-tooltip"
@@ -67,6 +67,7 @@ interface CalendarEvent extends Event {
 interface BookingCalendarProps {
   sessions: SessionTemplate[]
   slug: string
+  isAdmin?: boolean
 }
 
 // Add the CustomEvent component with proper typing
@@ -120,10 +121,9 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   )
 }
 
-export function BookingCalendar({ sessions, slug }: BookingCalendarProps) {
+export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCalendarProps) {
   const router = useRouter()
   const { user } = useUser()
-  const { has } = useAuth()
   const isMobile = useIsMobile()
   const [currentView, setCurrentView] = useState<View>('week')
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -135,8 +135,7 @@ export function BookingCalendar({ sessions, slug }: BookingCalendarProps) {
     anchorEl: HTMLElement | null
   }>({ open: false, sessionName: '', anchorEl: null })
 
-  // Check if user is an admin
-  const isAdmin = has?.({ role: 'org:admin' }) || has?.({ role: 'org:super_admin' })
+  // isAdmin is now passed as a prop from the server component
 
   useEffect(() => {
     const fetchInternalUserId = async () => {
@@ -362,6 +361,7 @@ export function BookingCalendar({ sessions, slug }: BookingCalendarProps) {
             sessions={sessions}
             selectedDate={selectedDate}
             slug={slug}
+            isAdmin={isAdmin}
           />
         </div>
       </div>

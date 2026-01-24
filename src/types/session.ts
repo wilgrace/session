@@ -43,6 +43,8 @@ export interface SessionTemplate {
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
   booking_instructions?: string | null
+  // Image field
+  image_url?: string | null
 }
 
 export interface SessionInstance {

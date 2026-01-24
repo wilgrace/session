@@ -6,7 +6,6 @@ import { SessionTemplate } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@clerk/nextjs"
 import { Lock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { LockedSessionDialog } from "./locked-session-tooltip"
@@ -15,18 +14,17 @@ interface MobileSessionListProps {
   sessions: SessionTemplate[]
   selectedDate: Date
   slug: string
+  isAdmin?: boolean
 }
 
-export function MobileSessionList({ sessions, selectedDate, slug }: MobileSessionListProps) {
+export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = false }: MobileSessionListProps) {
   const router = useRouter()
-  const { has } = useAuth()
   const [lockedDialog, setLockedDialog] = useState<{ open: boolean; sessionName: string }>({
     open: false,
     sessionName: ''
   })
 
-  // Check if user is an admin
-  const isAdmin = has?.({ role: 'org:admin' }) || has?.({ role: 'org:super_admin' })
+  // isAdmin is now passed as a prop from the server component
 
   // Filter sessions for the selected date
   const filteredSessions = sessions.filter((template) => {

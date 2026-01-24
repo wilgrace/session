@@ -24,7 +24,7 @@ const STATIC_EXTENSIONS = [
 
 // Cache for organization lookups (edge runtime compatible)
 const orgCache = new Map<string, { data: { id: string; slug: string } | null; expiry: number }>();
-const userOrgCache = new Map<string, { slug: string | null; expiry: number }>();
+const userOrgCache = new Map<string, { slug: string | null; isSuperAdmin: boolean; expiry: number }>();
 const CACHE_TTL = 60 * 1000; // 1 minute cache
 
 /**
@@ -76,14 +76,14 @@ async function getOrganizationBySlug(slug: string): Promise<{ id: string; slug: 
 }
 
 /**
- * Fetch the organization slug for a user by their Clerk user ID.
- * Looks up the clerk_users table to find their organization, then gets the slug.
+ * Fetch user data (org slug and admin status) by their Clerk user ID.
+ * Looks up the clerk_users table to find their organization and admin status.
  */
-async function getOrgSlugForUser(clerkUserId: string): Promise<string | null> {
+async function getUserData(clerkUserId: string): Promise<{ slug: string | null; isSuperAdmin: boolean }> {
   // Check cache first
   const cached = userOrgCache.get(clerkUserId);
   if (cached && cached.expiry > Date.now()) {
-    return cached.slug;
+    return { slug: cached.slug, isSuperAdmin: cached.isSuperAdmin };
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -91,13 +91,13 @@ async function getOrgSlugForUser(clerkUserId: string): Promise<string | null> {
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('[Middleware] Missing Supabase environment variables');
-    return null;
+    return { slug: null, isSuperAdmin: false };
   }
 
   try {
-    // First, get the user's organization_id from clerk_users
+    // Get the user's organization_id and is_super_admin from clerk_users
     const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/clerk_users?clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=organization_id`,
+      `${supabaseUrl}/rest/v1/clerk_users?clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=organization_id,is_super_admin`,
       {
         headers: {
           'apikey': supabaseServiceKey,
@@ -108,16 +108,17 @@ async function getOrgSlugForUser(clerkUserId: string): Promise<string | null> {
 
     if (!userResponse.ok) {
       console.error('[Middleware] Failed to fetch user:', userResponse.status);
-      return null;
+      return { slug: null, isSuperAdmin: false };
     }
 
     const userData = await userResponse.json();
     const organizationId = userData?.[0]?.organization_id;
+    const isSuperAdmin = userData?.[0]?.is_super_admin || false;
 
     if (!organizationId) {
       console.log('[Middleware] User has no organization:', clerkUserId);
-      userOrgCache.set(clerkUserId, { slug: null, expiry: Date.now() + CACHE_TTL });
-      return null;
+      userOrgCache.set(clerkUserId, { slug: null, isSuperAdmin, expiry: Date.now() + CACHE_TTL });
+      return { slug: null, isSuperAdmin };
     }
 
     // Now get the organization's slug
@@ -133,19 +134,19 @@ async function getOrgSlugForUser(clerkUserId: string): Promise<string | null> {
 
     if (!orgResponse.ok) {
       console.error('[Middleware] Failed to fetch organization:', orgResponse.status);
-      return null;
+      return { slug: null, isSuperAdmin };
     }
 
     const orgData = await orgResponse.json();
     const slug = orgData?.[0]?.slug || null;
 
     // Cache the result
-    userOrgCache.set(clerkUserId, { slug, expiry: Date.now() + CACHE_TTL });
+    userOrgCache.set(clerkUserId, { slug, isSuperAdmin, expiry: Date.now() + CACHE_TTL });
 
-    return slug;
+    return { slug, isSuperAdmin };
   } catch (error) {
-    console.error('[Middleware] Error fetching user org slug:', error);
-    return null;
+    console.error('[Middleware] Error fetching user data:', error);
+    return { slug: null, isSuperAdmin: false };
   }
 }
 
@@ -199,7 +200,7 @@ function isAdminRoute(pathname: string): boolean {
 }
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, orgRole, orgId } = await auth();
+  const { userId } = await auth();
   const pathname = req.nextUrl.pathname;
 
   // Bypass slug detection for special paths
@@ -208,9 +209,9 @@ export default clerkMiddleware(async (auth, req) => {
     if (pathname === '/') {
       if (userId) {
         // Look up user's org slug and redirect there
-        const userOrgSlug = await getOrgSlugForUser(userId);
-        if (userOrgSlug) {
-          return NextResponse.redirect(new URL(`/${userOrgSlug}`, req.url));
+        const userData = await getUserData(userId);
+        if (userData.slug) {
+          return NextResponse.redirect(new URL(`/${userData.slug}`, req.url));
         }
         // User has no org - send to sign-in (they may need to be invited to an org)
         return NextResponse.redirect(new URL('/sign-in', req.url));
@@ -221,9 +222,9 @@ export default clerkMiddleware(async (auth, req) => {
 
     // Handle sign-in/sign-up for authenticated users - redirect to their org
     if (userId && (pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up'))) {
-      const userOrgSlug = await getOrgSlugForUser(userId);
-      if (userOrgSlug) {
-        return NextResponse.redirect(new URL(`/${userOrgSlug}`, req.url));
+      const userData = await getUserData(userId);
+      if (userData.slug) {
+        return NextResponse.redirect(new URL(`/${userData.slug}`, req.url));
       }
     }
 
@@ -261,15 +262,11 @@ export default clerkMiddleware(async (auth, req) => {
       return NextResponse.redirect(signInUrl);
     }
 
-    // Check if user has admin access
-    if (orgRole !== 'org:super_admin' && orgRole !== 'org:admin') {
-      // Regular users can't access admin - redirect to booking page for this org
-      return NextResponse.redirect(new URL(`/${org.slug}`, req.url));
-    }
+    // Check if user has admin access from Supabase clerk_users table
+    const userData = await getUserData(userId);
 
-    // For org:admin, verify they belong to this organization
-    if (orgRole === 'org:admin' && orgId !== org.id) {
-      // Admin trying to access a different org's admin area
+    if (!userData.isSuperAdmin) {
+      // Regular users can't access admin - redirect to booking page for this org
       return NextResponse.redirect(new URL(`/${org.slug}`, req.url));
     }
 

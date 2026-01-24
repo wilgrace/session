@@ -6,7 +6,7 @@ export default function SignUpPage() {
       <SignUp
         routing="path"
         path="/sign-up"
-        fallbackRedirectUrl="/booking"
+        fallbackRedirectUrl="/"
       />
     </div>
   );

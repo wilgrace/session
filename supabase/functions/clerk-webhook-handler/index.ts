@@ -1,15 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Webhook } from 'npm:svix@1.15.0';
 import { corsHeaders } from '../_shared/cors.ts'; // Optional: manage CORS if needed
-import { Clerk } from 'https://esm.sh/@clerk/backend@0.35.0';
-
-// Initialize Clerk client
-const clerkSecretKey = Deno.env.get('CLERK_SECRET_KEY');
-if (!clerkSecretKey) {
-  throw new Error('CLERK_SECRET_KEY environment variable is not set');
-}
-const clerk = Clerk({ secretKey: clerkSecretKey });
-const clerkClient = Clerk({ secretKey: clerkSecretKey });  // Add clerkClient instance
 
 // Define expected Clerk event payload structure (adjust based on actual usage)
 interface ClerkUserEventData {
@@ -161,17 +152,11 @@ Deno.serve(async (req) => {
             console.error('Error upgrading guest user:', updateError);
             throw updateError;
           }
-          // Create organization membership in Clerk
-          try {
-            await clerk.organizations.createOrganizationMembership({
-              organizationId: defaultOrgIdFromEnv,
-              userId: userData.id,
-              role: 'org:user'
-            });
-          } catch (clerkError: any) {
-            console.error('Error in Clerk operations:', clerkError);
-          }
-          return new Response(JSON.stringify({ 
+          // Note: Clerk organization membership is managed separately from Supabase organizations
+          // The DEFAULT_ORGANIZATION_ID is a Supabase org UUID, not a Clerk org ID
+          // Skip Clerk org membership creation - not needed for booking flow
+
+          return new Response(JSON.stringify({
             status: 'success',
             message: 'User upgraded and added to organization',
             userId: existingClerkUser.id
@@ -196,17 +181,11 @@ Deno.serve(async (req) => {
           console.error('Error inserting clerk user:', insertError);
           throw insertError;
         }
-        // Create organization membership in Clerk
-        try {
-          await clerk.organizations.createOrganizationMembership({
-            organizationId: defaultOrgIdFromEnv,
-            userId: userData.id,
-            role: 'org:user'
-          });
-        } catch (clerkError: any) {
-          console.error('Error in Clerk operations:', clerkError);
-        }
-        return new Response(JSON.stringify({ 
+        // Note: Clerk organization membership is managed separately from Supabase organizations
+        // The DEFAULT_ORGANIZATION_ID is a Supabase org UUID, not a Clerk org ID
+        // Skip Clerk org membership creation - not needed for booking flow
+
+        return new Response(JSON.stringify({
           status: 'success',
           message: 'Created new clerk user',
           userId: newUser.id

@@ -55,6 +55,8 @@ export const sessionTemplates = pgTable('session_templates', {
   pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
   dropInPrice: integer('drop_in_price'), // Price in pence for non-members
   bookingInstructions: text('booking_instructions'), // Instructions shown on confirmation page
+  // Image field
+  imageUrl: text('image_url'), // Optional image URL for the session
 });
 
 export const sessionSchedules = pgTable('session_schedules', {

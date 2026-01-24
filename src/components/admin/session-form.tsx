@@ -27,6 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { SessionTemplate } from "@/types/session"
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/constants'
 import { localToUTC, SAUNA_TIMEZONE } from '@/lib/time-utils'
+import { ImageUpload } from "@/components/admin/image-upload"
 
 async function generateInstances() {
   try {
@@ -101,15 +102,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   // Pricing state
-  const [pricingType, setPricingType] = useState<'free' | 'paid'>(
-    (template?.pricing_type as 'free' | 'paid') || 'free'
-  )
-  const [dropInPrice, setDropInPrice] = useState(
-    template?.drop_in_price ? (template.drop_in_price / 100).toFixed(2) : ''
-  )
-  const [bookingInstructions, setBookingInstructions] = useState(
-    template?.booking_instructions || ''
-  )
+  const [pricingType, setPricingType] = useState<'free' | 'paid'>('free')
+  const [dropInPrice, setDropInPrice] = useState('')
+  const [bookingInstructions, setBookingInstructions] = useState('')
+
+  // Image state
+  const [imageUrl, setImageUrl] = useState('')
 
   // Get the day of week in lowercase (e.g., "mon", "tue")
   const getDayOfWeek = (date: Date) => {
@@ -173,9 +171,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       setScheduleType(template.is_recurring ? "repeat" : "once")
 
       // Load pricing fields
-      setPricingType((template.pricing_type as 'free' | 'paid') || 'free')
+      setPricingType(template.pricing_type === 'paid' ? 'paid' : 'free')
       setDropInPrice(template.drop_in_price ? (template.drop_in_price / 100).toFixed(2) : '')
       setBookingInstructions(template.booking_instructions || '')
+
+      // Load image field
+      setImageUrl(template.image_url || '')
       
       if (template.is_recurring) {
         if (template.schedules) {
@@ -249,6 +250,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           pricing_type: pricingType,
           drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
           booking_instructions: bookingInstructions || null,
+          // Image field
+          image_url: imageUrl || null,
         });
 
         if (!result.success) {
@@ -280,6 +283,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           pricing_type: pricingType,
           drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
           booking_instructions: bookingInstructions || null,
+          // Image field
+          image_url: imageUrl || null,
         });
 
         if (!result.success || !result.id) {
@@ -852,6 +857,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                   />
                   <p className="text-sm text-gray-500">Length of the session (hours:minutes).</p>
                 </div>
+
+                {/* Image Upload */}
+                <ImageUpload
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  disabled={loading}
+                />
               </div>
             )}
           </div>

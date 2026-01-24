@@ -146,3 +146,23 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 50);
 }
+
+/**
+ * Check if a user is a super admin by their Clerk user ID.
+ * Uses React cache() for request-level deduplication.
+ */
+export const isUserSuperAdmin = cache(async (clerkUserId: string): Promise<boolean> => {
+  const supabase = createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('clerk_users')
+    .select('is_super_admin')
+    .eq('clerk_user_id', clerkUserId)
+    .single();
+
+  if (error || !data) {
+    return false;
+  }
+
+  return data.is_super_admin || false;
+});
