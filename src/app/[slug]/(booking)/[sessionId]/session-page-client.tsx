@@ -21,6 +21,16 @@ interface SessionPageClientProps {
   slug: string
 }
 
+// Calculate spots remaining for a session
+function calculateSpotsRemaining(session: SessionTemplate, currentUserSpots: number = 0): number {
+  const totalSpotsBooked =
+    (session.instances?.reduce((total, instance) => {
+      return total + (instance.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
+    }, 0) || 0) + currentUserSpots
+
+  return session.capacity - totalSpotsBooked
+}
+
 export function SessionPageClient({ sessionId, searchParams, slug }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
@@ -30,7 +40,6 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [bookingDetails, setBookingDetails] = useState<any>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
-  const [numberOfSpots, setNumberOfSpots] = useState(1)
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -190,9 +199,6 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
           session={session}
           startTime={startTime || undefined}
           currentUserSpots={bookingDetails?.number_of_spots || 0}
-          numberOfSpots={numberOfSpots}
-          onSpotsChange={setNumberOfSpots}
-          showSpotsSelector={!bookingDetails && session.pricing_type === 'paid'}
         />
         <div className="md:hidden">
           <hr className="border-gray-200 my-0 mx-6" />
@@ -201,8 +207,8 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
           session={session}
           startTime={startTime || undefined}
           bookingDetails={bookingDetails}
-          numberOfSpots={numberOfSpots}
           slug={slug}
+          spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
         />
       </div>
     </div>

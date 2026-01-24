@@ -30,9 +30,131 @@ export interface CreateCheckoutSessionResult {
   error?: string
 }
 
+// Email check types
+export interface EmailCheckResult {
+  success: boolean
+  exists: boolean
+  isGuestAccount: boolean
+  error?: string
+}
+
+// Coupon validation types
+export interface CouponValidationResult {
+  success: boolean
+  valid: boolean
+  coupon?: {
+    id: string
+    percentOff?: number
+    amountOff?: number // in pence
+    currency?: string
+    name?: string
+  }
+  error?: string
+}
+
 // ============================================
 // SERVER ACTIONS
 // ============================================
+
+/**
+ * Check if an email exists in the clerk_users table
+ * Used to determine if a guest should sign in or can proceed
+ */
+export async function checkEmailExists(
+  email: string
+): Promise<EmailCheckResult> {
+  try {
+    const supabase = createSupabaseServerClient()
+
+    const { data: user, error } = await supabase
+      .from("clerk_users")
+      .select("clerk_user_id")
+      .eq("email", email.toLowerCase().trim())
+      .maybeSingle()
+
+    if (error) {
+      console.error("Error checking email:", error)
+      return { success: false, exists: false, isGuestAccount: false, error: error.message }
+    }
+
+    if (!user) {
+      return { success: true, exists: false, isGuestAccount: false }
+    }
+
+    // Check if it's a guest account (clerk_user_id starts with "guest_")
+    const isGuestAccount = user.clerk_user_id.startsWith("guest_")
+
+    return { success: true, exists: true, isGuestAccount }
+  } catch (error) {
+    console.error("Error in checkEmailExists:", error)
+    return {
+      success: false,
+      exists: false,
+      isGuestAccount: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+/**
+ * Validate a coupon/promotion code against Stripe
+ * Uses the organization's connected Stripe account
+ */
+export async function validateCoupon(
+  couponCode: string,
+  organizationId: string
+): Promise<CouponValidationResult> {
+  try {
+    const supabase = createSupabaseServerClient()
+
+    // Get connected Stripe account
+    const { data: stripeAccount, error: stripeError } = await supabase
+      .from("stripe_connect_accounts")
+      .select("stripe_account_id")
+      .eq("organization_id", organizationId)
+      .single()
+
+    if (stripeError || !stripeAccount) {
+      return { success: false, valid: false, error: "Payment not configured for this organization" }
+    }
+
+    const stripe = getStripe()
+
+    // Search for promotion code on connected account, expanding the coupon object
+    const promotionCodes = await stripe.promotionCodes.list(
+      { code: couponCode.toUpperCase().trim(), active: true, limit: 1, expand: ["data.coupon"] },
+      { stripeAccount: stripeAccount.stripe_account_id }
+    )
+
+    if (promotionCodes.data.length === 0) {
+      return { success: true, valid: false, error: "Invalid or expired code" }
+    }
+
+    const promoCode = promotionCodes.data[0]
+    // Type assertion: the coupon property exists on the promotion code response
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const coupon = (promoCode as any).coupon as Stripe.Coupon
+
+    return {
+      success: true,
+      valid: true,
+      coupon: {
+        id: promoCode.id, // Use promotion code ID for checkout
+        percentOff: coupon.percent_off ?? undefined,
+        amountOff: coupon.amount_off ?? undefined,
+        currency: coupon.currency || "gbp",
+        name: coupon.name || promoCode.code,
+      },
+    }
+  } catch (error) {
+    console.error("Error in validateCoupon:", error)
+    return {
+      success: false,
+      valid: false,
+      error: error instanceof Error ? error.message : "Validation failed",
+    }
+  }
+}
 
 /**
  * Create a Stripe Checkout session for a paid booking
@@ -399,6 +521,10 @@ export interface CreateEmbeddedCheckoutParams {
   sessionTemplateId: string
   startTime: string
   numberOfSpots: number
+  customerEmail?: string // For guest users
+  promotionCode?: string // Validated promotion code ID
+  pricingType?: "drop_in" | "membership"
+  slug: string // Organization slug for return URL
 }
 
 export interface CreateEmbeddedCheckoutResult {
@@ -483,9 +609,9 @@ export async function createEmbeddedCheckoutSession(
       return { success: false, error: "Payment processing is not yet enabled for this organization" }
     }
 
-    // Get logged-in user's email (if any) to pre-fill checkout
-    let customerEmail: string | undefined
-    if (userId) {
+    // Determine customer email: use provided email for guests, or look up logged-in user's email
+    let customerEmail: string | undefined = params.customerEmail
+    if (!customerEmail && userId) {
       const { data: userData } = await supabase
         .from("clerk_users")
         .select("email")
@@ -497,6 +623,11 @@ export async function createEmbeddedCheckoutSession(
     // Determine base URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const startTime = new Date(params.startTime)
+
+    // Determine unit price based on pricing type
+    // For membership, use a hardcoded discounted price (£5 = 500 pence)
+    const unitPrice =
+      params.pricingType === "membership" ? 500 : template.drop_in_price
 
     // Create Stripe Checkout session - NO booking created yet
     // Booking will be created in webhook when payment completes
@@ -520,11 +651,15 @@ export async function createEmbeddedCheckoutSession(
                 minute: "2-digit",
               })}`,
             },
-            unit_amount: template.drop_in_price,
+            unit_amount: unitPrice,
           },
           quantity: params.numberOfSpots,
         },
       ],
+      // Apply promotion code discount if provided
+      ...(params.promotionCode && {
+        discounts: [{ promotion_code: params.promotionCode }],
+      }),
       payment_intent_data: {
         transfer_data: {
           destination: stripeAccount.stripe_account_id,
@@ -536,11 +671,14 @@ export async function createEmbeddedCheckoutSession(
           number_of_spots: params.numberOfSpots.toString(),
           clerk_user_id: userId || "",
           duration_minutes: template.duration_minutes.toString(),
+          customer_email: customerEmail || "",
+          pricing_type: params.pricingType || "drop_in",
+          promotion_code: params.promotionCode || "",
         },
       },
       customer_email: customerEmail,
       // Return URL includes session_id - booking will be looked up by this
-      return_url: `${baseUrl}/booking/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+      return_url: `${baseUrl}/${params.slug}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minute expiry
       metadata: {
         session_template_id: params.sessionTemplateId,
@@ -549,6 +687,9 @@ export async function createEmbeddedCheckoutSession(
         number_of_spots: params.numberOfSpots.toString(),
         clerk_user_id: userId || "",
         duration_minutes: template.duration_minutes.toString(),
+        customer_email: customerEmail || "",
+        pricing_type: params.pricingType || "drop_in",
+        promotion_code: params.promotionCode || "",
       },
     })
 

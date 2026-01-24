@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { SessionTemplate } from "@/types/session"
 import { useUser } from "@clerk/nextjs"
@@ -14,7 +13,8 @@ import { createBooking, updateBooking, deleteBooking } from "@/app/actions/sessi
 import { getClerkUser } from "@/app/actions/clerk"
 import { createClerkUser } from "@/app/actions/clerk"
 import { createEmbeddedCheckoutSession } from "@/app/actions/checkout"
-import { EmbeddedCheckoutWrapper } from "./embedded-checkout"
+import { PreCheckoutForm, CheckoutFormData } from "./pre-checkout-form"
+import { CheckoutStep } from "./checkout-step"
 import { Loader2 } from "lucide-react"
 import {
   AlertDialog,
@@ -36,14 +36,21 @@ interface BookingFormProps {
     notes?: string
     number_of_spots: number
   }
-  numberOfSpots?: number
   slug: string
+  spotsRemaining?: number
 }
 
-export function BookingForm({ session, startTime, bookingDetails, numberOfSpots: parentNumberOfSpots, slug }: BookingFormProps) {
+type CheckoutStepType = "form" | "checkout"
+
+export function BookingForm({
+  session,
+  startTime,
+  bookingDetails,
+  slug,
+  spotsRemaining = session.capacity,
+}: BookingFormProps) {
   const { user } = useUser()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState(bookingDetails?.notes || "")
@@ -53,16 +60,15 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
   const [isEditMode, setIsEditMode] = useState(!!bookingDetails)
   const [bookingId, setBookingId] = useState<string | null>(bookingDetails?.id || null)
 
-  // Checkout state for embedded checkout (V2: immediate checkout)
+  // 2-step checkout state for paid sessions
+  const [checkoutStep, setCheckoutStep] = useState<CheckoutStepType>("form")
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [checkoutFormData, setCheckoutFormData] = useState<CheckoutFormData | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   // Determine if this is a paid session (not in edit mode)
-  const isPaidSession = session.pricing_type === 'paid' && session.drop_in_price && !isEditMode
-
-  // Use parent-controlled spots for paid sessions, local state for free/edit
-  const effectiveNumberOfSpots = isPaidSession && parentNumberOfSpots ? parentNumberOfSpots : numberOfSpots
+  const isPaidSession = session.pricing_type === "paid" && session.drop_in_price && !isEditMode
 
   useEffect(() => {
     if (bookingDetails) {
@@ -73,29 +79,61 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
     }
   }, [bookingDetails])
 
-  // V2: For paid sessions, fetch checkout session immediately on mount/spots change
-  useEffect(() => {
-    if (isPaidSession && startTime) {
-      setCheckoutLoading(true)
-      setCheckoutError(null)
+  // Handle proceeding from Step 1 (PreCheckoutForm) to Step 2 (Stripe Checkout)
+  const handleProceedToCheckout = async (formData: CheckoutFormData) => {
+    if (!startTime) {
+      toast({
+        title: "Error",
+        description: "Please select a session time",
+        variant: "destructive",
+      })
+      return
+    }
 
-      createEmbeddedCheckoutSession({
+    setCheckoutLoading(true)
+    setCheckoutError(null)
+    setCheckoutFormData(formData)
+
+    try {
+      const result = await createEmbeddedCheckoutSession({
         sessionTemplateId: session.id,
         startTime: startTime.toISOString(),
-        numberOfSpots: effectiveNumberOfSpots,
-      }).then(result => {
-        if (result.success && result.clientSecret) {
-          setClientSecret(result.clientSecret)
-        } else {
-          setCheckoutError(result.error || "Failed to load checkout")
-        }
-        setCheckoutLoading(false)
-      }).catch(err => {
-        setCheckoutError(err.message || "Failed to load checkout")
-        setCheckoutLoading(false)
+        numberOfSpots: formData.numberOfSpots,
+        customerEmail: user ? undefined : formData.email, // Only pass for guests
+        promotionCode: formData.promotionCode,
+        pricingType: formData.pricingType,
+        slug: slug,
       })
+
+      if (result.success && result.clientSecret) {
+        setClientSecret(result.clientSecret)
+        setCheckoutStep("checkout")
+      } else {
+        setCheckoutError(result.error || "Failed to create checkout session")
+        toast({
+          title: "Error",
+          description: result.error || "Failed to create checkout session",
+          variant: "destructive",
+        })
+      }
+    } catch (err: any) {
+      setCheckoutError(err.message || "Failed to create checkout session")
+      toast({
+        title: "Error",
+        description: err.message || "Failed to create checkout session",
+        variant: "destructive",
+      })
+    } finally {
+      setCheckoutLoading(false)
     }
-  }, [isPaidSession, session.id, startTime, effectiveNumberOfSpots])
+  }
+
+  // Handle going back from Step 2 to Step 1
+  const handleBackFromCheckout = () => {
+    setCheckoutStep("form")
+    setClientSecret(null)
+    // Keep formData preserved so user doesn't lose their input
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -114,14 +152,14 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
 
       if (!user) {
         // For non-logged in users, create a new clerk user
-        const nameParts = name.trim().split(" ");
-        const firstName = nameParts[0] || "";
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
+        const nameParts = name.trim().split(" ")
+        const firstName = nameParts[0] || ""
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined
         const result = await createClerkUser({
           clerk_user_id: `guest_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
           email: email,
           first_name: firstName,
-          last_name: lastName
+          last_name: lastName,
         })
 
         if (!result.success || !result.id) {
@@ -142,7 +180,7 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
           const result = await createClerkUser({
             email: user.emailAddresses[0].emailAddress,
             first_name: user.firstName || undefined,
-            last_name: user.lastName || undefined
+            last_name: user.lastName || undefined,
           })
 
           if (!result.success || !result.id) {
@@ -160,7 +198,7 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
         const result = await updateBooking({
           booking_id: bookingId,
           notes: notes || undefined,
-          number_of_spots: numberOfSpots
+          number_of_spots: numberOfSpots,
         })
 
         if (!result.success) {
@@ -175,8 +213,8 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
             date: startTime?.toISOString() || new Date().toISOString(),
             numberOfSpots,
           }
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('bookingAction', JSON.stringify(updateDetails))
+          if (typeof window !== "undefined") {
+            localStorage.setItem("bookingAction", JSON.stringify(updateDetails))
           }
           router.push(`/${slug}`)
           return
@@ -187,15 +225,13 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
           description: "Booking updated successfully",
         })
       } else {
-        // Note: isPaidSession is handled above with immediate checkout
-        // This branch is only for free sessions
-        // Create new booking (for free sessions or admin booking free sessions)
+        // Create new booking (for free sessions)
         const result = await createBooking({
           session_template_id: session.id,
           user_id: clerkUserId,
           start_time: startTime.toISOString(),
           notes: notes || undefined,
-          number_of_spots: numberOfSpots
+          number_of_spots: numberOfSpots,
         })
 
         if (!result.success) {
@@ -236,8 +272,8 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
           date: startTime?.toISOString() || new Date().toISOString(),
           numberOfSpots,
         }
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('bookingAction', JSON.stringify(deleteDetails))
+        if (typeof window !== "undefined") {
+          localStorage.setItem("bookingAction", JSON.stringify(deleteDetails))
         }
         router.push(`/${slug}`)
         return
@@ -257,9 +293,52 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
     }
   }
 
-  // V2: For paid sessions, render embedded checkout immediately
+  // For paid sessions: 2-step checkout flow
   if (isPaidSession) {
-    // Loading state
+    // Step 1: Pre-checkout form
+    if (checkoutStep === "form") {
+      return (
+        <PreCheckoutForm
+          session={session}
+          startTime={startTime!}
+          spotsRemaining={spotsRemaining}
+          userEmail={user?.primaryEmailAddress?.emailAddress}
+          isLoggedIn={!!user}
+          slug={slug}
+          organizationId={session.organization_id}
+          onProceedToCheckout={handleProceedToCheckout}
+          isLoading={checkoutLoading}
+        />
+      )
+    }
+
+    // Step 2: Stripe Embedded Checkout
+    if (checkoutStep === "checkout" && clientSecret) {
+      return (
+        <CheckoutStep
+          clientSecret={clientSecret}
+          onBack={handleBackFromCheckout}
+        />
+      )
+    }
+
+    // Error state
+    if (checkoutError) {
+      return (
+        <Card className="border-0 shadow-none md:border md:shadow">
+          <CardContent className="p-6">
+            <div className="text-center space-y-4">
+              <p className="text-destructive">{checkoutError}</p>
+              <Button variant="outline" onClick={() => setCheckoutStep("form")}>
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    // Loading state (shouldn't normally be visible, handled by PreCheckoutForm)
     if (checkoutLoading) {
       return (
         <Card className="border-0 shadow-none md:border md:shadow">
@@ -273,56 +352,11 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
       )
     }
 
-    // Error state
-    if (checkoutError) {
-      return (
-        <Card className="border-0 shadow-none md:border md:shadow">
-          <CardContent className="p-6">
-            <div className="text-center space-y-4">
-              <p className="text-destructive">{checkoutError}</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setCheckoutError(null)
-                  setCheckoutLoading(true)
-                  createEmbeddedCheckoutSession({
-                    sessionTemplateId: session.id,
-                    startTime: startTime!.toISOString(),
-                    numberOfSpots: effectiveNumberOfSpots,
-                  }).then(result => {
-                    if (result.success && result.clientSecret) {
-                      setClientSecret(result.clientSecret)
-                    } else {
-                      setCheckoutError(result.error || "Failed to load checkout")
-                    }
-                    setCheckoutLoading(false)
-                  })
-                }}
-              >
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )
-    }
-
-    // Checkout ready - show embedded checkout
-    if (clientSecret) {
-      return (
-        <Card className="border-0 shadow-none md:border md:shadow">
-          <CardContent className="p-6">
-            <EmbeddedCheckoutWrapper clientSecret={clientSecret} />
-          </CardContent>
-        </Card>
-      )
-    }
-
     // Fallback - shouldn't reach here
     return null
   }
 
-  // Free sessions or edit mode: render form
+  // Free sessions or edit mode: render standard form
   return (
     <Card className="border-0 shadow-none md:border md:shadow">
       <CardContent className="p-6">
@@ -397,12 +431,7 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
             {isEditMode && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="w-full"
-                    disabled={loading}
-                  >
+                  <Button type="button" variant="destructive" className="w-full" disabled={loading}>
                     Cancel Booking
                   </Button>
                 </AlertDialogTrigger>
@@ -415,9 +444,7 @@ export function BookingForm({ session, startTime, bookingDetails, numberOfSpots:
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>No, keep booking</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCancel}>
-                      Yes, cancel booking
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
