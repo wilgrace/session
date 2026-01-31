@@ -1,7 +1,6 @@
 import { getBookingDetails } from "@/app/actions/session"
 import { getBookingByCheckoutSession } from "@/app/actions/checkout"
 import { redirect, notFound } from "next/navigation"
-import ConfirmationClient from "../ConfirmationClient"
 import { getTenantFromHeaders } from "@/lib/tenant-utils"
 
 interface ConfirmationPageProps {
@@ -20,7 +19,7 @@ export default async function ConfirmationPage({ params, searchParams }: Confirm
   let bookingId = queryParams.bookingId;
   const stripeSessionId = queryParams.session_id;
 
-  // V2: If we have a Stripe session ID but no booking ID, look up the booking
+  // If we have a Stripe session ID but no booking ID, look up the booking
   if (!bookingId && stripeSessionId) {
     const lookupResult = await getBookingByCheckoutSession(stripeSessionId)
     if (lookupResult.success && lookupResult.bookingId) {
@@ -35,7 +34,7 @@ export default async function ConfirmationPage({ params, searchParams }: Confirm
               Your payment was successful! Please wait a moment while we confirm your booking.
             </p>
             <p className="text-sm text-muted-foreground">
-              If this page doesn't update automatically, please refresh in a few seconds.
+              If this page doesn&apos;t update automatically, please refresh in a few seconds.
             </p>
           </div>
         </div>
@@ -54,7 +53,7 @@ export default async function ConfirmationPage({ params, searchParams }: Confirm
     )
   }
 
-  // Fetch booking, session, and user details
+  // Fetch booking details to get the session template ID and start time
   const result = await getBookingDetails(bookingId)
   if (!result.success) {
     return (
@@ -67,30 +66,19 @@ export default async function ConfirmationPage({ params, searchParams }: Confirm
     )
   }
 
-  const { session, startTime, booking } = (result as any).data
-  const bookingUser = booking.user
-  // If the booking is associated with a real Clerk user, redirect to booking page
-  if (bookingUser && bookingUser.clerk_user_id && !bookingUser.clerk_user_id.startsWith("guest_")) {
-    redirect(`/${slug}`)
+  const { session, startTime } = (result as any).data
+  const sessionId = session.id
+
+  // Build redirect URL with confirmation flag
+  const redirectParams = new URLSearchParams({
+    confirmed: 'true',
+    bookingId: bookingId,
+  })
+
+  if (startTime) {
+    redirectParams.set('start', startTime.toISOString())
   }
 
-  // Prefill Clerk SignUp for guests
-  const signUpInitialValues = {
-    emailAddress: bookingUser?.email || "",
-    firstName: bookingUser?.first_name || "",
-    lastName: bookingUser?.last_name || ""
-  }
-
-  return (
-    <ConfirmationClient
-      session={session}
-      startTime={startTime}
-      signUpInitialValues={signUpInitialValues}
-      bookingDetails={{
-        number_of_spots: booking.number_of_spots,
-        amount_paid: booking.amount_paid,
-      }}
-      slug={slug}
-    />
-  )
+  // Redirect to the session page with confirmation toast
+  redirect(`/${slug}/${sessionId}?${redirectParams.toString()}`)
 }

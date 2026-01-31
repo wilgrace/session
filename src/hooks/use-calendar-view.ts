@@ -16,7 +16,7 @@ interface CalendarViewStore {
 export const useCalendarView = create<CalendarViewStore>()(
   persist(
     (set) => ({
-      view: "calendar",
+      view: "list",
       date: new Date(),
       setDate: (date) => set({ date }),
       setView: (view) => set({ view })

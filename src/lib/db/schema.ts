@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, uuid, integer, boolean, date, time } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, timestamp, uuid, integer, boolean, date, time } from 'drizzle-orm/pg-core';
+
+// Role enum for user permissions
+export const userRoleEnum = pgEnum('user_role', ['guest', 'user', 'admin', 'superadmin']);
+
+// Membership status enum for subscription tracking
+export const membershipStatusEnum = pgEnum('membership_status', ['none', 'active', 'expired', 'cancelled']);
 
 export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
@@ -6,6 +12,10 @@ export const organizations = pgTable('organizations', {
   slug: text('slug').notNull().unique(),
   description: text('description'),
   logoUrl: text('logo_url'),
+  // Member pricing (org-level defaults)
+  memberPriceType: text('member_price_type').default('discount'), // 'discount' | 'fixed'
+  memberDiscountPercent: integer('member_discount_percent'), // e.g., 20 for 20% off
+  memberFixedPrice: integer('member_fixed_price'), // fixed price in pence (if type='fixed')
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -13,15 +23,35 @@ export const organizations = pgTable('organizations', {
 export const clerkUsers = pgTable('clerk_users', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
-  isSuperAdmin: boolean('is_super_admin').notNull().default(false),
+  role: userRoleEnum('role').notNull().default('user'),
   email: text('email').notNull().unique(),
   firstName: text('first_name'),
   lastName: text('last_name'),
-  dateOfBirth: date('date_of_birth'),
+  birthYear: integer('birth_year'),
   gender: text('gender'),
   ethnicity: text('ethnicity'),
   homePostalCode: text('home_postal_code'),
+  // Community profile fields
+  workSituation: text('work_situation'),
+  housingSituation: text('housing_situation'),
+  livesInCardiff: boolean('lives_in_cardiff'),
+  cardiffNeighbourhood: text('cardiff_neighbourhood'),
   clerkUserId: text('clerk_user_id').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Membership tracking for subscription-based pricing
+export const userMemberships = pgTable('user_memberships', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => clerkUsers.id, { onDelete: 'cascade' }),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  status: membershipStatusEnum('status').notNull().default('none'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  stripeCustomerId: text('stripe_customer_id'),
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }), // When user requested cancellation
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -54,6 +84,7 @@ export const sessionTemplates = pgTable('session_templates', {
   // Pricing fields
   pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
   dropInPrice: integer('drop_in_price'), // Price in pence for non-members
+  memberPrice: integer('member_price'), // Override org-level member pricing (if set)
   bookingInstructions: text('booking_instructions'), // Instructions shown on confirmation page
   // Image field
   imageUrl: text('image_url'), // Optional image URL for the session
@@ -96,7 +127,10 @@ export const bookings = pgTable('bookings', {
   paymentStatus: text('payment_status').default('not_required'), // 'not_required' | 'pending' | 'completed' | 'failed' | 'refunded'
   stripeCheckoutSessionId: text('stripe_checkout_session_id'),
   stripePaymentIntentId: text('stripe_payment_intent_id'),
-  amountPaid: integer('amount_paid'), // Amount in pence
+  amountPaid: integer('amount_paid'), // Total amount in pence
+  // Price breakdown fields (for displaying on confirmation)
+  unitPrice: integer('unit_price'), // First person price in pence
+  discountAmount: integer('discount_amount'), // Discount applied in pence
 });
 
 export const stripeConnectAccounts = pgTable('stripe_connect_accounts', {
@@ -109,6 +143,10 @@ export const stripeConnectAccounts = pgTable('stripe_connect_accounts', {
   payoutsEnabled: boolean('payouts_enabled').notNull().default(false),
   country: text('country').default('GB'),
   defaultCurrency: text('default_currency').default('gbp'),
+  // Membership subscription product/price on Connected Account
+  membershipProductId: text('membership_product_id'),
+  membershipPriceId: text('membership_price_id'),
+  membershipMonthlyPrice: integer('membership_monthly_price'), // in pence
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -120,8 +158,14 @@ export type SessionTemplate = typeof sessionTemplates.$inferSelect;
 export type SessionSchedule = typeof sessionSchedules.$inferSelect;
 export type SessionInstance = typeof sessionInstances.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
+export type UserMembership = typeof userMemberships.$inferSelect;
+export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect;
 
 // Insert types (for creating new records)
 export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
 export type NewSessionSchedule = typeof sessionSchedules.$inferInsert;
-export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect; 
+export type NewUserMembership = typeof userMemberships.$inferInsert;
+
+// Role type for convenience
+export type UserRole = 'guest' | 'user' | 'admin' | 'superadmin';
+export type MembershipStatus = 'none' | 'active' | 'expired' | 'cancelled'; 

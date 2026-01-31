@@ -6,6 +6,14 @@ import { mapDayStringToInt, mapIntToDayString } from "@/lib/day-utils"
 import { ensureClerkUser } from "./clerk"
 import { Booking } from "@/types/booking"
 import { createSupabaseServerClient, getUserContextWithClient, UserContext } from "@/lib/supabase"
+import Stripe from "stripe"
+
+// Lazy initialization to avoid build-time errors when env vars aren't available
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2025-12-15.clover",
+  })
+}
 
 // Helper function to get authenticated user
 async function getAuthenticatedUser() {
@@ -35,6 +43,7 @@ interface CreateSessionTemplateParams {
   // Pricing fields
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
+  member_price?: number | null
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
@@ -86,6 +95,7 @@ interface UpdateSessionTemplateParams {
   // Pricing fields
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
+  member_price?: number | null
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
@@ -184,7 +194,7 @@ interface DBSessionTemplate {
 export async function createSessionTemplate(params: CreateSessionTemplateParams): Promise<CreateSessionTemplateResult> {
   try {
     const userId = await getAuthenticatedUser()
-    
+
     // Verify the created_by matches the authenticated user
     if (params.created_by !== userId) {
       return {
@@ -216,6 +226,20 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
       }
     }
 
+    // Determine which organization to use:
+    // 1. Request headers (set by middleware for /[slug]/ routes)
+    // 2. User's primary organization
+    const { getTenantFromHeaders } = await import('@/lib/tenant-utils');
+    const tenant = await getTenantFromHeaders();
+    const organizationId = tenant?.organizationId || userData.organization_id;
+
+    if (!organizationId) {
+      return {
+        success: false,
+        error: "No organization specified"
+      }
+    }
+
     // Create the template first
     const { data, error } = await supabase
       .from("session_templates")
@@ -231,10 +255,11 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         recurrence_start_date: params.recurrence_start_date,
         recurrence_end_date: params.recurrence_end_date,
         created_by: userData.id,
-        organization_id: userData.organization_id,
+        organization_id: organizationId,
         // Pricing fields
         pricing_type: params.pricing_type || 'free',
         drop_in_price: params.drop_in_price,
+        member_price: params.member_price,
         booking_instructions: params.booking_instructions,
         // Image field
         image_url: params.image_url,
@@ -498,7 +523,7 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
   }
 }
 
-export async function getSessions(): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
+export async function getSessions(organizationId?: string): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -510,7 +535,7 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
     // Get the user's clerk_users record (use maybeSingle to handle missing users)
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
-      .select("id")
+      .select("id, organization_id")
       .eq("clerk_user_id", userId)
       .maybeSingle()
 
@@ -521,6 +546,7 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
 
     // If user doesn't exist, create them
     let clerkUserId: string
+    let userOrgId: string | null = null
     if (!userData) {
       const user = await currentUser()
       if (!user) {
@@ -546,9 +572,31 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
       clerkUserId = ensureResult.id
     } else {
       clerkUserId = userData.id
+      userOrgId = userData.organization_id
     }
 
-    // Get templates
+    // Determine which organization to filter by:
+    // 1. Explicit parameter
+    // 2. Request headers (set by middleware for /[slug]/ routes)
+    // 3. User's primary organization
+    let orgId: string | undefined = organizationId;
+
+    if (!orgId) {
+      // Try to get from request headers
+      const { getTenantFromHeaders } = await import('@/lib/tenant-utils');
+      const tenant = await getTenantFromHeaders();
+      orgId = tenant?.organizationId;
+    }
+
+    if (!orgId && userOrgId) {
+      orgId = userOrgId;
+    }
+
+    if (!orgId) {
+      return { data: null, error: "No organization specified" }
+    }
+
+    // Get templates for this organization
     const { data: templates, error: templatesError } = await supabase
       .from("session_templates")
       .select(`
@@ -572,7 +620,7 @@ export async function getSessions(): Promise<{ data: SessionTemplate[] | null; e
         booking_instructions,
         image_url
       `)
-      .eq('created_by', clerkUserId)
+      .eq('organization_id', orgId)
       .order("created_at", { ascending: false })
 
     if (templatesError) {
@@ -1807,6 +1855,88 @@ export async function deleteBooking(booking_id: string) {
   }
 }
 
+export async function cancelBookingWithRefund(bookingId: string): Promise<{
+  success: boolean
+  refunded?: boolean
+  error?: string
+}> {
+  try {
+    console.log('[cancelBookingWithRefund] Starting cancellation for booking_id:', bookingId);
+    const supabase = createSupabaseServerClient();
+
+    // 1. Fetch booking with payment details
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('id, payment_status, stripe_payment_intent_id, amount_paid, organization_id')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      console.error('[cancelBookingWithRefund] Booking not found:', bookingError);
+      return { success: false, error: 'Booking not found' };
+    }
+
+    console.log('[cancelBookingWithRefund] Booking found:', {
+      id: booking.id,
+      payment_status: booking.payment_status,
+      has_payment_intent: !!booking.stripe_payment_intent_id,
+      amount_paid: booking.amount_paid,
+    });
+
+    let refunded = false;
+
+    // 2. Process refund if payment was completed
+    if (booking.payment_status === 'completed' && booking.stripe_payment_intent_id) {
+      // Get the Connected Account ID for this organization
+      const { data: stripeAccount, error: stripeAccountError } = await supabase
+        .from('stripe_connect_accounts')
+        .select('stripe_account_id')
+        .eq('organization_id', booking.organization_id)
+        .single();
+
+      if (stripeAccountError || !stripeAccount) {
+        console.error('[cancelBookingWithRefund] Stripe account not found:', stripeAccountError);
+        return { success: false, error: 'Unable to process refund - Stripe account not found' };
+      }
+
+      try {
+        const stripe = getStripe();
+        console.log('[cancelBookingWithRefund] Processing refund for payment_intent:', booking.stripe_payment_intent_id);
+
+        // Create refund on the Connected Account
+        await stripe.refunds.create(
+          { payment_intent: booking.stripe_payment_intent_id },
+          { stripeAccount: stripeAccount.stripe_account_id }
+        );
+
+        refunded = true;
+        console.log('[cancelBookingWithRefund] Refund processed successfully');
+      } catch (stripeError: any) {
+        console.error('[cancelBookingWithRefund] Stripe refund failed:', stripeError);
+        // Don't delete the booking if refund fails
+        return {
+          success: false,
+          error: `Refund failed: ${stripeError.message || 'Unknown error'}. Please contact support.`
+        };
+      }
+    }
+
+    // 3. Delete the booking using the existing deleteBooking function
+    const deleteResult = await deleteBooking(bookingId);
+
+    if (!deleteResult.success) {
+      console.error('[cancelBookingWithRefund] Delete failed:', deleteResult.error);
+      return { success: false, error: deleteResult.error || 'Failed to delete booking' };
+    }
+
+    console.log('[cancelBookingWithRefund] Booking cancelled successfully, refunded:', refunded);
+    return { success: true, refunded };
+  } catch (error: any) {
+    console.error('[cancelBookingWithRefund] Exception:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getBookingDetails(bookingId: string) {
   try {
     const supabase = createSupabaseClient();
@@ -1888,6 +2018,8 @@ export async function getBookingDetails(bookingId: string) {
           updated_at: bookingData.updated_at,
           amount_paid: bookingData.amount_paid,
           payment_status: bookingData.payment_status,
+          unit_price: bookingData.unit_price,
+          discount_amount: bookingData.discount_amount,
           user: {
             id: userData.id,
             email: userData.email,
@@ -2078,8 +2210,14 @@ export async function checkInBooking(bookingId: string) {
 /**
  * Get a single session template by ID (public, no auth required).
  * Use this for public booking pages.
+ *
+ * @param sessionId - The session template ID
+ * @param startTime - Optional start time to fetch a specific instance with its bookings
  */
-export async function getPublicSessionById(sessionId: string): Promise<{
+export async function getPublicSessionById(
+  sessionId: string,
+  startTime?: string
+): Promise<{
   success: boolean;
   data?: SessionTemplate;
   error?: string;
@@ -2107,6 +2245,7 @@ export async function getPublicSessionById(sessionId: string): Promise<{
         organization_id,
         pricing_type,
         drop_in_price,
+        member_price,
         booking_instructions,
         image_url
       `)
@@ -2122,7 +2261,57 @@ export async function getPublicSessionById(sessionId: string): Promise<{
       return { success: false, error: "Session template not found or not open for booking" };
     }
 
-    return { success: true, data: sessionData as unknown as SessionTemplate };
+    // If startTime is provided, fetch the specific instance with its bookings
+    let instances: any[] = [];
+    if (startTime) {
+      const { data: instanceData, error: instanceError } = await supabase
+        .from('session_instances')
+        .select(`
+          id,
+          template_id,
+          start_time,
+          end_time,
+          status,
+          bookings (
+            id,
+            number_of_spots,
+            user:clerk_users!user_id (
+              id,
+              clerk_user_id
+            )
+          )
+        `)
+        .eq('template_id', sessionId)
+        .eq('start_time', startTime)
+        .single();
+
+      if (!instanceError && instanceData) {
+        // Transform to match expected format
+        const transformedInstance = {
+          id: instanceData.id,
+          template_id: instanceData.template_id,
+          start_time: instanceData.start_time,
+          end_time: instanceData.end_time,
+          status: instanceData.status,
+          bookings: (instanceData.bookings || []).map((booking: any) => ({
+            id: booking.id,
+            number_of_spots: booking.number_of_spots || 1,
+            user: {
+              clerk_user_id: booking.user?.clerk_user_id || ''
+            }
+          }))
+        };
+        instances = [transformedInstance];
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        ...sessionData,
+        instances
+      } as unknown as SessionTemplate
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -2169,9 +2358,10 @@ export async function checkClerkUserSynced(
   try {
     const supabase = createSupabaseClient();
 
+    // Check if user exists with matching email AND clerk_user_id AND has an organization_id
     const { data, error } = await supabase
       .from("clerk_users")
-      .select("id")
+      .select("id, organization_id")
       .eq("email", email)
       .eq("clerk_user_id", clerkUserId)
       .maybeSingle();
@@ -2180,7 +2370,10 @@ export async function checkClerkUserSynced(
       return { success: false, synced: false, error: error.message };
     }
 
-    return { success: true, synced: !!data?.id };
+    // User must exist AND have an organization_id to be considered synced
+    const isSynced = !!(data?.id && data?.organization_id);
+
+    return { success: true, synced: isSynced };
   } catch (error: any) {
     return { success: false, synced: false, error: error.message };
   }
@@ -2255,14 +2448,48 @@ export async function checkUserExistingBooking(
  */
 export async function getAdminSessionsForDateRange(
   startDate: string,
-  endDate: string
+  endDate: string,
+  organizationId?: string
 ): Promise<{
   success: boolean;
   data?: any[];
   error?: string;
 }> {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const supabase = createSupabaseClient();
+
+    // Get the organization from:
+    // 1. Explicit parameter
+    // 2. Request headers (set by middleware)
+    // 3. User's primary organization
+    let orgId = organizationId;
+
+    if (!orgId) {
+      // Try to get from request headers (set by middleware for /[slug]/ routes)
+      const { getTenantFromHeaders } = await import('@/lib/tenant-utils');
+      const tenant = await getTenantFromHeaders();
+      orgId = tenant?.organizationId;
+    }
+
+    if (!orgId) {
+      // Fall back to user's primary organization
+      const { data: userData } = await supabase
+        .from('clerk_users')
+        .select('organization_id')
+        .eq('clerk_user_id', userId)
+        .single();
+
+      orgId = userData?.organization_id;
+    }
+
+    if (!orgId) {
+      return { success: false, error: "No organization specified" };
+    }
 
     const { data: instances, error } = await supabase
       .from('session_instances')
@@ -2274,6 +2501,7 @@ export async function getAdminSessionsForDateRange(
           user:clerk_users(*)
         )
       `)
+      .eq('organization_id', orgId)
       .gte('start_time', startDate)
       .lte('start_time', endDate)
       .order('start_time', { ascending: true });

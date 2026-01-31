@@ -12,6 +12,7 @@ interface SessionPageProps {
     start?: string
     edit?: string
     bookingId?: string
+    membership?: string // Pre-select membership option (from sign-up redirect)
   }>
 }
 

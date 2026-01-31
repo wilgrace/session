@@ -33,34 +33,57 @@ interface ActionResult<T = void> {
 // HELPER FUNCTIONS
 // ============================================
 
-async function getAuthenticatedOrg(): Promise<{ orgId: string } | { error: string }> {
+async function getAuthenticatedOrg(organizationId?: string): Promise<{ orgId: string } | { error: string }> {
   const { userId } = await auth()
 
   if (!userId) {
     return { error: "Unauthorized: Not logged in" }
   }
 
-  // Get the user's organization from Supabase clerk_users table
   const supabase = createSupabaseServerClient()
-  const { data: user, error } = await supabase
+
+  // Get the user's internal ID
+  const { data: user, error: userError } = await supabase
     .from("clerk_users")
-    .select("organization_id, is_super_admin")
+    .select("id, organization_id, role")
     .eq("clerk_user_id", userId)
     .single()
 
-  if (error || !user) {
+  if (userError || !user) {
     return { error: "User not found" }
   }
 
-  if (!user.is_super_admin) {
+  // Determine which organization to use:
+  // 1. Explicit parameter
+  // 2. Request headers (set by middleware for /[slug]/ routes)
+  // 3. User's primary organization
+  let orgId = organizationId;
+
+  if (!orgId) {
+    const { getTenantFromHeaders } = await import('@/lib/tenant-utils');
+    const tenant = await getTenantFromHeaders();
+    orgId = tenant?.organizationId;
+  }
+
+  if (!orgId) {
+    orgId = user.organization_id;
+  }
+
+  if (!orgId) {
+    return { error: "No organization specified" }
+  }
+
+  // Check if user has admin access to this organization
+  // Superadmins can access any org, admins can only access their own org
+  const hasAccess =
+    user.role === 'superadmin' ||
+    (user.role === 'admin' && user.organization_id === orgId);
+
+  if (!hasAccess) {
     return { error: "Unauthorized: Admin access required" }
   }
 
-  if (!user.organization_id) {
-    return { error: "No organization associated with user" }
-  }
-
-  return { orgId: user.organization_id }
+  return { orgId }
 }
 
 // ============================================

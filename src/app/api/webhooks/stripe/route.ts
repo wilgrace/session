@@ -41,7 +41,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
   }
 
-  console.log(`Processing Stripe webhook: ${event.type}`)
+  // Log event details - 'account' field is present for Connect events
+  const connectedAccountId = event.account
+  console.log(`Processing Stripe webhook: ${event.type}${connectedAccountId ? ` (Connected Account: ${connectedAccountId})` : ""}`)
 
   const supabase = getSupabase()
 
@@ -101,20 +103,21 @@ export async function POST(req: NextRequest) {
           break
         }
 
-        // V2 flow: No booking_id - create booking from metadata
+        // V2/V3 flow: No booking_id - create booking from metadata
         const sessionTemplateId = metadata.session_template_id
         const organizationId = metadata.organization_id
         const startTimeStr = metadata.start_time
         const numberOfSpots = parseInt(metadata.number_of_spots || "1")
         const clerkUserId = metadata.clerk_user_id // Empty string for guests
         const durationMinutes = parseInt(metadata.duration_minutes || "60")
+        const isNewMembership = metadata.is_new_membership === "true"
 
         if (!sessionTemplateId || !organizationId || !startTimeStr) {
-          console.error("Missing required metadata for V2 checkout:", metadata)
+          console.error("Missing required metadata for checkout:", metadata)
           break
         }
 
-        console.log(`V2 Checkout completed - creating booking for session ${sessionTemplateId}`)
+        console.log(`Checkout completed - creating booking for session ${sessionTemplateId}, isNewMembership: ${isNewMembership}`)
 
         // Get customer info from Stripe (collected during checkout)
         const customerEmail = session.customer_details?.email
@@ -210,6 +213,10 @@ export async function POST(req: NextRequest) {
           instance = newInstance
         }
 
+        // Extract price breakdown from metadata
+        const unitPrice = metadata.unit_price ? parseInt(metadata.unit_price) : null
+        const discountAmount = metadata.discount_amount ? parseInt(metadata.discount_amount) : null
+
         // Create confirmed booking
         const { data: newBooking, error: bookingError } = await supabase
           .from("bookings")
@@ -221,8 +228,10 @@ export async function POST(req: NextRequest) {
             status: "confirmed",
             payment_status: "completed",
             stripe_checkout_session_id: session.id,
-            stripe_payment_intent_id: session.payment_intent as string,
+            stripe_payment_intent_id: session.payment_intent as string || null,
             amount_paid: session.amount_total,
+            unit_price: unitPrice,
+            discount_amount: discountAmount,
           })
           .select("id")
           .single()
@@ -230,7 +239,169 @@ export async function POST(req: NextRequest) {
         if (bookingError) {
           console.error("Error creating booking:", bookingError)
         } else {
-          console.log(`V2 Booking ${newBooking.id} created and confirmed`)
+          console.log(`Booking ${newBooking.id} created and confirmed`)
+        }
+
+        // Note: Membership creation is handled by customer.subscription.created webhook
+        // which is triggered separately for subscription mode checkouts
+        break
+      }
+
+      // ============================================
+      // SUBSCRIPTION LIFECYCLE EVENTS
+      // ============================================
+
+      case "customer.subscription.created": {
+        const subscription = event.data.object as Stripe.Subscription
+        const subMetadata = subscription.metadata || {}
+
+        const subOrgId = subMetadata.organization_id
+        const subClerkUserId = subMetadata.clerk_user_id
+        const subCustomerEmail = subMetadata.customer_email
+
+        if (!subOrgId) {
+          console.error("No organization_id in subscription metadata:", subMetadata)
+          break
+        }
+
+        console.log(`Subscription created: ${subscription.id} for org ${subOrgId}`)
+
+        // Find the user
+        let subInternalUserId: string | null = null
+
+        if (subClerkUserId) {
+          const { data: user } = await supabase
+            .from("clerk_users")
+            .select("id")
+            .eq("clerk_user_id", subClerkUserId)
+            .single()
+          subInternalUserId = user?.id || null
+        }
+
+        if (!subInternalUserId && subCustomerEmail) {
+          const { data: user } = await supabase
+            .from("clerk_users")
+            .select("id")
+            .eq("email", subCustomerEmail)
+            .maybeSingle()
+          subInternalUserId = user?.id || null
+        }
+
+        if (!subInternalUserId) {
+          console.error("Could not find user for subscription:", subscription.id)
+          break
+        }
+
+        // Create or update membership record
+        // Note: In newer Stripe API versions, current_period is on subscription items
+        const subscriptionItem = subscription.items?.data?.[0]
+        const currentPeriodStart = subscriptionItem?.current_period_start
+          ? new Date(subscriptionItem.current_period_start * 1000).toISOString()
+          : new Date().toISOString()
+        const currentPeriodEnd = subscriptionItem?.current_period_end
+          ? new Date(subscriptionItem.current_period_end * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Default 30 days
+
+        const { error: membershipError } = await supabase
+          .from("user_memberships")
+          .upsert(
+            {
+              user_id: subInternalUserId,
+              organization_id: subOrgId,
+              status: "active",
+              stripe_subscription_id: subscription.id,
+              stripe_customer_id: subscription.customer as string,
+              current_period_start: currentPeriodStart,
+              current_period_end: currentPeriodEnd,
+              cancelled_at: null,
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "user_id,organization_id",
+            }
+          )
+
+        if (membershipError) {
+          console.error("Error creating membership:", membershipError)
+        } else {
+          console.log(`Membership created/updated for user ${subInternalUserId}`)
+        }
+        break
+      }
+
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription
+
+        console.log(`Subscription updated: ${subscription.id}`)
+
+        // Determine new status
+        let membershipStatus: "active" | "cancelled" | "expired" = "active"
+        let cancelledAt: string | null = null
+
+        if (subscription.cancel_at_period_end) {
+          // User has cancelled but subscription is still active until period end
+          membershipStatus = "cancelled"
+          cancelledAt = subscription.canceled_at
+            ? new Date(subscription.canceled_at * 1000).toISOString()
+            : new Date().toISOString()
+        } else if (subscription.status === "past_due" || subscription.status === "unpaid") {
+          // Payment failed but not yet cancelled
+          membershipStatus = "active" // Keep active, webhook for failure will handle
+        } else if (subscription.status === "canceled") {
+          // Fully cancelled
+          membershipStatus = "expired"
+        }
+
+        // Note: In newer Stripe API versions, current_period is on subscription items
+        const updateSubItem = subscription.items?.data?.[0]
+        const updatePeriodStart = updateSubItem?.current_period_start
+          ? new Date(updateSubItem.current_period_start * 1000).toISOString()
+          : undefined
+        const updatePeriodEnd = updateSubItem?.current_period_end
+          ? new Date(updateSubItem.current_period_end * 1000).toISOString()
+          : undefined
+
+        const updateData: Record<string, unknown> = {
+          status: membershipStatus,
+          cancelled_at: cancelledAt,
+          updated_at: new Date().toISOString(),
+        }
+        if (updatePeriodStart) updateData.current_period_start = updatePeriodStart
+        if (updatePeriodEnd) updateData.current_period_end = updatePeriodEnd
+
+        const { error: updateError } = await supabase
+          .from("user_memberships")
+          .update(updateData)
+          .eq("stripe_subscription_id", subscription.id)
+
+        if (updateError) {
+          console.error("Error updating membership:", updateError)
+        } else {
+          console.log(`Membership updated for subscription ${subscription.id}: status=${membershipStatus}`)
+        }
+        break
+      }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription
+
+        console.log(`Subscription deleted: ${subscription.id}`)
+
+        // Set membership to 'none' - subscription has fully ended
+        const { error: deleteError } = await supabase
+          .from("user_memberships")
+          .update({
+            status: "none",
+            stripe_subscription_id: null,
+            cancelled_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_subscription_id", subscription.id)
+
+        if (deleteError) {
+          console.error("Error marking membership as none:", deleteError)
+        } else {
+          console.log(`Membership ended for subscription ${subscription.id}`)
         }
         break
       }

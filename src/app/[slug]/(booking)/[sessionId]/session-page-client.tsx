@@ -1,15 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { ChevronLeft } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
 import { SessionDetails } from "@/components/booking/session-details"
 import { BookingForm } from "@/components/booking/booking-form"
 import { SessionTemplate } from "@/types/session"
 import { useUser } from "@clerk/nextjs"
 import { getBookingDetails, getPublicSessionById, checkUserExistingBooking } from "@/app/actions/session"
-import { useRouter } from "next/navigation"
+import { getBookingPricingData, BookingPricingData } from "@/app/actions/membership"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
 
 interface SessionPageClientProps {
   sessionId: string
@@ -17,6 +16,8 @@ interface SessionPageClientProps {
     start?: string
     edit?: string
     bookingId?: string
+    membership?: string // Pre-select membership option (from sign-up redirect)
+    confirmed?: string // Show confirmation toast
   }
   slug: string
 }
@@ -34,12 +35,43 @@ function calculateSpotsRemaining(session: SessionTemplate, currentUserSpots: num
 export function SessionPageClient({ sessionId, searchParams, slug }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
+  const { toast } = useToast()
   const [session, setSession] = useState<SessionTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [bookingDetails, setBookingDetails] = useState<any>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [pricingData, setPricingData] = useState<BookingPricingData | null>(null)
+  const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
+  // Ref to track if initial session fetch has been done (prevent refetch when user changes)
+  const initialFetchDoneRef = useRef(false)
+  // Track the user ID that was used for the last booking check
+  const lastBookingCheckUserIdRef = useRef<string | null>(null)
+
+  // Determine the mode based on URL params and booking state
+  const isConfirmation = searchParams.confirmed === 'true'
+  const isEditMode = searchParams.edit === 'true' && searchParams.bookingId
+  // Show confirmation view if:
+  // 1. Edit mode with bookingId → 'edit'
+  // 2. Confirmed param or existing booking details → 'confirmation' (allows guests to see their booking)
+  // 3. Otherwise → 'new'
+  const mode = isEditMode ? 'edit' : (bookingDetails ? 'confirmation' : 'new')
+
+  // Show confirmation toast when arriving with confirmed=true
+  useEffect(() => {
+    if (isConfirmation && !hasShownConfirmationToast && !loading) {
+      toast({
+        title: "Booking Confirmed!",
+        description: "Your booking has been successfully created.",
+      })
+      setHasShownConfirmationToast(true)
+
+      // Clear the confirmed param from URL without reload
+      const newUrl = `/${slug}/${sessionId}${searchParams.start ? `?start=${encodeURIComponent(searchParams.start)}` : ''}${searchParams.bookingId ? `${searchParams.start ? '&' : '?'}bookingId=${searchParams.bookingId}` : ''}`
+      router.replace(newUrl, { scroll: false })
+    }
+  }, [isConfirmation, hasShownConfirmationToast, loading, toast, router, slug, sessionId, searchParams])
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -68,7 +100,13 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
         const edit = searchParams.edit
         const bookingId = searchParams.bookingId
 
-        if (!edit && user && startParam) {
+        // Only check for existing booking if:
+        // 1. Not in edit mode
+        // 2. User is logged in
+        // 3. We have a start time
+        // 4. We haven't already checked for this user (prevent duplicate checks when user reference changes)
+        if (!edit && user && startParam && lastBookingCheckUserIdRef.current !== user.id) {
+          lastBookingCheckUserIdRef.current = user.id
           // Check if user already has a booking for this session instance
           const bookingCheck = await checkUserExistingBooking(
             user.id,
@@ -88,45 +126,74 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
           }
         }
 
-        if (edit === 'true' && bookingId && user) {
+        // Skip session fetch if we've already done it (only refetch if URL params change)
+        if (initialFetchDoneRef.current) {
+          setLoading(false)
+          return
+        }
+
+        // Fetch booking details if bookingId is provided
+        // This handles both edit mode (logged-in users) and confirmation view (guests)
+        if (bookingId) {
           try {
             const result = await getBookingDetails(bookingId)
             if (!result.success) {
               throw new Error("Failed to fetch booking details")
             }
-            const { booking, session, startTime: bookingStartTime } = (result as { success: true; data: any }).data
+            const { booking, session: bookingSession, startTime: bookingStartTime } = (result as { success: true; data: any }).data
 
-            // Verify that the booking belongs to the current user
-            if (!booking.user || booking.user.clerk_user_id !== user.id) {
-              throw new Error("You don't have permission to edit this booking")
+            // For logged-in users in edit mode, verify the booking belongs to them
+            // For guests, allow viewing if the booking was made by a guest account
+            const isGuestBooking = booking.user?.clerk_user_id?.startsWith('guest_')
+            if (user && !isGuestBooking) {
+              // Logged-in user - verify they own the booking
+              if (!booking.user || booking.user.clerk_user_id !== user.id) {
+                throw new Error("You don't have permission to view this booking")
+              }
             }
+            // For guest bookings, anyone with the bookingId link can view it
+            // This is intentional - guests receive the link via email/confirmation
 
             // Set booking details and session
             setBookingDetails(booking)
-            setSession(session as unknown as SessionTemplate)
+            setSession(bookingSession as unknown as SessionTemplate)
             setStartTime(bookingStartTime)
             setDebugInfo({
               bookingId,
-              userId: user.id
+              userId: user?.id || 'guest'
             })
+            initialFetchDoneRef.current = true
+            setLoading(false)
+            return // Don't fetch session separately, we got it from booking details
           } catch (error: any) {
-            setError(error.message)
-            setDebugInfo((prev: any) => ({
-              ...(prev || {}),
-              error: error.message,
-              bookingId,
-              userId: user.id
-            }))
+            // If booking fetch fails, fall through to fetch session normally
+            // This allows the page to still work for new bookings
+            console.warn("Could not fetch booking details:", error.message)
           }
-        } else {
-          // Fetch session template using server action
-          const result = await getPublicSessionById(sessionId)
+        }
 
-          if (!result.success || !result.data) {
-            throw new Error(result.error || "Session template not found")
+        // No bookingId or booking fetch failed - fetch session template normally
+        // Fetch session template using server action
+        // Pass startParam to fetch the specific instance with its bookings for availability calculation
+        const result = await getPublicSessionById(sessionId, startParam ? decodeURIComponent(startParam) : undefined)
+
+        if (!result.success || !result.data) {
+          throw new Error(result.error || "Session template not found")
+        }
+
+        setSession(result.data)
+        initialFetchDoneRef.current = true
+
+        // Fetch pricing data for paid sessions
+        if (result.data.pricing_type === "paid" && result.data.drop_in_price) {
+          const pricingResult = await getBookingPricingData({
+            organizationId: result.data.organization_id,
+            dropInPrice: result.data.drop_in_price,
+            templateMemberPrice: result.data.member_price,
+          })
+          if (pricingResult.success && pricingResult.data) {
+            setPricingData(pricingResult.data)
           }
-
-          setSession(result.data)
         }
       } catch (err: any) {
         setError(err.message)
@@ -142,7 +209,8 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
     }
 
     fetchSession()
-  }, [sessionId, searchParams, user, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, searchParams.start, searchParams.edit, searchParams.bookingId, user?.id, router, slug])
 
   if (loading) {
     return (
@@ -160,15 +228,7 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
   if (error || !session) {
     return (
       <div className="container mx-auto py-8">
-        <div className="mb-4">
-          <Link href={`/${slug}`}>
-            <Button variant="ghost" className="gap-2">
-              <ChevronLeft className="h-4 w-4" />
-              Back to Calendar
-            </Button>
-          </Link>
-        </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <h2 className="text-red-800 font-semibold mb-2">Error: {error || "Session not found"}</h2>
           {debugInfo && (
             <div className="mt-4">
@@ -183,17 +243,21 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
     )
   }
 
+  // Determine if user is a guest (booking exists but user is a guest account)
+  const isGuest = bookingDetails?.user?.clerk_user_id?.startsWith('guest_') || false
+  const guestEmail = bookingDetails?.user?.email
+
+  // Build user details for BookingPanel
+  const userDetails = user && !isGuest ? {
+    name: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown',
+    email: user.primaryEmailAddress?.emailAddress || '',
+  } : bookingDetails?.user && !isGuest ? {
+    name: `${bookingDetails.user.first_name || ''} ${bookingDetails.user.last_name || ''}`.trim() || 'Unknown',
+    email: bookingDetails.user.email || '',
+  } : null
+
   return (
     <div className="container mx-auto py-4 md:py-0">
-      <div>
-        <Link href={`/${slug}`}>
-          <Button variant="ghost" className="gap-2">
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-        </Link>
-      </div>
-
       <div className="grid md:grid-cols-2 md:gap-8">
         <SessionDetails
           session={session}
@@ -208,7 +272,16 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
           startTime={startTime || undefined}
           bookingDetails={bookingDetails}
           slug={slug}
+          sessionId={sessionId}
           spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
+          memberPrice={pricingData?.memberPrice}
+          monthlyMembershipPrice={pricingData?.monthlyMembershipPrice}
+          isActiveMember={pricingData?.isActiveMember}
+          defaultToMembership={searchParams.membership === "true"}
+          mode={mode}
+          userDetails={userDetails}
+          isGuest={isGuest}
+          guestEmail={guestEmail}
         />
       </div>
     </div>

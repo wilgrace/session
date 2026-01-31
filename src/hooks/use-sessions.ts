@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { SessionInstanceWithBookings } from '@/lib/db/queries';
 import { getAdminSessionsForDateRange } from '@/app/actions/session';
 
-export function useSessions(startDate: Date, endDate: Date) {
+export function useSessions(startDate: Date, endDate: Date, organizationId?: string) {
   const [sessions, setSessions] = useState<SessionInstanceWithBookings[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -17,7 +17,8 @@ export function useSessions(startDate: Date, endDate: Date) {
         setLoading(true);
         const result = await getAdminSessionsForDateRange(
           startDate.toISOString(),
-          endDate.toISOString()
+          endDate.toISOString(),
+          organizationId
         );
         if (isMounted) {
           if (result.success) {
@@ -71,7 +72,7 @@ export function useSessions(startDate: Date, endDate: Date) {
       sessionChannel.unsubscribe();
       bookingChannel.unsubscribe();
     };
-  }, [startDate.getTime(), endDate.getTime()]);
+  }, [startDate.getTime(), endDate.getTime(), organizationId]);
 
   return { sessions, loading, error };
 } 

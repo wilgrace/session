@@ -13,7 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { updateClerkUser, deleteClerkUser, createClerkUser } from "@/app/actions/clerk";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUser } from "@clerk/nextjs";
-import { ROLES } from "@/lib/auth-utils";
+import { ROLES, DB_ROLES } from "@/lib/auth-utils";
 import { Protect } from "@clerk/nextjs";
 
 interface UserFormProps {
@@ -33,13 +33,13 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
   const isSuperAdmin = currentUser?.organizationMemberships?.[0]?.role === ROLES.SUPER_ADMIN;
   const availableRoles = isSuperAdmin
     ? [
-        { value: ROLES.SUPER_ADMIN, label: "Super Admin" },
-        { value: ROLES.ADMIN, label: "Admin" },
-        { value: ROLES.USER, label: "User" }
+        { value: DB_ROLES.SUPER_ADMIN, label: "Super Admin" },
+        { value: DB_ROLES.ADMIN, label: "Admin" },
+        { value: DB_ROLES.USER, label: "User" }
       ]
     : [
-        { value: ROLES.ADMIN, label: "Admin" },
-        { value: ROLES.USER, label: "User" }
+        { value: DB_ROLES.ADMIN, label: "Admin" },
+        { value: DB_ROLES.USER, label: "User" }
       ];
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
         gender: "",
         ethnicity: "",
         home_postal_code: "",
-        role: ROLES.USER
+        role: DB_ROLES.USER
       });
     }
   }, [user]);
@@ -221,7 +221,7 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
                 <Select
-                  value={form.role || ROLES.USER}
+                  value={form.role || DB_ROLES.USER}
                   onValueChange={(value) => handleChange("role", value)}
                 >
                   <SelectTrigger>
@@ -229,8 +229,8 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
                   </SelectTrigger>
                   <SelectContent>
                     {[
-                      { value: ROLES.ADMIN, label: "Admin" },
-                      { value: ROLES.USER, label: "User" }
+                      { value: DB_ROLES.ADMIN, label: "Admin" },
+                      { value: DB_ROLES.USER, label: "User" }
                     ].map((role) => (
                       <SelectItem key={role.value} value={role.value}>
                         {role.label}
@@ -244,7 +244,7 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <Select
-                value={form.role || ROLES.USER}
+                value={form.role || DB_ROLES.USER}
                 onValueChange={(value) => handleChange("role", value)}
               >
                 <SelectTrigger>

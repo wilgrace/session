@@ -7,10 +7,11 @@ import { EmbeddedCheckoutWrapper } from "./embedded-checkout"
 
 interface CheckoutStepProps {
   clientSecret: string
+  connectedAccountId?: string
   onBack: () => void
 }
 
-export function CheckoutStep({ clientSecret, onBack }: CheckoutStepProps) {
+export function CheckoutStep({ clientSecret, connectedAccountId, onBack }: CheckoutStepProps) {
   return (
     <Card className="border-0 shadow-none md:border md:shadow">
       <CardContent className="p-6">
@@ -29,7 +30,10 @@ export function CheckoutStep({ clientSecret, onBack }: CheckoutStepProps) {
         </div>
 
         {/* Stripe Embedded Checkout */}
-        <EmbeddedCheckoutWrapper clientSecret={clientSecret} />
+        <EmbeddedCheckoutWrapper
+          clientSecret={clientSecret}
+          connectedAccountId={connectedAccountId}
+        />
       </CardContent>
     </Card>
   )

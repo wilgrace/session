@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, ExternalLink, Menu, X, Building2, ChevronDown } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, ExternalLink, Menu, X, Building2, ChevronDown, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { useOrganizationList, useOrganization } from "@clerk/nextjs"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { UserButtonSection } from "./user-button-section"
+import { getCurrentUserOrganizations } from "@/app/actions/user"
+import type { UserOrgAssignment } from "@/lib/tenant-utils"
 
 interface SidebarProps {
   slug: string
@@ -22,11 +23,28 @@ interface SidebarProps {
 
 export function Sidebar({ slug }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const { organization } = useOrganization()
-  const { userMemberships, setActive, isLoaded } = useOrganizationList({
-    userMemberships: { infinite: true }
-  })
+  const [userOrgs, setUserOrgs] = useState<UserOrgAssignment[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch user's organization assignments from Supabase
+  useEffect(() => {
+    async function fetchOrgs() {
+      setIsLoading(true)
+      try {
+        const result = await getCurrentUserOrganizations()
+        if (result.success && result.data) {
+          setUserOrgs(result.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch organizations:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchOrgs()
+  }, [])
 
   const navItems = [
     { href: `/${slug}/admin`, icon: CalendarCheck, label: "Bookings" },
@@ -35,17 +53,17 @@ export function Sidebar({ slug }: SidebarProps) {
     { href: `/${slug}/admin/billing`, icon: CreditCard, label: "Billing" },
   ]
 
-  const organizations = userMemberships?.data?.map(m => m.organization) ?? []
-  const hasMultipleOrgs = organizations.length > 1
+  // Find current org from assignments
+  const currentOrg = userOrgs.find(a => a.organization.slug === slug)
+  const hasMultipleOrgs = userOrgs.length > 1
 
-  const handleOrgSwitch = async (orgId: string) => {
-    if (setActive) {
-      await setActive({ organization: orgId })
-    }
+  // Navigate to a different org's admin
+  const handleOrgSwitch = (newSlug: string) => {
+    router.push(`/${newSlug}/admin`)
   }
 
   const OrgPicker = () => {
-    if (!isLoaded) {
+    if (isLoading) {
       return (
         <div className="px-3 py-2">
           <div className="h-9 bg-gray-100 rounded-md animate-pulse" />
@@ -53,7 +71,25 @@ export function Sidebar({ slug }: SidebarProps) {
       )
     }
 
-    if (!organization) {
+    if (!currentOrg) {
+      return (
+        <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-500">
+          <Building2 className="mr-3 h-5 w-5" />
+          <span className="truncate">Unknown Organization</span>
+        </div>
+      )
+    }
+
+    // Show role badge for superadmins
+    const RoleBadge = () => {
+      if (currentOrg.role === 'superadmin') {
+        return (
+          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+            <Shield className="h-3 w-3 mr-0.5" />
+            Super
+          </span>
+        )
+      }
       return null
     }
 
@@ -64,23 +100,36 @@ export function Sidebar({ slug }: SidebarProps) {
             <button className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md text-gray-900 hover:bg-gray-50 transition-colors">
               <div className="flex items-center min-w-0">
                 <Building2 className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500" />
-                <span className="truncate">{organization.name}</span>
+                <span className="truncate">{currentOrg.organization.name}</span>
+                <RoleBadge />
               </div>
               <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {organizations.map((org) => (
+          <DropdownMenuContent align="start" className="w-64">
+            {userOrgs.map((assignment) => (
               <DropdownMenuItem
-                key={org.id}
-                onClick={() => handleOrgSwitch(org.id)}
+                key={assignment.organizationId}
+                onClick={() => handleOrgSwitch(assignment.organization.slug)}
                 className={cn(
-                  "cursor-pointer",
-                  org.id === organization.id && "bg-gray-100"
+                  "cursor-pointer flex items-center justify-between",
+                  assignment.organization.slug === slug && "bg-gray-100"
                 )}
               >
-                <Building2 className="mr-2 h-4 w-4" />
-                {org.name}
+                <div className="flex items-center">
+                  <Building2 className="mr-2 h-4 w-4" />
+                  <span>{assignment.organization.name}</span>
+                </div>
+                {assignment.role === 'superadmin' && (
+                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                    <Shield className="h-3 w-3" />
+                  </span>
+                )}
+                {assignment.role === 'admin' && (
+                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    Admin
+                  </span>
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -91,7 +140,8 @@ export function Sidebar({ slug }: SidebarProps) {
     return (
       <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-900">
         <Building2 className="mr-3 h-5 w-5 text-gray-500" />
-        <span className="truncate">{organization.name}</span>
+        <span className="truncate">{currentOrg.organization.name}</span>
+        <RoleBadge />
       </div>
     )
   }

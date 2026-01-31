@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { BookingHeader } from "@/components/booking/booking-header"
-import { getTenantOrganization, isUserSuperAdmin } from "@/lib/tenant-utils"
+import { AuthOverlay } from "@/components/auth/auth-overlay"
+import { getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
 
 interface BookingLayoutProps {
   children: React.ReactNode
@@ -15,8 +16,10 @@ export default async function BookingLayout({
   const organization = await getTenantOrganization()
   const { userId } = await auth()
 
-  // Check if user is a super admin from Supabase clerk_users table
-  const isAdmin = userId ? await isUserSuperAdmin(userId) : false
+  // Check if user has admin access (admin or superadmin role) for this org
+  const isAdmin = userId && organization
+    ? await canAccessAdminForOrg(userId, organization.id)
+    : false
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -26,6 +29,7 @@ export default async function BookingLayout({
         organizationName={organization?.name}
       />
       <main className="flex-1 overflow-auto md:p-6">{children}</main>
+      <AuthOverlay />
     </div>
   )
 }

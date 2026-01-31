@@ -173,6 +173,7 @@ TRUNCATE TABLE public.session_instances CASCADE;
 TRUNCATE TABLE public.session_schedules CASCADE;
 TRUNCATE TABLE public.session_templates CASCADE;
 TRUNCATE TABLE public.stripe_connect_accounts CASCADE;
+TRUNCATE TABLE public.user_memberships CASCADE;
 TRUNCATE TABLE public.clerk_users CASCADE;
 TRUNCATE TABLE public.organizations CASCADE;
 
@@ -190,10 +191,13 @@ INSERT INTO public.clerk_users (
   first_name,
   last_name,
   organization_id,
-  is_super_admin
+  role
 )
 VALUES
-  ('4e376853-0880-4b3e-a669-edf561e116dc', 'user_2y6VL5FKMg9cwwlLvbjg01GPlxT', 'wil.grace@gmail.com', 'Wil', 'Grace', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', true);
+  ('4e376853-0880-4b3e-a669-edf561e116dc', 'user_2y6VL5FKMg9cwwlLvbjg01GPlxT', 'wil.grace@gmail.com', 'Wil', 'Grace', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', 'superadmin');
+
+-- Note: Superadmins can access any organization without explicit assignments.
+-- The middleware checks the role directly from clerk_users table.
 
 -- Create sample Stripe Connect account (connected and ready to accept payments)
 INSERT INTO public.stripe_connect_accounts (

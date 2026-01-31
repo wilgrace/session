@@ -40,6 +40,11 @@ moment.locale('en', {
 
 const localizer = momentLocalizer(moment)
 
+// 24-hour time format for the time gutter
+const calendarFormats = {
+  timeGutterFormat: 'HH:mm',
+}
+
 // Extend the Event type from react-big-calendar
 interface CalendarEvent extends Event {
   id: string
@@ -252,29 +257,30 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
     }
 
     // Find earliest start and latest end times
-    let earliestStart = new Date(0, 0, 0, 23, 59, 59)
-    let latestEnd = new Date(0, 0, 0, 0, 0, 0)
+    let earliestStartHour = 23
+    let latestEndHour = 0
+    let latestEndMinutes = 0
 
     events.forEach(event => {
       const startHour = event.start.getHours()
       const endHour = event.end.getHours()
-      
-      if (startHour < earliestStart.getHours()) {
-        earliestStart = new Date(0, 0, 0, startHour, 0, 0)
+      const endMinutes = event.end.getMinutes()
+
+      if (startHour < earliestStartHour) {
+        earliestStartHour = startHour
       }
-      if (endHour > latestEnd.getHours()) {
-        latestEnd = new Date(0, 0, 0, endHour, 0, 0)
+      if (endHour > latestEndHour || (endHour === latestEndHour && endMinutes > latestEndMinutes)) {
+        latestEndHour = endHour
+        latestEndMinutes = endMinutes
       }
     })
 
-    // Add padding hours if needed
-    const paddingHours = 2
-    const minHour = Math.max(0, earliestStart.getHours() - paddingHours)
-    const maxHour = Math.min(23, latestEnd.getHours() + paddingHours)
+    // Ceiling the end hour if session ends with minutes (e.g., 20:30 → 21:00)
+    const maxHour = latestEndMinutes > 0 ? latestEndHour + 1 : latestEndHour
 
     return {
-      min: new Date(0, 0, 0, minHour, 0, 0),
-      max: new Date(0, 0, 0, maxHour, 0, 0)
+      min: new Date(0, 0, 0, earliestStartHour, 0, 0),
+      max: new Date(0, 0, 0, Math.min(24, maxHour), 0, 0)
     }
   }
 
@@ -421,6 +427,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
       <div className="h-[600px] border rounded-lg">
         <BigCalendar
           localizer={localizer}
+          formats={calendarFormats}
           events={events}
           startAccessor="start"
           endAccessor="end"

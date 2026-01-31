@@ -11,6 +11,7 @@ export interface Profile {
   clerk_user_id?: string;
   role?: string | null;
   roleLabel?: string | null;
+  isMember?: boolean;
   created_at: string;
   updated_at: string;
 } 

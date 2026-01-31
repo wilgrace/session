@@ -6,6 +6,7 @@ import { Profile } from "@/types/profile";
 import { UserForm } from "@/components/admin/user-form";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,7 +81,16 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
                   >
                     <TableCell className="font-medium">{[user.first_name, user.last_name].filter(Boolean).join(" ")}</TableCell>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.roleLabel || 'User'}</TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-2">
+                        {user.roleLabel || 'User'}
+                        {user.isMember && (
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                            Member
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button

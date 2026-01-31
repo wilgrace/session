@@ -22,9 +22,13 @@ const STATIC_EXTENSIONS = [
   '.css', '.js', '.map', '.woff', '.woff2', '.ttf', '.eot',
 ];
 
+// User role type (must match schema)
+type UserRole = 'guest' | 'user' | 'admin' | 'superadmin';
+
 // Cache for organization lookups (edge runtime compatible)
 const orgCache = new Map<string, { data: { id: string; slug: string } | null; expiry: number }>();
-const userOrgCache = new Map<string, { slug: string | null; isSuperAdmin: boolean; expiry: number }>();
+const userOrgCache = new Map<string, { slug: string | null; role: UserRole; expiry: number }>();
+const userOrgRoleCache = new Map<string, { role: UserRole | null; expiry: number }>();
 const CACHE_TTL = 60 * 1000; // 1 minute cache
 
 /**
@@ -76,14 +80,14 @@ async function getOrganizationBySlug(slug: string): Promise<{ id: string; slug: 
 }
 
 /**
- * Fetch user data (org slug and admin status) by their Clerk user ID.
- * Looks up the clerk_users table to find their organization and admin status.
+ * Fetch user data (org slug and role) by their Clerk user ID.
+ * Looks up the clerk_users table to find their primary organization and role.
  */
-async function getUserData(clerkUserId: string): Promise<{ slug: string | null; isSuperAdmin: boolean }> {
+async function getUserData(clerkUserId: string): Promise<{ slug: string | null; role: UserRole }> {
   // Check cache first
   const cached = userOrgCache.get(clerkUserId);
   if (cached && cached.expiry > Date.now()) {
-    return { slug: cached.slug, isSuperAdmin: cached.isSuperAdmin };
+    return { slug: cached.slug, role: cached.role };
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -91,13 +95,13 @@ async function getUserData(clerkUserId: string): Promise<{ slug: string | null; 
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('[Middleware] Missing Supabase environment variables');
-    return { slug: null, isSuperAdmin: false };
+    return { slug: null, role: 'user' };
   }
 
   try {
-    // Get the user's organization_id and is_super_admin from clerk_users
+    // Get the user's organization_id and role from clerk_users
     const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/clerk_users?clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=organization_id,is_super_admin`,
+      `${supabaseUrl}/rest/v1/clerk_users?clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=organization_id,role`,
       {
         headers: {
           'apikey': supabaseServiceKey,
@@ -108,17 +112,17 @@ async function getUserData(clerkUserId: string): Promise<{ slug: string | null; 
 
     if (!userResponse.ok) {
       console.error('[Middleware] Failed to fetch user:', userResponse.status);
-      return { slug: null, isSuperAdmin: false };
+      return { slug: null, role: 'user' };
     }
 
     const userData = await userResponse.json();
     const organizationId = userData?.[0]?.organization_id;
-    const isSuperAdmin = userData?.[0]?.is_super_admin || false;
+    const role = (userData?.[0]?.role || 'user') as UserRole;
 
     if (!organizationId) {
       console.log('[Middleware] User has no organization:', clerkUserId);
-      userOrgCache.set(clerkUserId, { slug: null, isSuperAdmin, expiry: Date.now() + CACHE_TTL });
-      return { slug: null, isSuperAdmin };
+      userOrgCache.set(clerkUserId, { slug: null, role, expiry: Date.now() + CACHE_TTL });
+      return { slug: null, role };
     }
 
     // Now get the organization's slug
@@ -134,19 +138,90 @@ async function getUserData(clerkUserId: string): Promise<{ slug: string | null; 
 
     if (!orgResponse.ok) {
       console.error('[Middleware] Failed to fetch organization:', orgResponse.status);
-      return { slug: null, isSuperAdmin };
+      return { slug: null, role };
     }
 
     const orgData = await orgResponse.json();
     const slug = orgData?.[0]?.slug || null;
 
     // Cache the result
-    userOrgCache.set(clerkUserId, { slug, isSuperAdmin, expiry: Date.now() + CACHE_TTL });
+    userOrgCache.set(clerkUserId, { slug, role, expiry: Date.now() + CACHE_TTL });
 
-    return { slug, isSuperAdmin };
+    return { slug, role };
   } catch (error) {
     console.error('[Middleware] Error fetching user data:', error);
-    return { slug: null, isSuperAdmin: false };
+    return { slug: null, role: 'user' };
+  }
+}
+
+/**
+ * Get user's role for a specific organization.
+ * Simplified logic:
+ * - Superadmins can access ANY org (return 'superadmin')
+ * - Admins can only access their own org (check organization_id match)
+ * - Users cannot access admin routes
+ */
+async function getUserRoleForOrg(clerkUserId: string, organizationId: string): Promise<UserRole | null> {
+  const cacheKey = `${clerkUserId}:${organizationId}`;
+
+  // Check cache first
+  const cached = userOrgRoleCache.get(cacheKey);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.role;
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('[Middleware] Missing Supabase environment variables');
+    return null;
+  }
+
+  try {
+    // Get user's role and organization_id from clerk_users
+    const userResponse = await fetch(
+      `${supabaseUrl}/rest/v1/clerk_users?clerk_user_id=eq.${encodeURIComponent(clerkUserId)}&select=role,organization_id`,
+      {
+        headers: {
+          'apikey': supabaseServiceKey,
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+      }
+    );
+
+    if (!userResponse.ok) {
+      return null;
+    }
+
+    const userData = await userResponse.json();
+    const user = userData?.[0];
+
+    if (!user) {
+      return null;
+    }
+
+    const role = user.role as UserRole;
+    const userOrgId = user.organization_id;
+
+    // Superadmins can access any organization
+    if (role === 'superadmin') {
+      userOrgRoleCache.set(cacheKey, { role: 'superadmin', expiry: Date.now() + CACHE_TTL });
+      return 'superadmin';
+    }
+
+    // Admins can only access their own organization
+    if (role === 'admin' && userOrgId === organizationId) {
+      userOrgRoleCache.set(cacheKey, { role: 'admin', expiry: Date.now() + CACHE_TTL });
+      return 'admin';
+    }
+
+    // Regular users or admins trying to access a different org
+    userOrgRoleCache.set(cacheKey, { role: null, expiry: Date.now() + CACHE_TTL });
+    return null;
+  } catch (error) {
+    console.error('[Middleware] Error fetching user role for org:', error);
+    return null;
   }
 }
 
@@ -262,15 +337,15 @@ export default clerkMiddleware(async (auth, req) => {
       return NextResponse.redirect(signInUrl);
     }
 
-    // Check if user has admin access from Supabase clerk_users table
-    const userData = await getUserData(userId);
+    // Check if user has admin/superadmin role for THIS organization
+    const userRoleForOrg = await getUserRoleForOrg(userId, org.id);
 
-    if (!userData.isSuperAdmin) {
-      // Regular users can't access admin - redirect to booking page for this org
+    if (!userRoleForOrg || (userRoleForOrg !== 'admin' && userRoleForOrg !== 'superadmin')) {
+      // User doesn't have admin access to this org - redirect to booking page
       return NextResponse.redirect(new URL(`/${org.slug}`, req.url));
     }
 
-    // Super admins can access any org's admin
+    // User has admin or superadmin role for this org - allow access
   }
 
   // For public booking pages (/{slug}, /{slug}/checkout, etc.), allow access

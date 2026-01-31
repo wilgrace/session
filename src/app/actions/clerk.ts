@@ -221,36 +221,64 @@ async function updateClerkUser(id: string, data: any) {
   try {
     const supabase = createSupabaseClient()
 
-    // If role is being updated, update it in Clerk first
-    if (data.role) {
-      try {
-        const { data: userData } = await supabase
-          .from("clerk_users")
-          .select("clerk_user_id, organization_id")
-          .eq("id", id)
-          .single();
+    // Get the Clerk user ID first
+    const { data: userData, error: userError } = await supabase
+      .from("clerk_users")
+      .select("clerk_user_id")
+      .eq("id", id)
+      .single()
 
-        if (userData?.clerk_user_id && userData?.organization_id) {
-          await clerkClient.organizations.updateOrganizationMembership({
-            organizationId: userData.organization_id,
-            userId: userData.clerk_user_id,
-            role: data.role
-          });
-        }
-      } catch (clerkError) {
-        return {
-          success: false,
-          error: "Failed to update role in Clerk"
-        };
+    if (userError) {
+      return {
+        success: false,
+        error: userError.message
       }
     }
 
-    // Remove role from the data before updating Supabase
-    const { role, ...supabaseData } = data;
+    // Sync name and email to Clerk if they changed
+    if (userData?.clerk_user_id && (data.first_name !== undefined || data.last_name !== undefined || data.email !== undefined)) {
+      try {
+        const clerkUpdateData: { firstName?: string; lastName?: string; primaryEmailAddressID?: string } = {}
 
+        if (data.first_name !== undefined) {
+          clerkUpdateData.firstName = data.first_name || ""
+        }
+        if (data.last_name !== undefined) {
+          clerkUpdateData.lastName = data.last_name || ""
+        }
+
+        // Update name in Clerk
+        if (clerkUpdateData.firstName !== undefined || clerkUpdateData.lastName !== undefined) {
+          await clerkClient.users.updateUser(userData.clerk_user_id, clerkUpdateData)
+        }
+
+        // Update email in Clerk (requires creating a new email address and setting it as primary)
+        if (data.email) {
+          const clerkUser = await clerkClient.users.getUser(userData.clerk_user_id)
+          const currentPrimaryEmail = clerkUser.emailAddresses.find(
+            e => e.id === clerkUser.primaryEmailAddressId
+          )?.emailAddress
+
+          if (currentPrimaryEmail !== data.email) {
+            // Create new email and set as primary
+            await clerkClient.emailAddresses.createEmailAddress({
+              userId: userData.clerk_user_id,
+              emailAddress: data.email,
+              verified: true,
+              primary: true
+            })
+          }
+        }
+      } catch (clerkError) {
+        console.error("Failed to update user in Clerk:", clerkError)
+        // Continue with Supabase update even if Clerk update fails
+      }
+    }
+
+    // Update user in Supabase (role is managed in DB, not Clerk)
     const { error } = await supabase
       .from("clerk_users")
-      .update(supabaseData)
+      .update(data)
       .eq("id", id)
 
     if (error) {

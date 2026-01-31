@@ -15,6 +15,7 @@ import { createClerkUser } from "@/app/actions/clerk"
 import { createEmbeddedCheckoutSession } from "@/app/actions/checkout"
 import { PreCheckoutForm, CheckoutFormData } from "./pre-checkout-form"
 import { CheckoutStep } from "./checkout-step"
+import { BookingPanel } from "./booking-panel"
 import { Loader2 } from "lucide-react"
 import {
   AlertDialog,
@@ -28,6 +29,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
+type BookingMode = 'new' | 'edit' | 'confirmation'
+
 interface BookingFormProps {
   session: SessionTemplate
   startTime?: Date
@@ -35,9 +38,29 @@ interface BookingFormProps {
     id: string
     notes?: string
     number_of_spots: number
+    amount_paid?: number | null
+    unit_price?: number | null
+    discount_amount?: number | null
   }
   slug: string
+  sessionId?: string // Session instance ID for sharing links
   spotsRemaining?: number
+  // Membership pricing props (passed from server component)
+  memberPrice?: number
+  monthlyMembershipPrice?: number | null
+  isActiveMember?: boolean
+  // Pre-select membership option (from sign-up redirect)
+  defaultToMembership?: boolean
+  // Mode for rendering different views
+  mode?: BookingMode
+  // User details for edit/confirmation modes
+  userDetails?: {
+    name: string
+    email: string
+  } | null
+  // Guest status for edit/confirmation modes
+  isGuest?: boolean
+  guestEmail?: string
 }
 
 type CheckoutStepType = "form" | "checkout"
@@ -47,7 +70,16 @@ export function BookingForm({
   startTime,
   bookingDetails,
   slug,
+  sessionId,
   spotsRemaining = session.capacity,
+  memberPrice = 0,
+  monthlyMembershipPrice = null,
+  isActiveMember = false,
+  defaultToMembership = false,
+  mode = 'new',
+  userDetails,
+  isGuest = false,
+  guestEmail,
 }: BookingFormProps) {
   const { user } = useUser()
   const router = useRouter()
@@ -63,6 +95,7 @@ export function BookingForm({
   // 2-step checkout state for paid sessions
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStepType>("form")
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [connectedAccountId, setConnectedAccountId] = useState<string | null>(null)
   const [checkoutFormData, setCheckoutFormData] = useState<CheckoutFormData | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
@@ -70,6 +103,8 @@ export function BookingForm({
   // Determine if this is a paid session (not in edit mode)
   const isPaidSession = session.pricing_type === "paid" && session.drop_in_price && !isEditMode
 
+  // NOTE: All hooks must be called before any conditional returns
+  // The BookingPanel return is moved below this useEffect to comply with React's rules of hooks
   useEffect(() => {
     if (bookingDetails) {
       setNotes(bookingDetails.notes || "")
@@ -78,6 +113,31 @@ export function BookingForm({
       setIsEditMode(true)
     }
   }, [bookingDetails])
+
+  // For edit or confirmation modes, use the BookingPanel
+  // This return is placed AFTER all hooks to comply with React's rules of hooks
+  if ((mode === 'edit' || mode === 'confirmation') && bookingDetails && startTime) {
+    return (
+      <BookingPanel
+        session={session}
+        startTime={startTime}
+        booking={{
+          id: bookingDetails.id,
+          number_of_spots: bookingDetails.number_of_spots,
+          amount_paid: bookingDetails.amount_paid,
+          notes: bookingDetails.notes,
+          unit_price: bookingDetails.unit_price,
+          discount_amount: bookingDetails.discount_amount,
+        }}
+        userDetails={userDetails}
+        isGuest={isGuest}
+        guestEmail={guestEmail}
+        slug={slug}
+        sessionId={sessionId}
+        isConfirmation={mode === 'confirmation'}
+      />
+    )
+  }
 
   // Handle proceeding from Step 1 (PreCheckoutForm) to Step 2 (Stripe Checkout)
   const handleProceedToCheckout = async (formData: CheckoutFormData) => {
@@ -102,11 +162,19 @@ export function BookingForm({
         customerEmail: user ? undefined : formData.email, // Only pass for guests
         promotionCode: formData.promotionCode,
         pricingType: formData.pricingType,
+        isNewMembership: formData.isNewMembership,
         slug: slug,
       })
 
+      // Handle zero-price bypass - booking created directly
+      if (result.success && result.zeroPrice && result.bookingId) {
+        router.push(`/${slug}/confirmation?bookingId=${result.bookingId}`)
+        return
+      }
+
       if (result.success && result.clientSecret) {
         setClientSecret(result.clientSecret)
+        setConnectedAccountId(result.connectedAccountId || null)
         setCheckoutStep("checkout")
       } else {
         setCheckoutError(result.error || "Failed to create checkout session")
@@ -116,11 +184,12 @@ export function BookingForm({
           variant: "destructive",
         })
       }
-    } catch (err: any) {
-      setCheckoutError(err.message || "Failed to create checkout session")
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to create checkout session"
+      setCheckoutError(errorMessage)
       toast({
         title: "Error",
-        description: err.message || "Failed to create checkout session",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -132,6 +201,7 @@ export function BookingForm({
   const handleBackFromCheckout = () => {
     setCheckoutStep("form")
     setClientSecret(null)
+    setConnectedAccountId(null)
     // Keep formData preserved so user doesn't lose their input
   }
 
@@ -308,6 +378,10 @@ export function BookingForm({
           organizationId={session.organization_id}
           onProceedToCheckout={handleProceedToCheckout}
           isLoading={checkoutLoading}
+          memberPrice={memberPrice}
+          monthlyMembershipPrice={monthlyMembershipPrice}
+          isActiveMember={isActiveMember}
+          defaultToMembership={defaultToMembership}
         />
       )
     }
@@ -317,6 +391,7 @@ export function BookingForm({
       return (
         <CheckoutStep
           clientSecret={clientSecret}
+          connectedAccountId={connectedAccountId || undefined}
           onBack={handleBackFromCheckout}
         />
       )

@@ -104,6 +104,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   // Pricing state
   const [pricingType, setPricingType] = useState<'free' | 'paid'>('free')
   const [dropInPrice, setDropInPrice] = useState('')
+  const [memberPrice, setMemberPrice] = useState('')
   const [bookingInstructions, setBookingInstructions] = useState('')
 
   // Image state
@@ -173,6 +174,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       // Load pricing fields
       setPricingType(template.pricing_type === 'paid' ? 'paid' : 'free')
       setDropInPrice(template.drop_in_price ? (template.drop_in_price / 100).toFixed(2) : '')
+      setMemberPrice(template.member_price ? (template.member_price / 100).toFixed(2) : '')
       setBookingInstructions(template.booking_instructions || '')
 
       // Load image field
@@ -249,6 +251,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           // Pricing fields
           pricing_type: pricingType,
           drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
           booking_instructions: bookingInstructions || null,
           // Image field
           image_url: imageUrl || null,
@@ -282,6 +285,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           // Pricing fields
           pricing_type: pricingType,
           drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
           booking_instructions: bookingInstructions || null,
           // Image field
           image_url: imageUrl || null,
@@ -529,7 +533,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="sm:max-w-md overflow-y-auto p-0">
+      <SheetContent className="sm:max-w-xl overflow-y-auto p-0">
         <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
           <SheetHeader>
             <SheetTitle className="text-xl">{template ? "Edit Session" : "New Session"}</SheetTitle>
@@ -540,6 +544,95 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
+          {/* General Section */}
+          <div className="rounded-lg overflow-hidden">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
+              onClick={() => setGeneralExpanded(!generalExpanded)}
+            >
+              <span>General</span>
+              {generalExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </button>
+
+            {generalExpanded && (
+              <div className="px-4 pb-4 pt-4 space-y-6">
+                {/* Status */}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="status" className="text-sm font-medium">
+                    Session Status
+                  </Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch id="status" checked={isOpen} onCheckedChange={setIsOpen} />
+                    <Label htmlFor="status" className="text-sm font-medium">
+                      {isOpen ? "Open" : "Closed"}
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Name */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="name" className="text-sm font-medium">
+                      Session Name
+                    </Label>
+                    <span className="text-sm text-gray-500">0</span>
+                  </div>
+                  <Input id="name" placeholder="e.g., Regular Sauna" defaultValue={name} onChange={(e) => setName(e.target.value)} />
+                  <p className="text-sm text-gray-500">Give your session a short and clear name.</p>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description" className="text-sm font-medium">
+                      Description
+                    </Label>
+                    <span className="text-sm text-gray-500">0</span>
+                  </div>
+                  <Textarea
+                    id="description"
+                    placeholder="Describe the session..."
+                    defaultValue={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                  <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
+                </div>
+
+                {/* Capacity */}
+                <div className="space-y-2">
+                  <Label htmlFor="capacity" className="text-sm font-medium">
+                    Capacity <span className="text-red-500">*</span>
+                  </Label>
+                  <Input id="capacity" type="number" min="1" defaultValue={capacity} onChange={(e) => setCapacity(e.target.value)} />
+                  <p className="text-sm text-gray-500">Maximum number of participants allowed.</p>
+                </div>
+
+                {/* Duration */}
+                <div className="space-y-2">
+                  <Label htmlFor="duration" className="text-sm font-medium">
+                    Duration <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="duration"
+                    type="time"
+                    value={duration}
+                    onChange={handleDurationChange}
+                    step="60"
+                  />
+                  <p className="text-sm text-gray-500">Length of the session (hours:minutes).</p>
+                </div>
+
+                {/* Image Upload */}
+                <ImageUpload
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  disabled={loading}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Schedule Section - Moved to top */}
           <div className="rounded-lg overflow-hidden">
             <button
@@ -779,95 +872,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
             )}
           </div>
 
-          {/* General Section */}
-          <div className="rounded-lg overflow-hidden">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
-              onClick={() => setGeneralExpanded(!generalExpanded)}
-            >
-              <span>General</span>
-              {generalExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-            </button>
-
-            {generalExpanded && (
-              <div className="px-4 pb-4 space-y-4">
-                {/* Status */}
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="status" className="text-sm font-medium">
-                    Session Status
-                  </Label>
-                  <div className="flex items-center space-x-2">
-                    <Switch id="status" checked={isOpen} onCheckedChange={setIsOpen} />
-                    <Label htmlFor="status" className="text-sm font-medium">
-                      {isOpen ? "Open" : "Closed"}
-                    </Label>
-                  </div>
-                </div>
-
-                {/* Name */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="name" className="text-sm font-medium">
-                      Session Name
-                    </Label>
-                    <span className="text-sm text-gray-500">0</span>
-                  </div>
-                  <Input id="name" placeholder="e.g., Regular Sauna" defaultValue={name} onChange={(e) => setName(e.target.value)} />
-                  <p className="text-sm text-gray-500">Give your session a short and clear name.</p>
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="description" className="text-sm font-medium">
-                      Description
-                    </Label>
-                    <span className="text-sm text-gray-500">0</span>
-                  </div>
-                  <Textarea
-                    id="description"
-                    placeholder="Describe the session..."
-                    defaultValue={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                  <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
-                </div>
-
-                {/* Capacity */}
-                <div className="space-y-2">
-                  <Label htmlFor="capacity" className="text-sm font-medium">
-                    Capacity <span className="text-red-500">*</span>
-                  </Label>
-                  <Input id="capacity" type="number" min="1" defaultValue={capacity} onChange={(e) => setCapacity(e.target.value)} />
-                  <p className="text-sm text-gray-500">Maximum number of participants allowed.</p>
-                </div>
-
-                {/* Duration */}
-                <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-sm font-medium">
-                    Duration <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="duration"
-                    type="time"
-                    value={duration}
-                    onChange={handleDurationChange}
-                    step="60"
-                  />
-                  <p className="text-sm text-gray-500">Length of the session (hours:minutes).</p>
-                </div>
-
-                {/* Image Upload */}
-                <ImageUpload
-                  value={imageUrl}
-                  onChange={setImageUrl}
-                  disabled={loading}
-                />
-              </div>
-            )}
-          </div>
-
           {/* Payment Section */}
           <div className="rounded-lg overflow-hidden">
             <button
@@ -957,7 +961,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="dropInPrice" className="text-sm font-medium">
-                        Price <span className="text-red-500">*</span>
+                        Drop-in Price <span className="text-red-500">*</span>
                       </Label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
@@ -972,7 +976,30 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           className="pl-7"
                         />
                       </div>
-                      <p className="text-sm text-gray-500">Price per person for this session.</p>
+                      <p className="text-sm text-gray-500">Price per person for non-members.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="memberPrice" className="text-sm font-medium">
+                        Member Price <span className="text-gray-400 font-normal">(optional)</span>
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
+                        <Input
+                          id="memberPrice"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Leave blank to use org default"
+                          value={memberPrice}
+                          onChange={(e) => setMemberPrice(e.target.value)}
+                          className="pl-7"
+                        />
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        Override the organization&apos;s default member pricing for this session.
+                        Leave blank to use the default (set in Billing settings).
+                      </p>
                     </div>
                   </div>
                 )}

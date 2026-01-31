@@ -21,9 +21,11 @@ src/
 │   ├── [slug]/           # Multi-tenant routes (org-specific)
 │   │   ├── (booking)/    # Public booking pages
 │   │   │   ├── page.tsx              # /{slug} - Booking calendar
-│   │   │   ├── [sessionId]/          # /{slug}/{sessionId} - Session details
+│   │   │   ├── [sessionId]/          # /{slug}/{sessionId} - Session details (unified template)
 │   │   │   ├── checkout/             # /{slug}/checkout - Stripe checkout
-│   │   │   └── confirmation/         # /{slug}/confirmation - Booking confirmed
+│   │   │   └── confirmation/         # /{slug}/confirmation - Redirects to session page
+│   │   ├── account/      # User account management
+│   │   │   └── page.tsx              # /{slug}/account - Membership & billing history
 │   │   └── admin/        # Admin dashboard (protected)
 │   │       ├── home/                 # /{slug}/admin/home - Bookings view
 │   │       ├── sessions/             # /{slug}/admin/sessions - Manage sessions
@@ -33,8 +35,13 @@ src/
 │   └── api/              # API routes (webhooks)
 ├── components/
 │   ├── ui/               # Shadcn UI primitives
+│   ├── auth/             # Auth overlay components
 │   ├── booking/          # Booking components
 │   └── admin/            # Admin components
+├── hooks/
+│   ├── use-auth-overlay.ts   # Zustand store for auth overlay state
+│   ├── use-mobile.tsx        # Mobile detection hook
+│   └── use-toast.ts          # Toast notifications
 ├── lib/
 │   ├── db/
 │   │   ├── schema.ts     # Drizzle ORM schema (7 tables)
@@ -60,21 +67,24 @@ All booking and admin routes are prefixed with the organization's slug:
 
 - `/{slug}` - Public booking calendar
 - `/{slug}/{sessionId}` - Book a specific session
+- `/{slug}/account` - User account (membership status, billing history)
 - `/{slug}/admin` - Admin dashboard
 - `/{slug}/admin/sessions` - Manage sessions
 - `/{slug}/admin/billing` - Stripe Connect settings
 
 The middleware validates the slug against the database and sets `x-organization-id` and `x-organization-slug` headers for server components.
 
-## Database Schema (7 Tables)
+## Database Schema (9 Tables)
 
 1. **organizations** - Multi-tenant support (has `slug` column for URL routing)
-2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase)
-3. **session_templates** - Master templates (recurring or one-off)
-4. **session_schedules** - Days/times for recurring sessions
-5. **session_instances** - Individual bookable time slots (UTC)
-6. **bookings** - User reservations
-7. **stripe_connect_accounts** - Stripe Connect account links per organization
+2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile)
+3. **user_memberships** - User subscription status per organization
+4. **saunas** - Sauna/facility definitions (legacy, may be unused)
+5. **session_templates** - Master templates (recurring or one-off)
+6. **session_schedules** - Days/times for recurring sessions
+7. **session_instances** - Individual bookable time slots (UTC)
+8. **bookings** - User reservations (includes `price_paid`, `member_price_applied` for price tracking)
+9. **stripe_connect_accounts** - Stripe Connect account links per organization (includes membership product/price IDs)
 
 ### Key Relationships
 - Templates have many Schedules → generates Instances
@@ -103,6 +113,35 @@ supabase db diff --linked           # Check differences between local and remote
 supabase db push --linked           # Push local migrations to remote
 supabase db reset                   # Reset local DB to match migrations
 ```
+
+## Local Development Startup
+
+Run these in separate terminal windows:
+
+```bash
+# Terminal 1: Database & Edge Functions
+supabase start
+
+# Terminal 2: Next.js App
+npm run dev
+
+# Terminal 3: Stripe webhooks (copy whsec_... to STRIPE_WEBHOOK_SECRET)
+stripe listen --forward-to localhost:3000/api/webhooks/stripe \
+  --forward-connect-to localhost:3000/api/webhooks/stripe
+
+# Terminal 4: Clerk webhooks (only needed when testing user sync)
+ngrok http 54321
+# Then update Clerk dashboard webhook URL to: https://<ngrok-id>.ngrok.io/api/webhooks/clerk
+```
+
+**What each does**:
+- `supabase start` - Runs PostgreSQL, Auth, and Edge Functions (including `clerk-webhook-handler`)
+- `npm run dev` - Next.js on port 3000
+- `stripe listen` - Forwards Stripe webhooks to localhost (the `--forward-connect-to` flag is needed for Connected Account events like subscriptions)
+- `ngrok http 54321
+` - Tunnels port 3000 so Clerk can send webhooks to your local machine
+
+**Note**: Clerk webhooks go to your Next.js app (port 3000), not directly to Supabase. The Edge Function is called via Supabase's internal routing.
 
 ## Database Sync Workflow
 
@@ -172,6 +211,7 @@ All database operations use React 19 server actions in `src/app/actions/`:
 - `getPublicSessionsByOrg(organizationId)` - Fetch bookable instances for an org
 - `createBooking()` - Create user booking
 - `createSessionTemplate()` - Admin creates template
+- `updateCurrentUserProfile()` - Update logged-in user's community profile (dob, gender, ethnicity)
 
 ### Timezone Handling
 - Templates store timezone (default: Europe/London)
@@ -180,10 +220,66 @@ All database operations use React 19 server actions in `src/app/actions/`:
 - Display converts back to template timezone
 
 ### Authentication Flow
-1. User signs up via Clerk
+1. User signs up via Clerk (through Auth Overlay or dedicated pages)
 2. Webhook calls `clerk-webhook-handler` Edge Function
 3. Function creates `clerk_users` entry in Supabase
 4. Middleware routes by role: admin → `/{slug}/admin`, user → `/{slug}`
+
+### Auth Overlay System
+
+All Clerk authentication (sign-in/sign-up) uses a modal overlay instead of page redirects.
+
+**Key Files**:
+- `src/hooks/use-auth-overlay.ts` - Zustand store for overlay state
+- `src/components/auth/auth-overlay.tsx` - Modal/sheet component with Clerk forms
+- `src/components/auth/community-profile-overlay.tsx` - Post-signup demographic form
+
+**Usage Pattern**:
+```typescript
+const { openSignIn, openSignUp } = useAuthOverlay()
+
+// Open sign-in overlay
+openSignIn({ onComplete: () => proceedWithAction() })
+
+// Open sign-up overlay with pre-filled email
+openSignUp({
+  initialEmail: email,
+  onComplete: () => proceedToCheckout(savedFormData)
+})
+```
+
+**Responsive Behavior**:
+- **Mobile**: Bottom sheet (slides up from bottom)
+- **Desktop**: Centered modal dialog
+
+**Community Profile Overlay**:
+- Shown after sign-up completion
+- Optional demographic fields: date of birth, gender, ethnicity
+- All fields include "Prefer not to say" option
+- Skip button returns to previous flow
+
+### Unified Booking Page
+
+The session detail page (`/{slug}/{sessionId}`) handles all booking states using a unified template:
+
+**Modes** (determined by URL params):
+- `mode="new"` - Default, shows PreCheckoutForm → CheckoutStep
+- `mode="edit"` - When `?edit=true&bookingId=X`, shows BookingPanel
+- `mode="confirmation"` - When `?confirmed=true&bookingId=X`, shows BookingPanel with toast
+
+**Key Components**:
+- `BookingForm` - Orchestrates rendering based on mode
+- `BookingPanel` - Unified view for edit/confirmation with:
+  - Share actions (Copy Link, Add to Calendar)
+  - Important information display
+  - User details or guest signup callout
+  - Inline quantity picker with price summary
+  - Update/Cancel booking actions
+
+**Confirmation Flow**:
+- `/{slug}/confirmation` page now redirects to `/{slug}/{sessionId}?confirmed=true`
+- Session page shows a toast notification on arrival
+- Guest users see a callout prompting account creation
 
 ### Session Generation
 1. Admin creates template with schedules
@@ -222,6 +318,106 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 # Copy the webhook signing secret to STRIPE_WEBHOOK_SECRET
 ```
 
+### Membership Subscriptions
+
+Organizations can offer monthly memberships that give users discounted session pricing.
+
+**Architecture Decision**: Subscriptions are created on the **Connected Account** (not the Platform). This means:
+- The business owns the customer relationship
+- Subscriptions appear in the Connected Account's Stripe Dashboard
+- Customers can manage billing via the Connected Account's billing portal
+- No `transfer_data` is used for subscription checkouts
+
+**Database Tables**:
+
+`user_memberships` - Stores user membership status per organization:
+- `user_id`, `organization_id` - Links user to org membership
+- `status` - 'none', 'active', or 'cancelled'
+- `stripe_subscription_id` - Subscription ID on the Connected Account
+- `stripe_customer_id` - Customer ID on the Connected Account
+- `current_period_start`, `current_period_end` - Billing period dates
+- `cancelled_at` - When user requested cancellation (grace period until `current_period_end`)
+
+`stripe_connect_accounts` - Additional membership fields:
+- `membership_product_id` - Stripe Product ID on Connected Account
+- `membership_price_id` - Stripe recurring Price ID on Connected Account
+- `membership_monthly_price` - Cached price in pence
+
+**Key Files**:
+- `src/app/actions/membership.ts` - Membership server actions
+- `src/app/actions/checkout.ts` - Hybrid checkout (payment vs subscription mode)
+- `src/lib/pricing-utils.ts` - Member price calculation, `isMembershipActive()`
+- `src/components/booking/pre-checkout-form.tsx` - Membership selection UI
+- `src/components/booking/booking-panel.tsx` - Unified view/edit/confirmation panel
+- `src/components/booking/share-actions.tsx` - Copy link & add to calendar buttons
+- `src/components/booking/guest-account-callout.tsx` - Guest signup prompt
+
+**Checkout Flow**:
+
+1. **New membership purchase** (`mode: 'subscription'`):
+   - Checkout created on Connected Account with `stripeAccount` option
+   - Line items: recurring membership price + one-off session price
+   - Frontend loads Stripe.js with `stripeAccount` for embedded checkout
+   - `connectedAccountId` passed from server to `EmbeddedCheckoutWrapper`
+
+2. **Existing member booking** (`mode: 'payment'`):
+   - Standard checkout on Platform with `transfer_data` to Connected Account
+   - Member price applied automatically
+
+3. **Drop-in booking** (`mode: 'payment'`):
+   - Standard checkout on Platform with `transfer_data`
+   - Full drop-in price
+
+**Guest Membership Sign-Up Flow**:
+
+Guests purchasing memberships must create an account first (so the Stripe webhook can link the subscription to a `clerk_users` record). This is handled via the Auth Overlay:
+
+1. Guest selects "Become a Member" and enters email
+2. Clicking "Create Account" opens the Auth Overlay (bottom sheet on mobile, dialog on desktop)
+3. After sign-up completes, system polls `checkClerkUserSynced()` for webhook sync
+4. Community Profile overlay appears (optional demographic questions)
+5. After skip/submit, proceeds directly to Stripe checkout
+
+**Key Implementation Details**:
+- `pre-checkout-form.tsx` saves form data to `savedFormData` state before opening overlay
+- Auth Overlay uses Clerk `<SignUp routing="hash" forceRedirectUrl={currentUrl} />`
+- `forceRedirectUrl` is critical - without it, middleware redirects authenticated users to `/{slug}`
+- Uses Clerk's authenticated email (not form email) when proceeding to checkout
+
+**Member Pricing Hierarchy**:
+1. Session template `member_price` override (highest priority)
+2. Organization `member_fixed_price` (if `member_price_type = 'fixed'`)
+3. Organization `member_discount_percent` (if `member_price_type = 'discount'`)
+4. Fall back to drop-in price (no member discount)
+
+**Grace Period**: When a member cancels, they remain active until `current_period_end`. The `isMembershipActive()` function handles this.
+
+**Testing Connect Webhooks Locally**:
+```bash
+# For subscription events from Connected Accounts, use --forward-connect-to
+stripe listen --forward-to localhost:3000/api/webhooks/stripe \
+  --forward-connect-to localhost:3000/api/webhooks/stripe
+```
+
+### User Account Page
+
+The account page (`/{slug}/account`) allows authenticated users to view and manage their membership.
+
+**Features**:
+- View membership status (active, cancelled, expired, or none)
+- See next billing date or cancellation end date
+- Access Stripe billing portal to update payment method or cancel
+- View billing history with invoice PDFs
+
+**Key Files**:
+- `src/app/[slug]/account/page.tsx` - Server component with auth check
+- `src/app/[slug]/account/account-client.tsx` - Client component with membership UI
+
+**Server Actions Used**:
+- `getUserMembership(organizationId)` - Get user's membership status
+- `getUserBillingHistory(organizationId)` - Fetch payment history from Stripe
+- `createBillingPortalSession(organizationId)` - Generate Stripe billing portal URL
+
 ## RLS & Authorization
 
 - All tables have Row-Level Security enabled
@@ -235,6 +431,7 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
 - **App**: http://localhost:3000
 - **Booking Page**: http://localhost:3000/{org-slug}
+- **Account Page**: http://localhost:3000/{org-slug}/account
 - **Admin Dashboard**: http://localhost:3000/{org-slug}/admin
 - **Supabase API**: http://127.0.0.1:54321
 - **Supabase Studio**: http://127.0.0.1:54323

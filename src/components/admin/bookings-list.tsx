@@ -17,7 +17,7 @@ interface Booking {
     full_name?: string;
     name?: string;
     email?: string;
-    is_super_admin?: boolean;
+    role?: 'guest' | 'user' | 'admin' | 'superadmin';
     clerk_user_id?: string;
     image_url?: string;
     avatar_url?: string;
@@ -35,13 +35,13 @@ function getUserDisplayName(user?: Booking['user']): string {
   return user.full_name || user.name || user.email || 'Guest';
 }
 
-// Helper to determine user type from clerk_user_id prefix
+// Helper to determine user type from role
 function getUserType(user?: Booking['user']): 'Admin' | 'User' | 'Guest' {
   if (!user) return 'Guest';
-  if (user.is_super_admin) return 'Admin';
+  if (user.role === 'superadmin' || user.role === 'admin') return 'Admin';
+  if (user.role === 'guest') return 'Guest';
   if (user.clerk_user_id?.startsWith('guest_')) return 'Guest';
-  if (user.clerk_user_id?.startsWith('user_')) return 'User';
-  return 'User'; // Default to User if clerk_user_id doesn't have expected prefix
+  return 'User';
 }
 
 export function BookingsList({ bookings, onSelect, onCheckIn }: {

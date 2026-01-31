@@ -42,6 +42,7 @@ export interface SessionTemplate {
   // Pricing fields
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
+  member_price?: number | null
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
