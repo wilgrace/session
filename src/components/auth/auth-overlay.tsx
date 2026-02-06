@@ -92,6 +92,7 @@ export function AuthOverlay() {
       while (tries < 20 && !cancelled) {
         let result: { success: boolean; synced: boolean; error?: string }
         try {
+          console.log('[AuthOverlay] About to call checkClerkUserSynced, try:', tries)
           result = await checkClerkUserSynced(clerkUserId, clerkEmail)
           console.log('[AuthOverlay] Sync check result:', { tries, result })
         } catch (err) {
