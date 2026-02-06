@@ -90,8 +90,17 @@ export function AuthOverlay() {
       let attemptedDirectCreate = false
 
       while (tries < 20 && !cancelled) {
-        const result = await checkClerkUserSynced(clerkUserId, clerkEmail)
-        console.log('[AuthOverlay] Sync check result:', { tries, result })
+        let result: { success: boolean; synced: boolean; error?: string }
+        try {
+          result = await checkClerkUserSynced(clerkUserId, clerkEmail)
+          console.log('[AuthOverlay] Sync check result:', { tries, result })
+        } catch (err) {
+          console.error('[AuthOverlay] Sync check error:', err)
+          // Continue polling - the error might be transient
+          await new Promise((res) => setTimeout(res, 500))
+          tries++
+          continue
+        }
 
         if (result.success && result.synced) {
           if (!cancelled) {
