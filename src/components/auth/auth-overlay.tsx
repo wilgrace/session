@@ -77,7 +77,6 @@ export function AuthOverlay() {
       const clerkEmail = user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress
       const clerkUserId = user.id
 
-      console.log('[AuthOverlay] Starting sync for:', { clerkUserId, clerkEmail })
 
       if (!clerkEmail) {
         setSyncError("No email found for user")
@@ -92,19 +91,17 @@ export function AuthOverlay() {
       while (tries < 20 && !cancelled) {
         let result: { success: boolean; synced: boolean; error?: string }
         try {
-          console.log('[AuthOverlay] About to call checkClerkUserSynced, try:', tries)
-          // Add timeout to detect hanging server action
+          // Longer timeout for first attempt (cold start), shorter for subsequent
+          const timeout = tries === 0 ? 10000 : 5000
           const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Server action timeout after 5s')), 5000)
+            setTimeout(() => reject(new Error(`Server action timeout after ${timeout/1000}s`)), timeout)
           )
           result = await Promise.race([
             checkClerkUserSynced(clerkUserId, clerkEmail),
             timeoutPromise
           ])
-          console.log('[AuthOverlay] Sync check result:', { tries, result })
         } catch (err) {
-          console.error('[AuthOverlay] Sync check error:', err)
-          // Continue polling - the error might be transient
+          // Timeout or error - continue polling (cold start may cause first attempt to fail)
           await new Promise((res) => setTimeout(res, 500))
           tries++
           continue
@@ -112,7 +109,6 @@ export function AuthOverlay() {
 
         if (result.success && result.synced) {
           if (!cancelled) {
-            console.log('[AuthOverlay] Sync complete, showing profile overlay')
             setIsSyncing(false)
             setAuthCompleted(true)
 
@@ -131,7 +127,6 @@ export function AuthOverlay() {
         // This handles the case where the Clerk webhook isn't running locally
         if (tries === 5 && !attemptedDirectCreate) {
           attemptedDirectCreate = true
-          console.log('[AuthOverlay] Attempting direct user creation')
           const firstName = user.firstName || null
           const lastName = user.lastName || null
           await ensureClerkUser(clerkUserId, clerkEmail, firstName, lastName)
@@ -143,7 +138,6 @@ export function AuthOverlay() {
       }
 
       if (!cancelled) {
-        console.log('[AuthOverlay] Sync timed out after 20 attempts')
         setSyncError("Account setup is taking longer than expected. Please try again.")
         setIsSyncing(false)
       }

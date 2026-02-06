@@ -2430,10 +2430,8 @@ export async function checkClerkUserSynced(
   clerkUserId: string,
   email: string
 ): Promise<{ success: boolean; synced: boolean; error?: string }> {
-  console.log('[checkClerkUserSynced] Called with:', { clerkUserId, email })
   try {
     const supabase = createSupabaseClient();
-    console.log('[checkClerkUserSynced] Supabase client created')
 
     // Check if user exists with matching email AND clerk_user_id AND has an organization_id
     const { data, error } = await supabase
@@ -2443,8 +2441,6 @@ export async function checkClerkUserSynced(
       .eq("clerk_user_id", clerkUserId)
       .maybeSingle();
 
-    console.log('[checkClerkUserSynced] Query result:', { data, error })
-
     if (error) {
       return { success: false, synced: false, error: error.message };
     }
@@ -2452,10 +2448,8 @@ export async function checkClerkUserSynced(
     // User must exist AND have an organization_id to be considered synced
     const isSynced = !!(data?.id && data?.organization_id);
 
-    console.log('[checkClerkUserSynced] Returning:', { success: true, synced: isSynced })
     return { success: true, synced: isSynced };
   } catch (error: any) {
-    console.error('[checkClerkUserSynced] Error:', error)
     return { success: false, synced: false, error: error.message };
   }
 }
