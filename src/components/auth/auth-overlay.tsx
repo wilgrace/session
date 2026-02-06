@@ -93,7 +93,14 @@ export function AuthOverlay() {
         let result: { success: boolean; synced: boolean; error?: string }
         try {
           console.log('[AuthOverlay] About to call checkClerkUserSynced, try:', tries)
-          result = await checkClerkUserSynced(clerkUserId, clerkEmail)
+          // Add timeout to detect hanging server action
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Server action timeout after 5s')), 5000)
+          )
+          result = await Promise.race([
+            checkClerkUserSynced(clerkUserId, clerkEmail),
+            timeoutPromise
+          ])
           console.log('[AuthOverlay] Sync check result:', { tries, result })
         } catch (err) {
           console.error('[AuthOverlay] Sync check error:', err)
