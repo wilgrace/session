@@ -14,7 +14,7 @@ export default function AdminLayout({
   const slug = params.slug as string
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex min-h-screen w-full">
       <Sidebar slug={slug} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header slug={slug} />

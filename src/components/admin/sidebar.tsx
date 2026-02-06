@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, ExternalLink, Menu, X, Building2, ChevronDown, Shield } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, X, Building2, ChevronDown, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import {
@@ -51,6 +51,7 @@ export function Sidebar({ slug }: SidebarProps) {
     { href: `/${slug}/admin/sessions`, icon: CalendarDays, label: "Sessions" },
     { href: `/${slug}/admin/users`, icon: Users, label: "Users" },
     { href: `/${slug}/admin/billing`, icon: CreditCard, label: "Billing" },
+    { href: `/${slug}/admin/settings`, icon: Settings, label: "Settings" },
   ]
 
   // Find current org from assignments
@@ -74,7 +75,7 @@ export function Sidebar({ slug }: SidebarProps) {
     if (!currentOrg) {
       return (
         <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-500">
-          <Building2 className="mr-3 h-5 w-5" />
+          <Building2 className="mr-3 h-5 w-5 opacity-50" />
           <span className="truncate">Unknown Organization</span>
         </div>
       )
@@ -99,7 +100,7 @@ export function Sidebar({ slug }: SidebarProps) {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md text-gray-900 hover:bg-gray-50 transition-colors">
               <div className="flex items-center min-w-0">
-                <Building2 className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500" />
+                <Building2 className="mr-3 h-5 w-5 opacity-50 flex-shrink-0 text-gray-500" />
                 <span className="truncate">{currentOrg.organization.name}</span>
                 <RoleBadge />
               </div>
@@ -139,7 +140,7 @@ export function Sidebar({ slug }: SidebarProps) {
 
     return (
       <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-900">
-        <Building2 className="mr-3 h-5 w-5 text-gray-500" />
+        <Building2 className="mr-3 h-5 w-5 opacity-50 text-gray-500" />
         <span className="truncate">{currentOrg.organization.name}</span>
         <RoleBadge />
       </div>
@@ -149,7 +150,7 @@ export function Sidebar({ slug }: SidebarProps) {
   const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex flex-col h-full">
       {/* Org Picker at top */}
-      <div className="border-b border-gray-200 py-3 px-2">
+      <div className=" py-3 px-2 h-75">
         <OrgPicker />
       </div>
 
@@ -171,7 +172,7 @@ export function Sidebar({ slug }: SidebarProps) {
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                 )}
               >
-                <item.icon className="mr-3 h-5 w-5" />
+                <item.icon className="mr-3 h-5 w-5 opacity-50" />
                 {item.label}
               </Link>
             )
@@ -187,7 +188,7 @@ export function Sidebar({ slug }: SidebarProps) {
             onClick={onNavigate}
             className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           >
-            <ExternalLink className="mr-3 h-5 w-5" />
+            <ExternalLink className="mr-3 h-5 w-5 opacity-50" />
             Booking Page
           </Link>
         </div>
@@ -198,9 +199,9 @@ export function Sidebar({ slug }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className="hidden md:flex md:flex-shrink-0">
-        <div className="flex flex-col w-64 border-r border-gray-200 bg-white">
+      {/* Desktop Sidebar - Fixed position */}
+      <div className="hidden md:block md:w-64 md:flex-shrink-0">
+        <div className="fixed top-0 left-0 h-screen w-64 flex flex-col border-r border-gray-200 bg-white">
           <SidebarContent />
         </div>
       </div>

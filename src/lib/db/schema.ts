@@ -6,12 +6,21 @@ export const userRoleEnum = pgEnum('user_role', ['guest', 'user', 'admin', 'supe
 // Membership status enum for subscription tracking
 export const membershipStatusEnum = pgEnum('membership_status', ['none', 'active', 'expired', 'cancelled']);
 
+// Billing period type (stored as text, not enum for flexibility)
+export type BillingPeriod = 'monthly' | 'yearly' | 'one_time';
+
 export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   description: text('description'),
   logoUrl: text('logo_url'),
+  // Branding fields
+  faviconUrl: text('favicon_url'),
+  headerImageUrl: text('header_image_url'),
+  defaultSessionImageUrl: text('default_session_image_url'),
+  buttonColor: text('button_color').default('#6c47ff'),
+  buttonTextColor: text('button_text_color').default('#ffffff'),
   // Member pricing (org-level defaults)
   memberPriceType: text('member_price_type').default('discount'), // 'discount' | 'fixed'
   memberDiscountPercent: integer('member_discount_percent'), // e.g., 20 for 20% off
@@ -46,6 +55,7 @@ export const userMemberships = pgTable('user_memberships', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull().references(() => clerkUsers.id, { onDelete: 'cascade' }),
   organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  membershipId: uuid('membership_id'), // Reference to specific membership tier (added later to avoid circular ref)
   status: membershipStatusEnum('status').notNull().default('none'),
   stripeSubscriptionId: text('stripe_subscription_id'),
   stripeCustomerId: text('stripe_customer_id'),
@@ -64,6 +74,9 @@ export const saunas = pgTable('saunas', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Session visibility enum
+export const sessionVisibilityEnum = pgEnum('session_visibility', ['open', 'hidden', 'closed']);
+
 export const sessionTemplates = pgTable('session_templates', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: text('organization_id').references(() => organizations.id),
@@ -71,7 +84,7 @@ export const sessionTemplates = pgTable('session_templates', {
   description: text('description'),
   capacity: integer('capacity').notNull(),
   durationMinutes: integer('duration_minutes').notNull(),
-  isOpen: boolean('is_open').notNull().default(true),
+  visibility: text('visibility').notNull().default('open'), // 'open' | 'hidden' | 'closed'
   isRecurring: boolean('is_recurring').notNull().default(false),
   oneOffStartTime: time('one_off_start_time'),
   oneOffDate: date('one_off_date'),
@@ -88,6 +101,8 @@ export const sessionTemplates = pgTable('session_templates', {
   bookingInstructions: text('booking_instructions'), // Instructions shown on confirmation page
   // Image field
   imageUrl: text('image_url'), // Optional image URL for the session
+  // Calendar display color
+  eventColor: text('event_color').default('blue'), // Color key for calendar events (blue, green, yellow, red, purple)
 });
 
 export const sessionSchedules = pgTable('session_schedules', {
@@ -95,6 +110,7 @@ export const sessionSchedules = pgTable('session_schedules', {
   sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id),
   dayOfWeek: integer('day_of_week').notNull(), // 0-6
   time: time('time').notNull(),
+  durationMinutes: integer('duration_minutes'), // Optional per-schedule duration; falls back to template duration
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -143,10 +159,58 @@ export const stripeConnectAccounts = pgTable('stripe_connect_accounts', {
   payoutsEnabled: boolean('payouts_enabled').notNull().default(false),
   country: text('country').default('GB'),
   defaultCurrency: text('default_currency').default('gbp'),
-  // Membership subscription product/price on Connected Account
+  // Membership subscription product/price on Connected Account (DEPRECATED - use memberships table)
   membershipProductId: text('membership_product_id'),
   membershipPriceId: text('membership_price_id'),
   membershipMonthlyPrice: integer('membership_monthly_price'), // in pence
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Membership tiers that organizations can offer
+export const memberships = pgTable('memberships', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+
+  // Basic info
+  name: text('name').notNull(),
+  description: text('description'),
+  imageUrl: text('image_url'),
+
+  // Subscription pricing
+  price: integer('price').notNull().default(0), // in pence, 0 = free
+  billingPeriod: text('billing_period').notNull().default('monthly'), // 'monthly' | 'yearly' | 'one_time'
+
+  // Member session pricing
+  memberPriceType: text('member_price_type').notNull().default('discount'), // 'discount' | 'fixed'
+  memberDiscountPercent: integer('member_discount_percent'), // e.g., 20 for 20% off
+  memberFixedPrice: integer('member_fixed_price'), // fixed price in pence
+
+  // Visibility (legacy field, kept for backward compatibility)
+  displayToNonMembers: boolean('display_to_non_members').notNull().default(true),
+  // New visibility options
+  showOnBookingPage: boolean('show_on_booking_page').notNull().default(true),
+  showOnMembershipPage: boolean('show_on_membership_page').notNull().default(true),
+
+  // Stripe IDs (null for free memberships)
+  stripeProductId: text('stripe_product_id'),
+  stripePriceId: text('stripe_price_id'),
+
+  // Status
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Per-membership price overrides for sessions
+export const sessionMembershipPrices = pgTable('session_membership_prices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
+  membershipId: uuid('membership_id').notNull().references(() => memberships.id, { onDelete: 'cascade' }),
+  overridePrice: integer('override_price').notNull(), // in pence
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -166,6 +230,13 @@ export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
 export type NewSessionSchedule = typeof sessionSchedules.$inferInsert;
 export type NewUserMembership = typeof userMemberships.$inferInsert;
 
+// Membership types
+export type Membership = typeof memberships.$inferSelect;
+export type NewMembership = typeof memberships.$inferInsert;
+export type SessionMembershipPrice = typeof sessionMembershipPrices.$inferSelect;
+export type NewSessionMembershipPrice = typeof sessionMembershipPrices.$inferInsert;
+
 // Role type for convenience
 export type UserRole = 'guest' | 'user' | 'admin' | 'superadmin';
-export type MembershipStatus = 'none' | 'active' | 'expired' | 'cancelled'; 
+export type MembershipStatus = 'none' | 'active' | 'expired' | 'cancelled';
+export type SessionVisibility = 'open' | 'hidden' | 'closed'; 

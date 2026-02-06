@@ -135,7 +135,7 @@ export async function validateCoupon(
     // The coupon ID is nested under promotion.coupon in the API response
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const promoCodeAny = promoCode as any
-    const couponId = promoCodeAny.promotion?.coupon || promoCode.coupon
+    const couponId = promoCodeAny.promotion?.coupon || promoCodeAny.coupon
 
     if (!couponId) {
       console.error("Coupon ID not found on promotion code:", promoCode.id)
@@ -539,6 +539,7 @@ export interface CreateEmbeddedCheckoutParams {
   promotionCode?: string // Validated promotion code ID
   pricingType?: "drop_in" | "membership"
   isNewMembership?: boolean // True if user is signing up for membership
+  membershipId?: string // Selected membership ID for multi-membership support
   slug: string // Organization slug for return URL
 }
 
@@ -876,6 +877,7 @@ export async function createEmbeddedCheckoutSession(
           start_time: params.startTime,
           number_of_spots: params.numberOfSpots.toString(),
           duration_minutes: template.duration_minutes.toString(),
+          membership_id: params.membershipId || "", // For multi-membership support
         },
       }
     } else {
@@ -1033,6 +1035,126 @@ async function createDirectBooking(params: {
     return { success: true, bookingId: booking.id }
   } catch (error) {
     console.error("Error in createDirectBooking:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+// ============================================
+// MEMBERSHIP-ONLY CHECKOUT
+// ============================================
+
+export interface CreateMembershipOnlyCheckoutParams {
+  membershipId: string
+  customerEmail?: string
+  slug: string
+}
+
+export interface CreateMembershipOnlyCheckoutResult {
+  success: boolean
+  clientSecret?: string
+  connectedAccountId?: string
+  error?: string
+}
+
+/**
+ * Create a Stripe Checkout session for membership-only purchase
+ * No session booking involved - just the subscription
+ */
+export async function createMembershipOnlyCheckoutSession(
+  params: CreateMembershipOnlyCheckoutParams
+): Promise<CreateMembershipOnlyCheckoutResult> {
+  try {
+    const { userId } = await auth()
+    const supabase = createSupabaseServerClient()
+
+    // Get membership details
+    const { data: membership, error: membershipError } = await supabase
+      .from("memberships")
+      .select("*")
+      .eq("id", params.membershipId)
+      .single()
+
+    if (membershipError || !membership) {
+      return { success: false, error: "Membership not found" }
+    }
+
+    if (!membership.is_active) {
+      return { success: false, error: "This membership is no longer available" }
+    }
+
+    if (!membership.stripe_price_id) {
+      return { success: false, error: "This membership is not configured for payment" }
+    }
+
+    // Get Stripe connect account
+    const { data: stripeAccount, error: stripeError } = await supabase
+      .from("stripe_connect_accounts")
+      .select("stripe_account_id, charges_enabled")
+      .eq("organization_id", membership.organization_id)
+      .single()
+
+    if (stripeError || !stripeAccount || !stripeAccount.charges_enabled) {
+      return { success: false, error: "Payment not configured for this organization" }
+    }
+
+    // Get customer email
+    let customerEmail = params.customerEmail
+    if (userId) {
+      const { data: userData } = await supabase
+        .from("clerk_users")
+        .select("email")
+        .eq("clerk_user_id", userId)
+        .single()
+      customerEmail = userData?.email || customerEmail
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const stripe = getStripe()
+
+    // Create subscription checkout on Connected Account
+    const checkoutSession = await stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        ui_mode: "embedded",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: membership.stripe_price_id,
+            quantity: 1,
+          },
+        ],
+        customer_email: customerEmail,
+        return_url: `${baseUrl}/${params.slug}/membership/${params.membershipId}?confirmed=true&session_id={CHECKOUT_SESSION_ID}`,
+        expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+        subscription_data: {
+          metadata: {
+            organization_id: membership.organization_id,
+            membership_id: params.membershipId,
+            clerk_user_id: userId || "",
+            customer_email: customerEmail || "",
+            is_membership_only: "true", // Flag to identify in webhook
+          },
+        },
+        metadata: {
+          organization_id: membership.organization_id,
+          membership_id: params.membershipId,
+          clerk_user_id: userId || "",
+          is_membership_only: "true",
+        },
+      },
+      { stripeAccount: stripeAccount.stripe_account_id }
+    )
+
+    return {
+      success: true,
+      clientSecret: checkoutSession.client_secret!,
+      connectedAccountId: stripeAccount.stripe_account_id,
+    }
+  } catch (error) {
+    console.error("Error in createMembershipOnlyCheckoutSession:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

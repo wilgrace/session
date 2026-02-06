@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,14 +11,23 @@ import { checkEmailExists, validateCoupon } from "@/app/actions/checkout"
 import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { Loader2, Check, AlertCircle, BadgeCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { Membership } from "@/lib/db/schema"
 
 export interface CheckoutFormData {
   numberOfSpots: number
   email: string
   pricingType: "drop_in" | "membership"
   isNewMembership?: boolean
+  membershipId?: string // The selected membership ID
   promotionCode?: string
   discountAmount?: number
+}
+
+// Membership with calculated session price
+export interface MembershipPricingOption {
+  membership: Membership
+  sessionPrice: number // Calculated price for this session
+  isUserMembership: boolean // Whether the user currently has this membership
 }
 
 interface PreCheckoutFormProps {
@@ -32,10 +40,13 @@ interface PreCheckoutFormProps {
   organizationId: string
   onProceedToCheckout: (data: CheckoutFormData) => void
   isLoading?: boolean
-  // New props for membership
-  memberPrice: number // Calculated server-side
-  monthlyMembershipPrice: number | null // null if not configured
-  isActiveMember: boolean
+  // Multi-membership props
+  memberships: MembershipPricingOption[] // All available memberships with prices
+  userMembershipId?: string | null // User's current membership ID
+  // Backward compatibility props (deprecated)
+  memberPrice?: number
+  monthlyMembershipPrice?: number | null
+  isActiveMember?: boolean
   // Pre-select membership option (from sign-up redirect)
   defaultToMembership?: boolean
 }
@@ -63,16 +74,34 @@ export function PreCheckoutForm({
   organizationId,
   onProceedToCheckout,
   isLoading = false,
-  memberPrice,
-  monthlyMembershipPrice,
-  isActiveMember,
+  memberships = [],
+  userMembershipId,
+  // Backward compatibility
+  memberPrice: legacyMemberPrice,
+  monthlyMembershipPrice: legacyMonthlyMembershipPrice,
+  isActiveMember: legacyIsActiveMember,
   defaultToMembership = false,
 }: PreCheckoutFormProps) {
   const { openSignUp, openSignIn } = useAuthOverlay()
 
+  // Find user's current membership
+  const userMembership = memberships.find(m => m.isUserMembership)
+  const isActiveMember = legacyIsActiveMember ?? !!userMembership
+
+  // Get best member price from available memberships (for backward compat)
+  const bestMemberPrice = memberships.length > 0
+    ? Math.min(...memberships.map(m => m.sessionPrice))
+    : (legacyMemberPrice ?? session.drop_in_price ?? 0)
+
+  // Get monthly price for showing on new membership options
+  const getMonthlyPrice = (membership: Membership) => membership.price
+
   // Form state - default to "membership" if user is already a member or returning from sign-up
   const [pricingType, setPricingType] = useState<"drop_in" | "membership">(
     isActiveMember || defaultToMembership ? "membership" : "drop_in"
+  )
+  const [selectedMembershipId, setSelectedMembershipId] = useState<string | null>(
+    userMembershipId || (memberships.length > 0 ? memberships[0].membership.id : null)
   )
   const [numberOfSpots, setNumberOfSpots] = useState(1)
   const [email, setEmail] = useState(userEmail || "")
@@ -116,14 +145,20 @@ export function PreCheckoutForm({
     }
   }, [isLoggedIn, savedFormData, userEmail, onProceedToCheckout, awaitingAuthComplete])
 
+  // Get selected membership details
+  const selectedMembership = memberships.find(m => m.membership.id === selectedMembershipId)
+  const selectedMembershipPrice = selectedMembership?.sessionPrice ?? bestMemberPrice
+  const selectedMonthlyPrice = selectedMembership ? getMonthlyPrice(selectedMembership.membership) : (legacyMonthlyMembershipPrice ?? 0)
+
   // Determine if this is a new membership signup
-  const isNewMembership = pricingType === "membership" && !isActiveMember && !!monthlyMembershipPrice
+  const isNewMembership = pricingType === "membership" && !isActiveMember && selectedMonthlyPrice > 0
 
   // Check if guest is trying to purchase membership (needs to create account first)
   const guestNeedsAccountForMembership = !isLoggedIn && isNewMembership
 
   // Calculate prices - person 1 gets member rate, additional people pay drop-in
   const dropInPrice = session.drop_in_price || 0
+  const memberPrice = selectedMembershipPrice
   const person1Price = (pricingType === "membership" || isActiveMember) ? memberPrice : dropInPrice
   const additionalPersonPrice = dropInPrice // Additional people always pay drop-in
   const additionalPeople = Math.max(0, numberOfSpots - 1)
@@ -132,7 +167,7 @@ export function PreCheckoutForm({
   const sessionSubtotal = person1Price + (additionalPersonPrice * additionalPeople)
 
   // Add membership fee for new signups
-  const membershipFee = isNewMembership ? (monthlyMembershipPrice || 0) : 0
+  const membershipFee = isNewMembership ? selectedMonthlyPrice : 0
 
   // Calculate discount (only applies to session subtotal, not membership fee)
   const calculateDiscount = useCallback(() => {
@@ -224,6 +259,7 @@ export function PreCheckoutForm({
         email,
         pricingType,
         isNewMembership,
+        membershipId: selectedMembershipId || undefined,
         promotionCode: appliedCoupon?.id,
         discountAmount: discount,
       }
@@ -249,6 +285,7 @@ export function PreCheckoutForm({
       email: isLoggedIn ? (userEmail || "") : email,
       pricingType,
       isNewMembership,
+      membershipId: pricingType === "membership" ? (selectedMembershipId || undefined) : undefined,
       promotionCode: appliedCoupon?.id,
       discountAmount: discount,
     })
@@ -267,77 +304,59 @@ export function PreCheckoutForm({
     !isLoading
 
   return (
-    <Card className="border-0 shadow-none md:border md:shadow">
-      <CardContent className="p-6 space-y-6">
-        {/* Pricing Options */}
-        <div className="space-y-3">
-          {/* Drop-in Option - only show if not already a member */}
-          {!isActiveMember && (
-            <button
-              type="button"
-              onClick={() => setPricingType("drop_in")}
-              className={cn(
-                "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
-                pricingType === "drop_in"
-                  ? "border-primary bg-primary/5"
-                  : "border-muted hover:border-muted-foreground/30"
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
-                    pricingType === "drop_in"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-muted-foreground/30"
-                  )}
-                >
-                  {pricingType === "drop_in" && <Check className="h-3 w-3" />}
-                </div>
-                <div>
-                  <div className="font-medium">Drop-in</div>
-                  <div className="text-sm text-muted-foreground">Single session access</div>
-                </div>
+    <div className="space-y-6">
+      {/* Pricing Options */}
+      <div className="space-y-3">
+        {/* User's Current Membership - show first if they have one */}
+        {userMembership && (
+          <button
+            type="button"
+            onClick={() => {
+              setPricingType("membership")
+              setSelectedMembershipId(userMembership.membership.id)
+            }}
+            className="w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all bg-black/5"
+            style={{ borderColor: "var(--button-color, #6c47ff)" }}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2"
+                style={{
+                  borderColor: "var(--button-color, #6c47ff)",
+                  backgroundColor: "var(--button-color, #6c47ff)",
+                  color: "var(--button-text-color, #ffffff)"
+                }}
+              >
+                <Check className="h-3 w-3" />
               </div>
-              <div className="text-xl font-bold">{formatPrice(dropInPrice)}</div>
-            </button>
-          )}
-
-          {/* Existing Member - Member Rate Option */}
-          {isActiveMember && (
-            <button
-              type="button"
-              onClick={() => setPricingType("membership")}
-              className={cn(
-                "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
-                "border-primary bg-primary/5"
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-primary text-primary-foreground">
-                  <Check className="h-3 w-3" />
+              <div>
+                <div className="font-medium flex items-center gap-2">
+                  {userMembership.membership.name}
+                  <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                    <BadgeCheck className="h-3 w-3" />
+                    Your membership
+                  </span>
                 </div>
-                <div>
-                  <div className="font-medium flex items-center gap-2">
-                    Member Rate
-                    <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                      <BadgeCheck className="h-3 w-3" />
-                      Your membership
-                    </span>
-                  </div>
-                  <div className="text-sm text-muted-foreground">Discounted session price</div>
-                </div>
+                <div className="text-sm text-muted-foreground">Member pricing</div>
               </div>
-              <div className="text-xl font-bold">{formatPrice(memberPrice)}</div>
-            </button>
-          )}
+            </div>
+            <div className="text-xl font-bold">{formatPrice(userMembership.sessionPrice)}</div>
+          </button>
+        )}
 
-          {/* Become a Member Option - only show if not already a member and membership is configured */}
-          {!isActiveMember && monthlyMembershipPrice && (
+        {/* Available Memberships - show if user doesn't have a membership */}
+        {!isActiveMember && memberships.length > 0 && memberships.map((option) => {
+          const isSelected = pricingType === "membership" && selectedMembershipId === option.membership.id
+          const monthlyPrice = option.membership.price
+          const isFree = monthlyPrice === 0
+
+          return (
             <button
+              key={option.membership.id}
               type="button"
               onClick={() => {
                 setPricingType("membership")
+                setSelectedMembershipId(option.membership.id)
                 // Memberships are individual - reset quantity to 1
                 if (numberOfSpots > 1) {
                   setNumberOfSpots(1)
@@ -345,72 +364,124 @@ export function PreCheckoutForm({
               }}
               className={cn(
                 "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
-                pricingType === "membership"
-                  ? "border-primary bg-primary/5"
+                isSelected
+                  ? "bg-black/5"
                   : "border-muted hover:border-muted-foreground/30"
               )}
+              style={isSelected ? {
+                borderColor: "var(--button-color, #6c47ff)"
+              } : undefined}
             >
               <div className="flex items-start gap-3">
                 <div
                   className={cn(
                     "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
-                    pricingType === "membership"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-muted-foreground/30"
+                    !isSelected && "border-muted-foreground/30"
                   )}
+                  style={isSelected ? {
+                    borderColor: "var(--button-color, #6c47ff)",
+                    backgroundColor: "var(--button-color, #6c47ff)",
+                    color: "var(--button-text-color, #ffffff)"
+                  } : undefined}
                 >
-                  {pricingType === "membership" && <Check className="h-3 w-3" />}
+                  {isSelected && <Check className="h-3 w-3" />}
                 </div>
                 <div>
-                  <div className="font-medium">Become a Member</div>
+                  <div className="font-medium">{option.membership.name}</div>
                   <div className="text-sm text-muted-foreground">
-                    Get member pricing on all sessions
+                    {option.membership.description || "Get member pricing on all sessions"}
                   </div>
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xl font-bold">{formatPrice(memberPrice)}</div>
-                <div className="text-sm text-muted-foreground">+ {formatPrice(monthlyMembershipPrice)}/mo</div>
+                <div className="text-xl font-bold">{formatPrice(option.sessionPrice)}</div>
+                {!isFree && (
+                  <div className="text-sm text-muted-foreground">
+                    + {formatPrice(monthlyPrice)}/{option.membership.billingPeriod === 'yearly' ? 'yr' : 'mo'}
+                  </div>
+                )}
+                {isFree && (
+                  <div className="text-sm text-green-600">Free membership</div>
+                )}
               </div>
             </button>
-          )}
-        </div>
+          )
+        })}
+
+        {/* Drop-in Option - always show at bottom unless user already has membership */}
+        {!isActiveMember && (
+          <button
+            type="button"
+            onClick={() => setPricingType("drop_in")}
+            className={cn(
+              "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
+              pricingType === "drop_in"
+                ? "bg-black/5"
+                : "border-muted hover:border-muted-foreground/30"
+            )}
+            style={pricingType === "drop_in" ? {
+              borderColor: "var(--button-color, #6c47ff)"
+            } : undefined}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
+                  pricingType !== "drop_in" && "border-muted-foreground/30"
+                )}
+                style={pricingType === "drop_in" ? {
+                  borderColor: "var(--button-color, #6c47ff)",
+                  backgroundColor: "var(--button-color, #6c47ff)",
+                  color: "var(--button-text-color, #ffffff)"
+                } : undefined}
+              >
+                {pricingType === "drop_in" && <Check className="h-3 w-3" />}
+              </div>
+              <div>
+                <div className="font-medium">Drop-in</div>
+                <div className="text-sm text-muted-foreground">Single session access</div>
+              </div>
+            </div>
+            <div className="text-xl font-bold">{formatPrice(dropInPrice)}</div>
+          </button>
+        )}
+      </div>
 
         {/* Number of People */}
         <div className="space-y-2">
-          <Label className="text-base font-semibold">Number of people</Label>
-          <div className="flex items-center justify-center gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-12 w-12 rounded-xl"
-              onClick={() => setNumberOfSpots(Math.max(1, numberOfSpots - 1))}
-              disabled={numberOfSpots <= 1 || isNewMembership}
-            >
-              <span className="text-xl">−</span>
-            </Button>
-            <div className="w-32 text-center">
-              <span className="text-2xl font-medium">{numberOfSpots}</span>
+          <div className="flex items-center justify-between">
+            <Label className="text-base font-semibold">Number of people</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                onClick={() => setNumberOfSpots(Math.max(1, numberOfSpots - 1))}
+                disabled={numberOfSpots <= 1 || isNewMembership}
+              >
+                <span className="text-lg">−</span>
+              </Button>
+              <span className="w-8 text-center text-xl font-bold">{numberOfSpots}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                onClick={() => setNumberOfSpots(Math.min(effectiveSpotsRemaining, numberOfSpots + 1))}
+                disabled={numberOfSpots >= effectiveSpotsRemaining || isNewMembership}
+              >
+                <span className="text-lg">+</span>
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-12 w-12 rounded-xl"
-              onClick={() => setNumberOfSpots(Math.min(effectiveSpotsRemaining, numberOfSpots + 1))}
-              disabled={numberOfSpots >= effectiveSpotsRemaining || isNewMembership}
-            >
-              <span className="text-xl">+</span>
-            </Button>
           </div>
           {isNewMembership && !guestNeedsAccountForMembership && (
-            <p className="text-sm text-amber-600 text-center bg-amber-50 p-2 rounded-lg">
+            <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
               Memberships are individual. Complete this purchase first to book for a group.
             </p>
           )}
           {!isNewMembership && isActiveMember && numberOfSpots > 1 && (
-            <p className="text-sm text-muted-foreground text-center">
+            <p className="text-sm text-muted-foreground">
               You get member rate. Additional guests pay drop-in price.
             </p>
           )}
@@ -452,7 +523,8 @@ export function PreCheckoutForm({
               <button
                 type="button"
                 onClick={() => openSignIn()}
-                className="font-medium underline whitespace-nowrap"
+                className="font-medium underline whitespace-nowrap hover:opacity-80"
+                style={{ color: "var(--button-color, #6c47ff)" }}
               >
                 Sign in
               </button>
@@ -551,7 +623,7 @@ export function PreCheckoutForm({
           )}
           <div className="flex justify-between pt-3 border-t border-muted">
             <span className="text-lg font-semibold">Total</span>
-            <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
+            <span className="text-xl font-bold" style={{ color: "var(--button-color, #6c47ff)" }}>{formatPrice(total)}</span>
           </div>
         </div>
 
@@ -560,7 +632,11 @@ export function PreCheckoutForm({
           type="button"
           onClick={handleSubmit}
           disabled={!canProceed}
-          className="w-full h-14 text-lg rounded-xl bg-primary/80 hover:bg-primary"
+          className="w-full h-14 text-lg rounded-xl hover:opacity-90"
+          style={{
+            backgroundColor: "var(--button-color, #6c47ff)",
+            color: "var(--button-text-color, #ffffff)",
+          }}
         >
           {isLoading ? (
             <>
@@ -573,7 +649,6 @@ export function PreCheckoutForm({
             "Continue"
           )}
         </Button>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

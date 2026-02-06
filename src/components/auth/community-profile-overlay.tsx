@@ -292,44 +292,6 @@ export function CommunityProfileOverlay({
 
         </div>
 
-                {/* Housing Situation */}
-                <div className="space-y-2">
-          <Label htmlFor="housing-situation" className="text-sm font-medium">
-            Which best describes your current housing?
-          </Label>
-          <Select value={housingSituation} onValueChange={setHousingSituation}>
-            <SelectTrigger className="h-10 rounded-xl bg-muted/50">
-              <SelectValue placeholder="Select an option" />
-            </SelectTrigger>
-            <SelectContent>
-              {HOUSING_SITUATION_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Work Situation */}
-        <div className="space-y-2">
-          <Label htmlFor="work-situation" className="text-sm font-medium">
-            Which of these best describes your current work situation?
-          </Label>
-          <Select value={workSituation} onValueChange={setWorkSituation}>
-            <SelectTrigger className="h-10 rounded-xl bg-muted/50">
-              <SelectValue placeholder="Select an option" />
-            </SelectTrigger>
-            <SelectContent>
-              {WORK_SITUATION_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Birth Year */}
         <div className="space-y-2">
           <Label htmlFor="birth-year" className="text-sm font-medium">
@@ -393,6 +355,45 @@ export function CommunityProfileOverlay({
             </SelectContent>
           </Select>
         </div>
+
+                {/* Housing Situation */}
+                <div className="space-y-2">
+          <Label htmlFor="housing-situation" className="text-sm font-medium">
+            Which best describes your current housing?
+          </Label>
+          <Select value={housingSituation} onValueChange={setHousingSituation}>
+            <SelectTrigger className="h-10 rounded-xl bg-muted/50">
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              {HOUSING_SITUATION_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Work Situation */}
+        <div className="space-y-2">
+          <Label htmlFor="work-situation" className="text-sm font-medium">
+            Which of these best describes your current work situation?
+          </Label>
+          <Select value={workSituation} onValueChange={setWorkSituation}>
+            <SelectTrigger className="h-10 rounded-xl bg-muted/50">
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              {WORK_SITUATION_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
       </div>
 
       {/* Submit button */}

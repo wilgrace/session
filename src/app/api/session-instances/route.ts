@@ -41,11 +41,11 @@ export async function GET(request: Request) {
 
     const supabase = createSupabaseServerClient();
 
-    // Get all session templates that are open for booking
+    // Get all session templates that are open for booking (visibility = 'open')
     const { data: templates, error: templatesError } = await supabase
       .from('session_templates')
       .select('id, name, duration_minutes')
-      .eq('is_open', true);
+      .eq('visibility', 'open');
 
     if (templatesError) {
       return NextResponse.json(

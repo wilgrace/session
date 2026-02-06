@@ -1,4 +1,4 @@
-import type { UserMembership } from "@/lib/db/schema"
+import type { UserMembership, Membership } from "@/lib/db/schema"
 
 /**
  * Parameters for calculating member price
@@ -158,4 +158,82 @@ export function calculateBookingPrice(
     membershipFee,
     total: sessionSubtotal + membershipFee,
   }
+}
+
+// ============================================
+// Multi-Membership Pricing Functions
+// ============================================
+
+/**
+ * Parameters for calculating member price for a specific membership
+ */
+export interface MembershipPriceParams {
+  /** Drop-in price in pence */
+  dropInPrice: number
+  /** The membership to calculate price for */
+  membership: Membership
+  /** Per-session price override for this membership (in pence), null if not set */
+  sessionOverridePrice?: number | null
+}
+
+/**
+ * Calculate the session price for a specific membership.
+ *
+ * Priority order:
+ * 1. Session-level override for this membership (from session_membership_prices)
+ * 2. Membership-level fixed price (if memberPriceType = 'fixed')
+ * 3. Membership-level discount percentage (if memberPriceType = 'discount')
+ * 4. Fall back to drop-in price (no member discount)
+ *
+ * @returns Session price in pence for this membership
+ */
+export function calculateMembershipSessionPrice(params: MembershipPriceParams): number {
+  const { dropInPrice, membership, sessionOverridePrice } = params
+
+  // 1. Session-level override takes highest priority
+  if (sessionOverridePrice !== null && sessionOverridePrice !== undefined) {
+    return sessionOverridePrice
+  }
+
+  // 2. Membership-level fixed price
+  if (membership.memberPriceType === "fixed" && membership.memberFixedPrice !== null) {
+    return membership.memberFixedPrice
+  }
+
+  // 3. Membership-level discount percentage
+  if (membership.memberPriceType === "discount" && membership.memberDiscountPercent !== null) {
+    const discountMultiplier = 1 - membership.memberDiscountPercent / 100
+    return Math.round(dropInPrice * discountMultiplier)
+  }
+
+  // 4. No member pricing configured - return drop-in price
+  return dropInPrice
+}
+
+/**
+ * Calculate session prices for all memberships
+ */
+export interface MembershipWithPrice {
+  membership: Membership
+  sessionPrice: number
+  isUserMembership: boolean
+}
+
+export function calculateAllMembershipPrices(params: {
+  dropInPrice: number
+  memberships: Membership[]
+  sessionOverrides: Record<string, number> // membershipId -> price in pence
+  userMembershipId?: string | null
+}): MembershipWithPrice[] {
+  const { dropInPrice, memberships, sessionOverrides, userMembershipId } = params
+
+  return memberships.map((membership) => ({
+    membership,
+    sessionPrice: calculateMembershipSessionPrice({
+      dropInPrice,
+      membership,
+      sessionOverridePrice: sessionOverrides[membership.id] ?? null,
+    }),
+    isUserMembership: membership.id === userMembershipId,
+  }))
 }

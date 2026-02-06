@@ -1,7 +1,8 @@
 import { Suspense } from "react"
+import { auth } from "@clerk/nextjs/server"
 import { SessionPageClient } from "./session-page-client"
 import { notFound } from "next/navigation"
-import { getTenantFromHeaders } from "@/lib/tenant-utils"
+import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
 
 interface SessionPageProps {
   params: Promise<{
@@ -29,6 +30,13 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
     notFound()
   }
 
+  // Fetch organization data and admin status
+  const organization = await getTenantOrganization()
+  const { userId } = await auth()
+  const isAdmin = userId && organization
+    ? await canAccessAdminForOrg(userId, organization.id)
+    : false
+
   return (
     <Suspense fallback={
       <div className="container mx-auto py-8">
@@ -44,6 +52,8 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
         sessionId={resolvedParams.sessionId}
         searchParams={resolvedSearchParams}
         slug={resolvedParams.slug}
+        organizationName={organization?.name || null}
+        isAdmin={isAdmin}
       />
     </Suspense>
   )

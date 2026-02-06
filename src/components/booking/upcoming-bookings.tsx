@@ -27,13 +27,13 @@ export function UpcomingBookings({ bookings, className, slug }: UpcomingBookings
   }
 
   return (
-    <div className={cn("mb-6 rounded-lg border overflow-hidden md:mb-0 mx-4 md:mx-0 mt-4 md:mt-0", className)}>
-      <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+    <div className={cn("mb-6 rounded-lg border border-gray-200 overflow-hidden md:mb-0 mx-4 md:mx-0 mt-4 md:mt-0", className)}>
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-200">
         <h2 className="text-base font-medium">Upcoming Bookings</h2>
         <FAQDialog />
       </div>
 
-      <div className="divide-y">
+      <div className="divide-y bg-white">
         {bookings.map((booking) => (
           <div key={booking.id} className="p-4 sm:px-6 hover:bg-gray-50">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between">

@@ -12,7 +12,8 @@ import { Switch } from "@/components/ui/switch"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, isValid, parseISO, startOfDay } from "date-fns"
-import { CalendarIcon, Plus, X, ChevronUp, ChevronDown } from "lucide-react"
+import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
@@ -28,6 +29,9 @@ import { SessionTemplate } from "@/types/session"
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/constants'
 import { localToUTC, SAUNA_TIMEZONE } from '@/lib/time-utils'
 import { ImageUpload } from "@/components/admin/image-upload"
+import { getMemberships, getSessionMembershipPrices, updateSessionMembershipPrices } from "@/app/actions/memberships"
+import type { Membership } from "@/lib/db/schema"
+import { EVENT_COLORS, EventColorKey, DEFAULT_EVENT_COLOR, normalizeEventColor } from "@/lib/event-colors"
 
 async function generateInstances() {
   try {
@@ -64,6 +68,7 @@ interface ScheduleItem {
   id: string
   time: string
   days: string[]
+  durationMinutes?: number | null
 }
 
 const daysOfWeek = [
@@ -82,12 +87,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   const { getToken } = useAuth()
   const [loading, setLoading] = useState(false)
   const [date, setDate] = useState<Date | undefined>(undefined)
-  const [isOpen, setIsOpen] = useState(template?.is_open ?? true)
+  const [visibility, setVisibility] = useState<'open' | 'hidden' | 'closed'>(template?.visibility ?? 'open')
   const [scheduleType, setScheduleType] = useState(template?.is_recurring ? "repeat" : "once")
-  const [duration, setDuration] = useState(template?.duration_minutes ? 
-    `${Math.floor(template.duration_minutes / 60).toString().padStart(2, '0')}:${(template.duration_minutes % 60).toString().padStart(2, '0')}` : 
-    "01:15"
-  )
+  const [durationMinutes, setDurationMinutes] = useState(template?.duration_minutes ?? 75)
   const [name, setName] = useState(template?.name || "")
   const [description, setDescription] = useState(template?.description || "")
   const [capacity, setCapacity] = useState(template?.capacity?.toString() || "10")
@@ -104,11 +106,19 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   // Pricing state
   const [pricingType, setPricingType] = useState<'free' | 'paid'>('free')
   const [dropInPrice, setDropInPrice] = useState('')
-  const [memberPrice, setMemberPrice] = useState('')
+  const [memberPrice, setMemberPrice] = useState('') // Deprecated: kept for backward compatibility
   const [bookingInstructions, setBookingInstructions] = useState('')
+
+  // Membership pricing state (new multi-membership system)
+  const [memberships, setMemberships] = useState<Membership[]>([])
+  const [membershipPrices, setMembershipPrices] = useState<Record<string, string>>({}) // membershipId -> price string
+  const [loadingMemberships, setLoadingMemberships] = useState(false)
 
   // Image state
   const [imageUrl, setImageUrl] = useState('')
+
+  // Event color state
+  const [eventColor, setEventColor] = useState<EventColorKey>(DEFAULT_EVENT_COLOR)
 
   // Get the day of week in lowercase (e.g., "mon", "tue")
   const getDayOfWeek = (date: Date) => {
@@ -123,10 +133,11 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       setRecurrenceStartDate(startOfDay(today))
       // Default to recurring schedule for new sessions with current day
       setScheduleType("repeat")
-      setSchedules([{ 
-        id: "1", 
-        time: "09:00", 
-        days: [getDayOfWeek(today)] 
+      setSchedules([{
+        id: "1",
+        time: "09:00",
+        days: [getDayOfWeek(today)],
+        durationMinutes: null
       }])
     }
   }, [template])
@@ -140,10 +151,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       
       // Calculate duration in minutes
       const durationMs = initialTimeSlot.end.getTime() - initialTimeSlot.start.getTime()
-      const durationMinutes = Math.floor(durationMs / (1000 * 60))
-      const hours = Math.floor(durationMinutes / 60)
-      const minutes = durationMinutes % 60
-      setDuration(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`)
+      const calculatedDuration = Math.floor(durationMs / (1000 * 60))
+      setDurationMinutes(calculatedDuration)
       
       // Set the time in the schedule and use the selected day
       const timeString = format(initialTimeSlot.start, 'HH:mm')
@@ -164,11 +173,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       setName(template.name)
       setDescription(template.description || "")
       setCapacity(template.capacity.toString())
-      setDuration(template.duration_minutes ?
-        `${Math.floor(template.duration_minutes / 60).toString().padStart(2, '0')}:${(template.duration_minutes % 60).toString().padStart(2, '0')}` :
-        "01:15"
-      )
-      setIsOpen(template.is_open)
+      setDurationMinutes(template.duration_minutes ?? 75)
+      setVisibility(template.visibility ?? 'open')
       setScheduleType(template.is_recurring ? "repeat" : "once")
 
       // Load pricing fields
@@ -179,13 +185,17 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
       // Load image field
       setImageUrl(template.image_url || '')
-      
+
+      // Load event color
+      setEventColor(normalizeEventColor(template.event_color))
+
       if (template.is_recurring) {
         if (template.schedules) {
           setSchedules(template.schedules.map((s: any) => ({
             id: s.id,
             time: s.time,
-            days: s.days.map((day: string) => convertDayFormat(day, false))
+            days: s.days.map((day: string) => convertDayFormat(day, false)),
+            durationMinutes: s.duration_minutes
           })))
         }
         if (template.recurrence_start_date) {
@@ -211,13 +221,48 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         
         // Set the time from one_off_start_time
         if (template.one_off_start_time) {
-          setSchedules([{ id: "1", time: template.one_off_start_time, days: [] }])
+          setSchedules([{ id: "1", time: template.one_off_start_time, days: [], durationMinutes: null }])
         } else {
-          setSchedules([{ id: "1", time: "09:00", days: [] }])
+          setSchedules([{ id: "1", time: "09:00", days: [], durationMinutes: null }])
         }
       }
     }
   }, [template])
+
+  // Load memberships and their prices when form opens
+  useEffect(() => {
+    async function loadMembershipsData() {
+      if (!open) return
+
+      setLoadingMemberships(true)
+      try {
+        // Load all memberships for the org
+        const membershipsResult = await getMemberships()
+        if (membershipsResult.success && membershipsResult.data) {
+          setMemberships(membershipsResult.data)
+        }
+
+        // If editing, load existing session membership prices
+        if (template?.id) {
+          const pricesResult = await getSessionMembershipPrices(template.id)
+          if (pricesResult.success && pricesResult.data) {
+            const priceMap: Record<string, string> = {}
+            pricesResult.data.forEach((p) => {
+              priceMap[p.membershipId] = (p.overridePrice / 100).toFixed(2)
+            })
+            setMembershipPrices(priceMap)
+          }
+        } else {
+          setMembershipPrices({})
+        }
+      } catch (error) {
+        console.error("Error loading memberships:", error)
+      }
+      setLoadingMemberships(false)
+    }
+
+    loadMembershipsData()
+  }, [open, template?.id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,10 +272,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       if (!user) {
         throw new Error("You must be logged in to create a session");
       }
-
-      // Convert duration from HH:mm to minutes
-      const [hours, minutes] = duration.split(':').map(Number);
-      const durationMinutes = hours * 60 + minutes;
 
       let templateId: string;
 
@@ -242,7 +283,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           description,
           capacity: parseInt(capacity),
           duration_minutes: durationMinutes,
-          is_open: isOpen,
+          visibility: visibility,
           is_recurring: scheduleType === "repeat",
           one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
           one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
@@ -255,6 +296,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           booking_instructions: bookingInstructions || null,
           // Image field
           image_url: imageUrl || null,
+          // Calendar display color
+          event_color: eventColor,
         });
 
         if (!result.success) {
@@ -275,7 +318,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           description,
           capacity: parseInt(capacity),
           duration_minutes: durationMinutes,
-          is_open: isOpen,
+          visibility: visibility,
           is_recurring: scheduleType === "repeat",
           one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
           one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
@@ -289,6 +332,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           booking_instructions: bookingInstructions || null,
           // Image field
           image_url: imageUrl || null,
+          // Calendar display color
+          event_color: eventColor,
         });
 
         if (!result.success || !result.id) {
@@ -363,7 +408,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
               const result = await createSessionSchedule({
                 session_template_id: templateId,
                 time: schedule.time,
-                days: mappedDays
+                days: mappedDays,
+                duration_minutes: schedule.durationMinutes || null
               });
 
               return result;
@@ -404,6 +450,23 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           });
         } else {
         }
+      }
+
+      // Save membership price overrides
+      if (pricingType === 'paid' && Object.keys(membershipPrices).length > 0) {
+        const pricesToSave = Object.entries(membershipPrices)
+          .filter(([_, price]) => price && parseFloat(price) >= 0)
+          .map(([membershipId, price]) => ({
+            membershipId,
+            overridePrice: Math.round(parseFloat(price) * 100),
+          }))
+
+        if (pricesToSave.length > 0) {
+          await updateSessionMembershipPrices(templateId, pricesToSave)
+        }
+      } else {
+        // Clear any existing prices if session is free or no prices set
+        await updateSessionMembershipPrices(templateId, [])
       }
 
       toast({
@@ -466,7 +529,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   const addSchedule = () => {
     const newId = (schedules.length + 1).toString()
-    setSchedules([...schedules, { id: newId, time: "09:00", days: [] }])
+    setSchedules([...schedules, { id: newId, time: "09:00", days: [], durationMinutes: null }])
   }
 
   const removeSchedule = async (id: string) => {
@@ -495,8 +558,14 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   }
 
   const updateScheduleTime = (id: string, time: string) => {
-    setSchedules(schedules.map((schedule) => 
+    setSchedules(schedules.map((schedule) =>
       schedule.id === id ? { ...schedule, time } : schedule
+    ))
+  }
+
+  const updateScheduleDuration = (id: string, minutes: number) => {
+    setSchedules(schedules.map((schedule) =>
+      schedule.id === id ? { ...schedule, durationMinutes: minutes } : schedule
     ))
   }
 
@@ -516,29 +585,21 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
     setScheduleType(type)
     if (type === "once") {
       // Initialize with a single schedule for one-off sessions
-      setSchedules([{ id: "1", time: "09:00", days: [] }])
+      setSchedules([{ id: "1", time: "09:00", days: [], durationMinutes: null }])
     } else {
       // Initialize with default recurring schedule
-      setSchedules([{ id: "1", time: "09:00", days: ["mon", "thu", "fri"] }])
-    }
-  }
-
-  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    // Allow partial input while typing
-    if (value === "" || value.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
-      setDuration(value)
+      setSchedules([{ id: "1", time: "09:00", days: ["mon", "thu", "fri"], durationMinutes: null }])
     }
   }
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="sm:max-w-xl overflow-y-auto p-0">
+      <SheetContent className="sm:max-w-[625px] overflow-y-auto p-0">
         <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
           <SheetHeader>
             <SheetTitle className="text-xl">{template ? "Edit Session" : "New Session"}</SheetTitle>
             <SheetDescription>
-              {template ? "Make changes to the existing session." : "Add a new session to your calendar."}
+              {template ? "Any changes will update every instance of this session." : "Add a new session to your calendar."}
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -557,19 +618,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
             {generalExpanded && (
               <div className="px-4 pb-4 pt-4 space-y-6">
-                {/* Status */}
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="status" className="text-sm font-medium">
-                    Session Status
-                  </Label>
-                  <div className="flex items-center space-x-2">
-                    <Switch id="status" checked={isOpen} onCheckedChange={setIsOpen} />
-                    <Label htmlFor="status" className="text-sm font-medium">
-                      {isOpen ? "Open" : "Closed"}
-                    </Label>
-                  </div>
-                </div>
-
                 {/* Name */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -578,25 +626,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                     </Label>
                     <span className="text-sm text-gray-500">0</span>
                   </div>
-                  <Input id="name" placeholder="e.g., Regular Sauna" defaultValue={name} onChange={(e) => setName(e.target.value)} />
+                  <Input id="name" defaultValue={name} onChange={(e) => setName(e.target.value)} />
                   <p className="text-sm text-gray-500">Give your session a short and clear name.</p>
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="description" className="text-sm font-medium">
-                      Description
-                    </Label>
-                    <span className="text-sm text-gray-500">0</span>
-                  </div>
-                  <Textarea
-                    id="description"
-                    placeholder="Describe the session..."
-                    defaultValue={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                  <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
                 </div>
 
                 {/* Capacity */}
@@ -608,19 +639,35 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                   <p className="text-sm text-gray-500">Maximum number of participants allowed.</p>
                 </div>
 
-                {/* Duration */}
+
+                {/* Description */}
                 <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-sm font-medium">
-                    Duration <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="duration"
-                    type="time"
-                    value={duration}
-                    onChange={handleDurationChange}
-                    step="60"
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description" className="text-sm font-medium">
+                      Description
+                    </Label>
+                    <span className="text-sm text-gray-500">0</span>
+                  </div>
+                  <Textarea
+                    id="description"
+                    defaultValue={description}
+                    onChange={(e) => setDescription(e.target.value)}
                   />
-                  <p className="text-sm text-gray-500">Length of the session (hours:minutes).</p>
+                  <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
+                </div>
+
+                {/* Booking Instructions - moved from Payment section */}
+                <div className="space-y-2">
+                  <Label htmlFor="bookingInstructions" className="text-sm font-medium">
+                    Booking Instructions
+                  </Label>
+                  <Textarea
+                    id="bookingInstructions"
+                    value={bookingInstructions}
+                    onChange={(e) => setBookingInstructions(e.target.value)}
+                    rows={4}
+                  />
+                  <p className="text-sm text-gray-500">Displayed on the confirmation page after booking.</p>
                 </div>
 
                 {/* Image Upload */}
@@ -629,6 +676,40 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                   onChange={setImageUrl}
                   disabled={loading}
                 />
+
+                {/* Event Color */}
+                <div className="space-y-2">
+                  <Label htmlFor="eventColor" className="text-sm font-medium">
+                    Calendar Event Color
+                  </Label>
+                  <Select value={eventColor} onValueChange={(value: EventColorKey) => setEventColor(value)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-4 w-4 rounded-full border border-gray-200"
+                            style={{ backgroundColor: EVENT_COLORS[eventColor].color500 }}
+                          />
+                          <span>{EVENT_COLORS[eventColor].name}</span>
+                        </div>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(EVENT_COLORS).map(([key, { name, color500 }]) => (
+                        <SelectItem key={key} value={key}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-4 w-4 rounded-full border border-gray-200"
+                              style={{ backgroundColor: color500 }}
+                            />
+                            <span>{name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-gray-500">Color displayed on booking and admin calendars.</p>
+                </div>
               </div>
             )}
           </div>
@@ -674,7 +755,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           </div>
                         )}
                         <span className="font-medium">Repeat</span>
-                        <span className="text-sm text-gray-500 mt-1">Regular schedule</span>
                       </CardContent>
                     </Card>
 
@@ -703,7 +783,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           </div>
                         )}
                         <span className="font-medium">Once</span>
-                        <span className="text-sm text-gray-500 mt-1">Single occurrence</span>
                       </CardContent>
                     </Card>
                   </div>
@@ -742,10 +821,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                       <Label htmlFor="time" className="text-sm font-medium">
                         Time <span className="text-red-500">*</span>
                       </Label>
-                      <Input 
-                        id="time" 
-                        type="time" 
-                        value={schedules[0]?.time || "09:00"} 
+                      <Input
+                        id="time"
+                        type="time"
+                        value={schedules[0]?.time || "09:00"}
                         onChange={(e) => {
                           const newTime = e.target.value
                           if (schedules.length === 0) {
@@ -756,59 +835,74 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                         }}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="duration" className="text-sm font-medium">
+                        Duration (mins) <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="duration"
+                        type="number"
+                        min="1"
+                        value={durationMinutes}
+                        onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 0)}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <Label>Start Date <span className="text-red-500">*</span></Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !recurrenceStartDate && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {recurrenceStartDate ? format(recurrenceStartDate, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={recurrenceStartDate}
-                            onSelect={(newDate) => newDate && setRecurrenceStartDate(startOfDay(newDate))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {/* Start and End Dates - Inline */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Start Date <span className="text-red-500">*</span></Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !recurrenceStartDate && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {recurrenceStartDate ? format(recurrenceStartDate, "PPP") : <span>Pick a date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={recurrenceStartDate}
+                              onSelect={(newDate) => newDate && setRecurrenceStartDate(startOfDay(newDate))}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
 
-                    <div className="space-y-2">
-                      <Label>End Date (Optional)</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !recurrenceEndDate && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={recurrenceEndDate}
-                            onSelect={(newDate) => newDate && setRecurrenceEndDate(startOfDay(newDate))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <div className="space-y-2">
+                        <Label>End Date (Optional)</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !recurrenceEndDate && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : <span>Pick a date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={recurrenceEndDate}
+                              onSelect={(newDate) => newDate && setRecurrenceEndDate(startOfDay(newDate))}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
 
                     {/* Schedule Items - Only show for repeat type */}
@@ -826,16 +920,31 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                               <X className="h-4 w-4" />
                             </Button>
                           )}
-                          <div className="space-y-2">
-                            <Label htmlFor={`time-${schedule.id}`} className="text-sm font-medium">
-                              Time <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              id={`time-${schedule.id}`}
-                              type="time"
-                              value={schedule.time}
-                              onChange={(e) => updateScheduleTime(schedule.id, e.target.value)}
-                            />
+                          {/* Time and Duration inline */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor={`time-${schedule.id}`} className="text-sm font-medium">
+                                Time <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id={`time-${schedule.id}`}
+                                type="time"
+                                value={schedule.time}
+                                onChange={(e) => updateScheduleTime(schedule.id, e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`duration-${schedule.id}`} className="text-sm font-medium">
+                                Duration (mins) <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id={`duration-${schedule.id}`}
+                                type="number"
+                                min="1"
+                                value={schedule.durationMinutes ?? durationMinutes}
+                                onChange={(e) => updateScheduleDuration(schedule.id, parseInt(e.target.value) || 0)}
+                              />
+                            </div>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">
@@ -913,7 +1022,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           </div>
                         )}
                         <span className="font-medium">Free</span>
-                        <span className="text-sm text-gray-500 mt-1">Contact for details</span>
                       </CardContent>
                     </Card>
 
@@ -942,7 +1050,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           </div>
                         )}
                         <span className="font-medium">Paid</span>
-                        <span className="text-sm text-gray-500 mt-1">Stripe checkout</span>
                       </CardContent>
                     </Card>
                   </div>
@@ -979,47 +1086,112 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                       <p className="text-sm text-gray-500">Price per person for non-members.</p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="memberPrice" className="text-sm font-medium">
-                        Member Price <span className="text-gray-400 font-normal">(optional)</span>
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
-                        <Input
-                          id="memberPrice"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Leave blank to use org default"
-                          value={memberPrice}
-                          onChange={(e) => setMemberPrice(e.target.value)}
-                          className="pl-7"
-                        />
+                    {/* Per-Membership Price Overrides */}
+                    {memberships.length > 0 && (
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium">
+                          Membership Pricing <span className="text-gray-400 font-normal">(optional overrides)</span>
+                        </Label>
+                        <p className="text-sm text-gray-500">
+                          Override the default member price for specific memberships. Leave blank to use each membership&apos;s default pricing.
+                        </p>
+                        <div className="space-y-2 rounded-lg border p-3 bg-gray-50">
+                          {memberships.filter(m => m.isActive).map((membership) => {
+                            const defaultPrice = membership.memberPriceType === 'fixed'
+                              ? membership.memberFixedPrice
+                                ? `£${(membership.memberFixedPrice / 100).toFixed(2)}`
+                                : '—'
+                              : membership.memberDiscountPercent
+                                ? `${membership.memberDiscountPercent}% off`
+                                : '—'
+
+                            return (
+                              <div key={membership.id} className="flex items-center gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{membership.name}</p>
+                                  <p className="text-xs text-gray-500">Default: {defaultPrice}</p>
+                                </div>
+                                <div className="relative w-28">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">£</span>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="—"
+                                    value={membershipPrices[membership.id] || ''}
+                                    onChange={(e) => setMembershipPrices(prev => ({
+                                      ...prev,
+                                      [membership.id]: e.target.value
+                                    }))}
+                                    className="pl-7 h-9 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-500">
-                        Override the organization&apos;s default member pricing for this session.
-                        Leave blank to use the default (set in Billing settings).
+                    )}
+
+                    {memberships.length === 0 && !loadingMemberships && (
+                      <p className="text-sm text-gray-500 italic">
+                        No memberships configured. Create memberships in Billing settings to offer member pricing.
                       </p>
-                    </div>
+                    )}
                   </div>
                 )}
-
-                {/* Booking Instructions - show for both paid and free */}
-                <div className="space-y-2">
-                  <Label htmlFor="bookingInstructions" className="text-sm font-medium">
-                    Booking Instructions
-                  </Label>
-                  <Textarea
-                    id="bookingInstructions"
-                    placeholder="Instructions shown after booking (e.g., arrival time, what to bring)..."
-                    value={bookingInstructions}
-                    onChange={(e) => setBookingInstructions(e.target.value)}
-                    rows={4}
-                  />
-                  <p className="text-sm text-gray-500">Displayed on the confirmation page after booking.</p>
-                </div>
               </div>
             )}
+          </div>
+
+          {/* Status Section */}
+          <div className="rounded-lg overflow-hidden border">
+            <div className="px-4 py-3 bg-gray-50">
+              <span className="font-medium">Status</span>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+              <Select value={visibility} onValueChange={(value: 'open' | 'hidden' | 'closed') => setVisibility(value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4" />
+                      <span>Open</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="hidden">
+                    <div className="flex items-center gap-2">
+                      <EyeOff className="h-4 w-4" />
+                      <span>Hidden</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="closed">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      <span>Closed</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {visibility === 'open' && (
+                <p className="text-sm text-muted-foreground">
+                  Can be found and booked from the public calendar.
+                </p>
+              )}
+              {visibility === 'hidden' && (
+                <p className="text-sm text-muted-foreground">
+                  The public won&apos;t find the session, but a link can be shared privately and the session booked as normal. Use this setting to host private or restricted sessions.
+                </p>
+              )}
+              {visibility === 'closed' && (
+                <p className="text-sm text-muted-foreground">
+                  Cannot be found or booked.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Sticky Footer */}

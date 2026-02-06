@@ -32,7 +32,7 @@ interface CreateSessionTemplateParams {
   description: string | null
   capacity: number
   duration_minutes: number
-  is_open: boolean
+  visibility: 'open' | 'hidden' | 'closed'
   is_recurring: boolean
   one_off_start_time: string | null
   one_off_date: string | null
@@ -47,6 +47,8 @@ interface CreateSessionTemplateParams {
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
+  // Calendar display color
+  event_color?: string | null
 }
 
 interface CreateSessionTemplateResult {
@@ -72,6 +74,7 @@ interface CreateSessionScheduleParams {
   session_template_id: string
   time: string
   days: string[]
+  duration_minutes?: number | null
 }
 
 interface CreateSessionScheduleResult {
@@ -86,7 +89,7 @@ interface UpdateSessionTemplateParams {
   description?: string | null
   capacity?: number
   duration_minutes?: number
-  is_open?: boolean
+  visibility?: 'open' | 'hidden' | 'closed'
   is_recurring?: boolean
   one_off_start_time?: string | null
   one_off_date?: string | null
@@ -99,6 +102,8 @@ interface UpdateSessionTemplateParams {
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
+  // Calendar display color
+  event_color?: string | null
 }
 
 interface UpdateSessionTemplateResult {
@@ -173,7 +178,7 @@ interface DBSessionTemplate {
   description: string | null;
   capacity: number;
   duration_minutes: number;
-  is_open: boolean;
+  visibility: 'open' | 'hidden' | 'closed';
   is_recurring: boolean;
   one_off_start_time: string | null;
   one_off_date: string | null;
@@ -189,6 +194,8 @@ interface DBSessionTemplate {
   booking_instructions: string | null;
   // Image field
   image_url: string | null;
+  // Calendar display color
+  event_color: string | null;
 }
 
 export async function createSessionTemplate(params: CreateSessionTemplateParams): Promise<CreateSessionTemplateResult> {
@@ -248,7 +255,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         description: params.description,
         capacity: params.capacity,
         duration_minutes: params.duration_minutes,
-        is_open: params.is_open,
+        visibility: params.visibility,
         is_recurring: params.is_recurring,
         one_off_start_time: params.one_off_start_time,
         one_off_date: params.one_off_date,
@@ -263,6 +270,8 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         booking_instructions: params.booking_instructions,
         // Image field
         image_url: params.image_url,
+        // Calendar display color
+        event_color: params.event_color || '#3b82f6',
       })
       .select()
       .single()
@@ -491,7 +500,8 @@ export async function createSessionSchedule(params: CreateSessionScheduleParams)
           session_template_id: params.session_template_id,
           day_of_week: dayOfWeek,
           time: params.time,
-          is_active: true
+          is_active: true,
+          duration_minutes: params.duration_minutes || null
         })
         .select()
         .single()
@@ -605,7 +615,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         description,
         capacity,
         duration_minutes,
-        is_open,
+        visibility,
         is_recurring,
         one_off_start_time,
         one_off_date,
@@ -618,7 +628,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         pricing_type,
         drop_in_price,
         booking_instructions,
-        image_url
+        image_url,
+        event_color
       `)
       .eq('organization_id', orgId)
       .order("created_at", { ascending: false })
@@ -642,7 +653,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         is_active,
         created_at,
         updated_at,
-        time
+        time,
+        duration_minutes
       `)
       .in('session_template_id', templateIds)
 
@@ -691,6 +703,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
             days: [],
             session_id: template.id,
             is_recurring: true,
+            duration_minutes: schedule.duration_minutes,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }
@@ -729,7 +742,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         description: template.description,
         capacity: template.capacity,
         duration_minutes: template.duration_minutes,
-        is_open: template.is_open,
+        visibility: template.visibility,
         is_recurring: template.is_recurring ?? false,
         one_off_start_time: template.one_off_start_time,
         one_off_date: template.one_off_date,
@@ -747,6 +760,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         booking_instructions: template.booking_instructions,
         // Image field
         image_url: template.image_url,
+        // Calendar display color
+        event_color: template.event_color,
       } as unknown as SessionTemplate
 
       return transformedTemplate
@@ -801,7 +816,7 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         description,
         capacity,
         duration_minutes,
-        is_open,
+        visibility,
         is_recurring,
         one_off_start_time,
         one_off_date,
@@ -837,7 +852,8 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         is_active,
         created_at,
         updated_at,
-        time
+        time,
+        duration_minutes
       `)
       .eq("session_template_id", id);
 
@@ -871,6 +887,7 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
           days: [],
           session_id: template.id,
           is_recurring: true,
+          duration_minutes: schedule.duration_minutes,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -1197,10 +1214,10 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     }
 
 
-    // Get the session template to verify it exists and is open
+    // Get the session template to verify it exists and is bookable
     const { data: template, error: templateError } = await supabase
       .from("session_templates")
-      .select("duration_minutes, is_open, organization_id")
+      .select("duration_minutes, visibility, organization_id")
       .eq("id", params.session_template_id)
       .single()
 
@@ -1219,7 +1236,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     }
 
 
-    if (!template.is_open) {
+    if (template.visibility === 'closed') {
       return {
         success: false,
         error: "This session is not available for booking"
@@ -1331,8 +1348,23 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
   try {
     const supabase = createSupabaseClient()
 
-    // Get all open templates
-    const { data: templates, error: templatesError } = await supabase
+    // Check if the current user is an admin or superadmin
+    let isAdmin = false
+    const { userId } = await auth()
+    if (userId) {
+      const { data: userData } = await supabase
+        .from("clerk_users")
+        .select("role")
+        .eq("clerk_user_id", userId)
+        .single()
+
+      if (userData && (userData.role === 'admin' || userData.role === 'superadmin')) {
+        isAdmin = true
+      }
+    }
+
+    // Build the query - admins see 'open' and 'hidden', regular users only see 'open'
+    let query = supabase
       .from("session_templates")
       .select(`
         id,
@@ -1340,7 +1372,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         description,
         capacity,
         duration_minutes,
-        is_open,
+        visibility,
         is_recurring,
         one_off_start_time,
         one_off_date,
@@ -1353,10 +1385,21 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         pricing_type,
         drop_in_price,
         booking_instructions,
-        image_url
+        image_url,
+        event_color
       `)
-      .eq('is_open', true)
       .order("created_at", { ascending: false })
+
+    // Filter by visibility based on user role
+    if (isAdmin) {
+      // Admins see 'open' and 'hidden' sessions (but not 'closed')
+      query = query.in('visibility', ['open', 'hidden'])
+    } else {
+      // Regular users and guests only see 'open' sessions
+      query = query.eq('visibility', 'open')
+    }
+
+    const { data: templates, error: templatesError } = await query
 
     if (templatesError) {
       // Provide more helpful error message
@@ -1377,7 +1420,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
     // Get schedules for all templates
     const templateIds = templates.map(t => t.id)
-    
+
     const { data: schedules, error: schedulesError } = await supabase
       .from("session_schedules")
       .select(`
@@ -1387,7 +1430,8 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         is_active,
         created_at,
         updated_at,
-        time
+        time,
+        duration_minutes
       `)
       .in('session_template_id', templateIds)
 
@@ -1492,6 +1536,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
             days: [],
             session_id: template.id,
             is_recurring: true,
+            duration_minutes: schedule.duration_minutes,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }
@@ -1544,13 +1589,29 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 /**
  * Get public sessions for a specific organization.
  * Filters session templates by organization_id.
+ * Admins and superadmins can see hidden sessions; regular users only see open sessions.
  */
 export async function getPublicSessionsByOrg(organizationId: string): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
   try {
     const supabase = createSupabaseClient()
 
-    // Get all open templates for this organization
-    const { data: templates, error: templatesError } = await supabase
+    // Check if the current user is an admin or superadmin
+    let isAdmin = false
+    const { userId } = await auth()
+    if (userId) {
+      const { data: userData } = await supabase
+        .from("clerk_users")
+        .select("role")
+        .eq("clerk_user_id", userId)
+        .single()
+
+      if (userData && (userData.role === 'admin' || userData.role === 'superadmin')) {
+        isAdmin = true
+      }
+    }
+
+    // Build the query - admins see 'open' and 'hidden', regular users only see 'open'
+    let query = supabase
       .from("session_templates")
       .select(`
         id,
@@ -1558,7 +1619,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         description,
         capacity,
         duration_minutes,
-        is_open,
+        visibility,
         is_recurring,
         one_off_start_time,
         one_off_date,
@@ -1571,11 +1632,22 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         pricing_type,
         drop_in_price,
         booking_instructions,
-        image_url
+        image_url,
+        event_color
       `)
-      .eq('is_open', true)
       .eq('organization_id', organizationId)
       .order("created_at", { ascending: false })
+
+    // Filter by visibility based on user role
+    if (isAdmin) {
+      // Admins see 'open' and 'hidden' sessions (but not 'closed')
+      query = query.in('visibility', ['open', 'hidden'])
+    } else {
+      // Regular users and guests only see 'open' sessions
+      query = query.eq('visibility', 'open')
+    }
+
+    const { data: templates, error: templatesError } = await query
 
     if (templatesError) {
       const errorMessage = templatesError.message || 'Unknown error';
@@ -1604,7 +1676,8 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         is_active,
         created_at,
         updated_at,
-        time
+        time,
+        duration_minutes
       `)
       .in('session_template_id', templateIds)
 
@@ -1699,6 +1772,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
             days: [],
             session_id: template.id,
             is_recurring: true,
+            duration_minutes: schedule.duration_minutes,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }
@@ -2229,6 +2303,7 @@ export async function getPublicSessionById(
 
     const supabase = createSupabaseClient();
 
+    // Allow 'open' and 'hidden' sessions to be accessed via direct link, but not 'closed'
     const { data: sessionData, error: sessionError } = await supabase
       .from('session_templates')
       .select(`
@@ -2237,7 +2312,7 @@ export async function getPublicSessionById(
         description,
         capacity,
         duration_minutes,
-        is_open,
+        visibility,
         is_recurring,
         created_at,
         updated_at,
@@ -2250,7 +2325,7 @@ export async function getPublicSessionById(
         image_url
       `)
       .eq('id', sessionId)
-      .eq('is_open', true)
+      .neq('visibility', 'closed')
       .single();
 
     if (sessionError) {
@@ -2258,7 +2333,7 @@ export async function getPublicSessionById(
     }
 
     if (!sessionData) {
-      return { success: false, error: "Session template not found or not open for booking" };
+      return { success: false, error: "Session not found or not available for booking" };
     }
 
     // If startTime is provided, fetch the specific instance with its bookings
@@ -2514,4 +2589,186 @@ export async function getAdminSessionsForDateRange(
   } catch (error: any) {
     return { success: false, error: error.message };
   }
-} 
+}
+
+export interface AdminBooking {
+  id: string;
+  number_of_spots: number;
+  status: string;
+  amount_paid: number | null;
+  booked_at: string;
+  user: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string;
+    role: string | null;
+  };
+  session_instance: {
+    id: string;
+    start_time: string;
+    end_time: string;
+    template: {
+      id: string;
+      name: string;
+    };
+  };
+  is_member: boolean;
+}
+
+export interface GetAdminBookingsResult {
+  success: boolean;
+  data?: AdminBooking[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  error?: string;
+}
+
+export async function getAdminBookingsForOrg(
+  options?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }
+): Promise<GetAdminBookingsResult> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const supabase = createSupabaseClient();
+
+    // Get organization from headers
+    const { getTenantFromHeaders } = await import('@/lib/tenant-utils');
+    const tenant = await getTenantFromHeaders();
+    const orgId = tenant?.organizationId;
+
+    if (!orgId) {
+      return { success: false, error: "No organization specified" };
+    }
+
+    const page = options?.page ?? 1;
+    const pageSize = options?.pageSize ?? 25;
+    const offset = (page - 1) * pageSize;
+    const search = options?.search?.trim().toLowerCase() || "";
+
+    // Build the query for bookings
+    let query = supabase
+      .from('bookings')
+      .select(`
+        id,
+        number_of_spots,
+        status,
+        amount_paid,
+        booked_at,
+        user_id,
+        session_instance_id,
+        user:clerk_users(
+          id,
+          first_name,
+          last_name,
+          email,
+          role
+        ),
+        session_instance:session_instances(
+          id,
+          start_time,
+          end_time,
+          template:session_templates(
+            id,
+            name
+          )
+        )
+      `, { count: 'exact' })
+      .eq('organization_id', orgId)
+      .order('booked_at', { ascending: false });
+
+    // Fetch all bookings first (search is done client-side due to Supabase limitations with nested relations)
+    const { data: bookings, error, count } = await query;
+
+    console.log('[getAdminBookingsForOrg] Query result:', {
+      orgId,
+      bookingsCount: bookings?.length,
+      error: error?.message,
+      firstBooking: bookings?.[0]
+    });
+
+    if (error) {
+      console.error('[getAdminBookingsForOrg] Query error:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Get membership status for all users in the results
+    const userIds = [...new Set((bookings || []).map((b: any) => b.user?.id).filter(Boolean))];
+
+    let memberships: Record<string, boolean> = {};
+    if (userIds.length > 0) {
+      const { data: membershipData } = await supabase
+        .from('user_memberships')
+        .select('user_id, status, current_period_end')
+        .eq('organization_id', orgId)
+        .in('user_id', userIds);
+
+      if (membershipData) {
+        for (const m of membershipData) {
+          const isActive = m.status === 'active' ||
+            (m.status === 'cancelled' && m.current_period_end && new Date(m.current_period_end) > new Date());
+          memberships[m.user_id] = isActive;
+        }
+      }
+    }
+
+    // Transform data
+    let transformedBookings: AdminBooking[] = (bookings || []).map((b: any) => ({
+      id: b.id,
+      number_of_spots: b.number_of_spots,
+      status: b.status,
+      amount_paid: b.amount_paid,
+      booked_at: b.booked_at,
+      user: b.user,
+      session_instance: b.session_instance,
+      is_member: memberships[b.user?.id] || false
+    }));
+
+    // Apply search filter (client-side due to Supabase limitations with nested relations)
+    if (search) {
+      transformedBookings = transformedBookings.filter((b) => {
+        const firstName = b.user?.first_name?.toLowerCase() || "";
+        const lastName = b.user?.last_name?.toLowerCase() || "";
+        const email = b.user?.email?.toLowerCase() || "";
+        const fullName = `${firstName} ${lastName}`.trim();
+        return (
+          fullName.includes(search) ||
+          firstName.includes(search) ||
+          lastName.includes(search) ||
+          email.includes(search)
+        );
+      });
+    }
+
+    // Sort by session date then time (latest first)
+    transformedBookings.sort((a, b) => {
+      const dateA = new Date(a.session_instance?.start_time || 0);
+      const dateB = new Date(b.session_instance?.start_time || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    // Get total before pagination
+    const totalCount = transformedBookings.length;
+
+    // Apply pagination
+    transformedBookings = transformedBookings.slice(offset, offset + pageSize);
+
+    return {
+      success: true,
+      data: transformedBookings,
+      total: totalCount,
+      page,
+      pageSize
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

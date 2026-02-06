@@ -12,15 +12,15 @@ import {
   createOnboardingLink,
   createDashboardLink,
   disconnectStripeAccount,
+  getPromotionCodes,
   StripeConnectStatus,
+  PromotionCodeInfo,
 } from "@/app/actions/stripe"
-import {
-  getMembershipConfig,
-  configureMembershipPricing,
-  updateMemberPricingDefaults,
-  MembershipConfig,
-} from "@/app/actions/membership"
-import { CheckCircle, AlertCircle, ExternalLink, Loader2, CreditCard, Unlink, Users } from "lucide-react"
+import { getMemberships } from "@/app/actions/memberships"
+import type { Membership } from "@/lib/db/schema"
+import { MembershipsList } from "@/components/admin/memberships-list"
+import { MembershipForm } from "@/components/admin/membership-form"
+import { CheckCircle, AlertCircle, ExternalLink, Loader2, CreditCard, Unlink, Users, Tag, Copy, Check } from "lucide-react"
 import { toast } from "sonner"
 
 export default function BillingPage() {
@@ -38,19 +38,18 @@ export default function BillingPage() {
 function BillingPageContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<StripeConnectStatus | null>(null)
-  const [membershipConfig, setMembershipConfig] = useState<MembershipConfig | null>(null)
+  const [memberships, setMemberships] = useState<Membership[]>([])
+  const [promotionCodes, setPromotionCodes] = useState<PromotionCodeInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [copiedAccountId, setCopiedAccountId] = useState(false)
 
   // Membership form state
-  const [monthlyPrice, setMonthlyPrice] = useState("")
-  const [memberPriceType, setMemberPriceType] = useState<"discount" | "fixed">("discount")
-  const [discountPercent, setDiscountPercent] = useState("")
-  const [fixedPrice, setFixedPrice] = useState("")
-  const [savingMembership, setSavingMembership] = useState(false)
-  const [savingDefaults, setSavingDefaults] = useState(false)
+  const [membershipFormOpen, setMembershipFormOpen] = useState(false)
+  const [editingMembership, setEditingMembership] = useState<Membership | null>(null)
 
   const success = searchParams.get("success")
   const refresh = searchParams.get("refresh")
@@ -63,9 +62,10 @@ function BillingPageContent() {
     setLoading(true)
     setError(null)
 
-    const [statusResult, membershipResult] = await Promise.all([
+    const [statusResult, membershipsResult, promoCodesResult] = await Promise.all([
       getStripeConnectStatus(),
-      getMembershipConfig(),
+      getMemberships(),
+      getPromotionCodes(),
     ])
 
     if (statusResult.success && statusResult.data) {
@@ -74,24 +74,38 @@ function BillingPageContent() {
       setError(statusResult.error || "Failed to load status")
     }
 
-    if (membershipResult.success && membershipResult.data) {
-      setMembershipConfig(membershipResult.data)
-      // Initialize form state from config
-      if (membershipResult.data.monthlyPrice) {
-        setMonthlyPrice((membershipResult.data.monthlyPrice / 100).toString())
-      }
-      if (membershipResult.data.memberPriceType) {
-        setMemberPriceType(membershipResult.data.memberPriceType)
-      }
-      if (membershipResult.data.memberDiscountPercent) {
-        setDiscountPercent(membershipResult.data.memberDiscountPercent.toString())
-      }
-      if (membershipResult.data.memberFixedPrice) {
-        setFixedPrice((membershipResult.data.memberFixedPrice / 100).toString())
-      }
+    if (membershipsResult.success && membershipsResult.data) {
+      setMemberships(membershipsResult.data)
+    }
+
+    if (promoCodesResult.success && promoCodesResult.data) {
+      setPromotionCodes(promoCodesResult.data)
     }
 
     setLoading(false)
+  }
+
+  function handleEditMembership(membership: Membership) {
+    setEditingMembership(membership)
+    setMembershipFormOpen(true)
+  }
+
+  function handleCreateMembership() {
+    setEditingMembership(null)
+    setMembershipFormOpen(true)
+  }
+
+  function handleMembershipFormClose() {
+    setMembershipFormOpen(false)
+    setEditingMembership(null)
+  }
+
+  async function handleMembershipSuccess() {
+    // Refresh memberships list
+    const result = await getMemberships()
+    if (result.success && result.data) {
+      setMemberships(result.data)
+    }
   }
 
   async function loadStatus() {
@@ -104,52 +118,6 @@ function BillingPageContent() {
       setError(result.error || "Failed to load status")
     }
     setLoading(false)
-  }
-
-  async function handleSaveMembershipPrice() {
-    if (!monthlyPrice || parseFloat(monthlyPrice) <= 0) {
-      toast.error("Please enter a valid monthly price")
-      return
-    }
-
-    setSavingMembership(true)
-    const result = await configureMembershipPricing({
-      monthlyPrice: parseFloat(monthlyPrice),
-    })
-
-    if (result.success) {
-      toast.success("Membership pricing saved")
-      await loadData() // Refresh to get new config
-    } else {
-      toast.error(result.error || "Failed to save membership pricing")
-    }
-    setSavingMembership(false)
-  }
-
-  async function handleSavePricingDefaults() {
-    if (memberPriceType === "discount" && (!discountPercent || parseInt(discountPercent) <= 0)) {
-      toast.error("Please enter a valid discount percentage")
-      return
-    }
-    if (memberPriceType === "fixed" && (!fixedPrice || parseFloat(fixedPrice) <= 0)) {
-      toast.error("Please enter a valid fixed price")
-      return
-    }
-
-    setSavingDefaults(true)
-    const result = await updateMemberPricingDefaults({
-      memberPriceType,
-      memberDiscountPercent: memberPriceType === "discount" ? parseInt(discountPercent) : undefined,
-      memberFixedPrice: memberPriceType === "fixed" ? Math.round(parseFloat(fixedPrice) * 100) : undefined,
-    })
-
-    if (result.success) {
-      toast.success("Member pricing defaults saved")
-      await loadData()
-    } else {
-      toast.error(result.error || "Failed to save pricing defaults")
-    }
-    setSavingDefaults(false)
   }
 
   async function handleConnectStripe() {
@@ -201,6 +169,51 @@ function BillingPageContent() {
     setActionLoading(false)
   }
 
+  function handleCopyCode(code: string) {
+    navigator.clipboard.writeText(code)
+    setCopiedCode(code)
+    toast.success("Copied to clipboard")
+    setTimeout(() => setCopiedCode(null), 2000)
+  }
+
+  function handleCopyAccountId() {
+    if (status?.stripeAccountId) {
+      navigator.clipboard.writeText(status.stripeAccountId)
+      setCopiedAccountId(true)
+      toast.success("Account ID copied")
+      setTimeout(() => setCopiedAccountId(false), 2000)
+    }
+  }
+
+  function formatBalance(amount: number, currency: string) {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100)
+  }
+
+  function formatDiscount(code: PromotionCodeInfo) {
+    console.log("formatDiscount received:", code)
+    let discount = ""
+    if (code.percentOff) {
+      discount = `${code.percentOff}% off`
+    } else if (code.amountOff && code.currency) {
+      discount = `${formatBalance(code.amountOff, code.currency)} off`
+    } else {
+      return "Discount"
+    }
+
+    // Append duration
+    if (code.duration === "forever") {
+      return `${discount} forever`
+    } else if (code.duration === "repeating" && code.durationInMonths) {
+      return `${discount} for ${code.durationInMonths} month${code.durationInMonths > 1 ? "s" : ""}`
+    } else if (code.duration === "once") {
+      return `${discount} once`
+    }
+    return discount
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -208,6 +221,9 @@ function BillingPageContent() {
       </div>
     )
   }
+
+  const isFullyConnected = status?.connected && status?.onboardingComplete && status?.chargesEnabled && status?.payoutsEnabled
+  const hasIssue = status?.connected && status?.onboardingComplete && (!status?.chargesEnabled || !status?.payoutsEnabled)
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -240,36 +256,52 @@ function BillingPageContent() {
         </div>
       )}
 
-      {/* Stripe Connect Status Card */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <h3 className="text-base font-medium text-gray-900 mb-4">
-          Stripe Connect Status
-        </h3>
-
-        {!status?.connected ? (
-          // Not connected state
-          <div className="text-center py-6">
-            <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-              <CreditCard className="h-6 w-6 text-gray-400" />
+      {/* NOT CONNECTED: Show Stripe Connect prompt first */}
+      {!status?.connected && (
+        <>
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="text-center py-6">
+              <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                <CreditCard className="h-6 w-6 text-gray-400" />
+              </div>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">
+                Connect Your Stripe Account
+              </h4>
+              <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                Connect a Stripe account to start accepting payments for your sessions.
+                You&apos;ll earn money directly from bookings with automatic payouts.
+              </p>
+              <Button
+                onClick={handleConnectStripe}
+                disabled={actionLoading}
+                className="gap-2"
+              >
+                {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Connect with Stripe
+              </Button>
             </div>
-            <h4 className="text-lg font-medium text-gray-900 mb-2">
-              Connect Your Stripe Account
-            </h4>
-            <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
-              Connect a Stripe account to start accepting payments for your sessions.
-              You&apos;ll earn money directly from bookings with automatic payouts.
-            </p>
-            <Button
-              onClick={handleConnectStripe}
-              disabled={actionLoading}
-              className="gap-2"
-            >
-              {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Connect with Stripe
-            </Button>
           </div>
-        ) : !status.onboardingComplete ? (
-          // Onboarding incomplete state
+
+          {/* How Payments Work - only show when not connected */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <h3 className="text-base font-medium text-gray-900 mb-2">
+              How Payments Work
+            </h3>
+            <p className="text-sm text-gray-500">
+              Once your Stripe account is connected and verified, customers will be able to pay
+              for session bookings. Payments are deposited directly to your bank account
+              through Stripe, typically within 2-7 business days.
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* ONBOARDING INCOMPLETE */}
+      {status?.connected && !status.onboardingComplete && (
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <h3 className="text-base font-medium text-gray-900 mb-4">
+            Complete Stripe Setup
+          </h3>
           <div className="space-y-4">
             <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
               <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -291,28 +323,197 @@ function BillingPageContent() {
               Complete Setup
             </Button>
           </div>
-        ) : (
-          // Fully connected state
-          <div className="space-y-4">
-            <div className="grid gap-3">
-              <StatusItem
-                label="Account Connected"
-                status={status.connected}
-              />
-              <StatusItem
-                label="Details Submitted"
-                status={status.onboardingComplete}
-              />
-              <StatusItem
-                label="Charges Enabled"
-                status={status.chargesEnabled}
-              />
-              <StatusItem
-                label="Payouts Enabled"
-                status={status.payoutsEnabled}
-              />
+        </div>
+      )}
+
+      {/* CONNECTED: Show Memberships, Coupons, then Stripe at bottom */}
+      {status?.chargesEnabled && (
+        <>
+          {/* Memberships */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-gray-400" />
+              <h3 className="text-base font-medium text-gray-900">
+                Memberships
+              </h3>
             </div>
 
+            <MembershipsList
+              memberships={memberships}
+              onEdit={handleEditMembership}
+              onCreate={handleCreateMembership}
+              onRefresh={handleMembershipSuccess}
+            />
+          </div>
+
+          {/* Membership Form Sheet */}
+          <MembershipForm
+            open={membershipFormOpen}
+            onClose={handleMembershipFormClose}
+            membership={editingMembership}
+            onSuccess={handleMembershipSuccess}
+          />
+
+          {/* Coupons & Promotion Codes */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Tag className="h-5 w-5 text-gray-400" />
+              <h3 className="text-base font-medium text-gray-900">
+                Coupons & Promotion Codes
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Promotion codes let customers apply discounts at checkout. Create and manage them in your Stripe Dashboard.
+            </p>
+
+            {promotionCodes.length > 0 ? (
+              <div className="space-y-2">
+                {promotionCodes.map((code) => (
+                  <div
+                    key={code.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <code className="px-2 py-1 rounded bg-white border border-gray-200 text-sm font-mono font-medium">
+                        {code.code}
+                      </code>
+                      <span className="text-sm text-gray-600">
+                        {formatDiscount(code)}
+                      </span>
+                      {code.maxRedemptions ? (
+                        <span className="text-xs text-gray-400">
+                          {code.timesRedeemed}/{code.maxRedemptions} used
+                        </span>
+                      ) : code.timesRedeemed > 0 ? (
+                        <span className="text-xs text-gray-400">
+                          Used {code.timesRedeemed} times
+                        </span>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopyCode(code.code)}
+                      className="h-8 px-2"
+                    >
+                      {copiedCode === code.code ? (
+                        <Check className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-sm text-gray-500">
+                No promotion codes yet. Create one in Stripe to offer discounts.
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              onClick={() => window.open("https://dashboard.stripe.com/coupons", "_blank")}
+              className="gap-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Manage on Stripe
+            </Button>
+          </div>
+
+          {/* Stripe Section (at bottom when connected) */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-gray-400" />
+              <h3 className="text-base font-medium text-gray-900">Stripe</h3>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Your Stripe account handles payments, payouts, and customer billing. Coupons and promotion codes are also managed directly in Stripe.
+            </p>
+
+            {/* Account Details */}
+            <div className="space-y-3 pt-2">
+              {/* Business Name */}
+              {status.businessName && (
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">Business Name</span>
+                  <span className="text-sm font-medium text-gray-900">{status.businessName}</span>
+                </div>
+              )}
+
+              {/* Account ID */}
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-gray-600">Account ID</span>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs font-mono text-gray-500">{status.stripeAccountId}</code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopyAccountId}
+                    className="h-6 w-6 p-0"
+                  >
+                    {copiedAccountId ? (
+                      <Check className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Balance */}
+              {status.balance && (
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">Balance</span>
+                  <div className="text-sm text-right">
+                    <span className="font-medium text-gray-900">
+                      {formatBalance(status.balance.available, status.balance.currency)}
+                    </span>
+                    <span className="text-gray-400"> available</span>
+                    {status.balance.pending > 0 && (
+                      <>
+                        <span className="text-gray-300 mx-1">/</span>
+                        <span className="text-gray-500">
+                          {formatBalance(status.balance.pending, status.balance.currency)}
+                        </span>
+                        <span className="text-gray-400"> pending</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Status - only show if there's an issue */}
+              {isFullyConnected ? (
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">Status</span>
+                  <span className="flex items-center gap-1.5 text-sm text-green-600">
+                    <CheckCircle className="h-4 w-4" />
+                    Connected
+                  </span>
+                </div>
+              ) : hasIssue && (
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <p className="text-sm font-medium text-yellow-800">Account Issues</p>
+                  {!status.chargesEnabled && (
+                    <div className="flex items-center gap-1.5 text-sm text-yellow-600">
+                      <AlertCircle className="h-4 w-4" />
+                      Charges not enabled
+                    </div>
+                  )}
+                  {!status.payoutsEnabled && (
+                    <div className="flex items-center gap-1.5 text-sm text-yellow-600">
+                      <AlertCircle className="h-4 w-4" />
+                      Payouts not enabled
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
             <div className="pt-4 border-t border-gray-100 flex items-center gap-3">
               <Button
                 variant="outline"
@@ -365,170 +566,7 @@ function BillingPageContent() {
               )}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Membership Settings - Only show if Stripe is connected */}
-      {status?.chargesEnabled && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-6">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-gray-400" />
-            <h3 className="text-base font-medium text-gray-900">
-              Membership Settings
-            </h3>
-          </div>
-
-          {/* Monthly Subscription Price */}
-          <div className="space-y-3">
-            <Label htmlFor="monthlyPrice" className="text-sm font-medium">
-              Monthly Membership Price
-            </Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1 max-w-xs">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                  £
-                </span>
-                <Input
-                  id="monthlyPrice"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={monthlyPrice}
-                  onChange={(e) => setMonthlyPrice(e.target.value)}
-                  className="pl-7"
-                  placeholder="15.00"
-                />
-              </div>
-              <Button
-                onClick={handleSaveMembershipPrice}
-                disabled={savingMembership || !monthlyPrice}
-              >
-                {savingMembership && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                {membershipConfig?.priceId ? "Update Price" : "Create Price"}
-              </Button>
-            </div>
-            {membershipConfig?.priceId && (
-              <p className="text-sm text-green-600 flex items-center gap-1">
-                <CheckCircle className="h-4 w-4" />
-                Membership product configured on Stripe
-              </p>
-            )}
-            <p className="text-sm text-gray-500">
-              This creates a recurring monthly subscription product on your Stripe account.
-            </p>
-          </div>
-
-          {/* Member Session Pricing Defaults */}
-          <div className="border-t pt-6 space-y-4">
-            <Label className="text-sm font-medium">
-              Default Member Session Pricing
-            </Label>
-            <p className="text-sm text-gray-500">
-              How should member prices be calculated for sessions?
-            </p>
-
-            <RadioGroup
-              value={memberPriceType}
-              onValueChange={(v) => setMemberPriceType(v as "discount" | "fixed")}
-              className="space-y-3"
-            >
-              <div className="flex items-center space-x-3">
-                <RadioGroupItem value="discount" id="discount" />
-                <Label htmlFor="discount" className="font-normal cursor-pointer">
-                  Percentage discount off drop-in price
-                </Label>
-              </div>
-              <div className="flex items-center space-x-3">
-                <RadioGroupItem value="fixed" id="fixed" />
-                <Label htmlFor="fixed" className="font-normal cursor-pointer">
-                  Fixed price for all sessions
-                </Label>
-              </div>
-            </RadioGroup>
-
-            {memberPriceType === "discount" && (
-              <div className="flex items-center gap-2 ml-6">
-                <Input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={discountPercent}
-                  onChange={(e) => setDiscountPercent(e.target.value)}
-                  className="w-24"
-                  placeholder="20"
-                />
-                <span className="text-sm text-gray-600">% off drop-in price</span>
-              </div>
-            )}
-
-            {memberPriceType === "fixed" && (
-              <div className="flex items-center gap-2 ml-6">
-                <div className="relative w-32">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    £
-                  </span>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={fixedPrice}
-                    onChange={(e) => setFixedPrice(e.target.value)}
-                    className="pl-7"
-                    placeholder="5.00"
-                  />
-                </div>
-                <span className="text-sm text-gray-600">per session</span>
-              </div>
-            )}
-
-            <div className="pt-2">
-              <Button
-                variant="outline"
-                onClick={handleSavePricingDefaults}
-                disabled={savingDefaults}
-              >
-                {savingDefaults && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Save Pricing Defaults
-              </Button>
-            </div>
-
-            <p className="text-sm text-gray-500">
-              These defaults apply to all sessions. You can override the member price
-              for individual sessions in the session editor.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Info Card */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <h3 className="text-base font-medium text-gray-900 mb-2">
-          How Payments Work
-        </h3>
-        <p className="text-sm text-gray-500">
-          Once your Stripe account is connected and verified, customers will be able to pay
-          for session bookings. Payments are deposited directly to your bank account
-          through Stripe, typically within 2-7 business days.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function StatusItem({ label, status }: { label: string; status: boolean }) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm text-gray-600">{label}</span>
-      {status ? (
-        <span className="flex items-center gap-1.5 text-sm text-green-600">
-          <CheckCircle className="h-4 w-4" />
-          Active
-        </span>
-      ) : (
-        <span className="flex items-center gap-1.5 text-sm text-gray-400">
-          <AlertCircle className="h-4 w-4" />
-          Pending
-        </span>
+        </>
       )}
     </div>
   )

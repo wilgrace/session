@@ -37,7 +37,7 @@ export function DayPicker({
   const visibleDays = isMobile ? days.slice(0, 4) : days;
 
   return (
-    <div className="w-full flex items-stretch border-b bg-background">
+    <div className="w-full flex items-stretch border-b bg-background mt-1">
       <div className="flex flex-col justify-center">
         <button
           className="p-2 rounded hover:bg-muted transition shrink-0"

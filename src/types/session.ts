@@ -1,10 +1,12 @@
+export type SessionVisibility = 'open' | 'hidden' | 'closed';
+
 export interface Session {
   id: string
   name: string
   description?: string
   capacity: number
   duration: string
-  is_open: boolean
+  visibility: SessionVisibility
   created_at: string
   updated_at: string
   created_by: string
@@ -17,6 +19,7 @@ export interface SessionSchedule {
   days: string[]
   is_recurring: boolean
   date?: string
+  duration_minutes?: number | null
   created_at: string
   updated_at: string
 }
@@ -27,7 +30,7 @@ export interface SessionTemplate {
   description: string | null
   capacity: number
   duration_minutes: number
-  is_open: boolean
+  visibility: SessionVisibility
   is_recurring: boolean
   one_off_start_time?: string | null
   one_off_date?: string | null
@@ -46,6 +49,8 @@ export interface SessionTemplate {
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
+  // Calendar display color
+  event_color?: string | null
 }
 
 export interface SessionInstance {

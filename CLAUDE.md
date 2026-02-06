@@ -80,9 +80,9 @@ The middleware validates the slug against the database and sets `x-organization-
 2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile)
 3. **user_memberships** - User subscription status per organization
 4. **saunas** - Sauna/facility definitions (legacy, may be unused)
-5. **session_templates** - Master templates (recurring or one-off)
-6. **session_schedules** - Days/times for recurring sessions
-7. **session_instances** - Individual bookable time slots (UTC)
+5. **session_templates** - Master templates (recurring or one-off), includes `event_color` for calendar display
+6. **session_schedules** - Days/times for recurring sessions, includes optional `duration_minutes` override
+7. **session_instances** - Individual bookable time slots (UTC), stores calculated `start_time` and `end_time`
 8. **bookings** - User reservations (includes `price_paid`, `member_price_applied` for price tracking)
 9. **stripe_connect_accounts** - Stripe Connect account links per organization (includes membership product/price IDs)
 
@@ -90,6 +90,13 @@ The middleware validates the slug against the database and sets `x-organization-
 - Templates have many Schedules → generates Instances
 - Users create Bookings for Instances
 - All entities scoped to Organizations via `organization_id`
+
+### Session Duration Hierarchy
+Duration can be set at different levels with inheritance:
+1. **Schedule-level** (`session_schedules.duration_minutes`) - Highest priority, optional
+2. **Template-level** (`session_templates.duration_minutes`) - Default fallback
+
+When generating instances, the Edge Function uses: `schedule.duration_minutes || template.duration_minutes`
 
 ## Common Commands
 
@@ -215,9 +222,10 @@ All database operations use React 19 server actions in `src/app/actions/`:
 
 ### Timezone Handling
 - Templates store timezone (default: Europe/London)
-- Schedules store local time only (e.g., "14:00")
-- Instances stored in UTC
+- Schedules store local time (e.g., "14:00") and optional duration override
+- Instances stored in UTC with pre-calculated `start_time` and `end_time`
 - Display converts back to template timezone
+- Calendar views use schedule/template duration when instances aren't yet generated
 
 ### Authentication Flow
 1. User signs up via Clerk (through Auth Overlay or dedicated pages)
@@ -281,11 +289,31 @@ The session detail page (`/{slug}/{sessionId}`) handles all booking states using
 - Session page shows a toast notification on arrival
 - Guest users see a callout prompting account creation
 
+### Session Configuration
+
+The Create/Edit Session form (`src/components/admin/session-form.tsx`) is organized into sections:
+
+**General Section**:
+- Session Name, Description, Booking Instructions
+- Capacity (max participants)
+- Session Image (optional)
+- Calendar Event Color (hex color picker, default: `#3b82f6` blue)
+
+**Schedule Section**:
+- Schedule Type: Repeat (recurring) or Once (one-off)
+- Start/End Dates (displayed inline for recurring)
+- Time slots with per-schedule Duration (each schedule can have its own duration)
+
+**Payment Section**:
+- Pricing Type: Free or Paid
+- Drop-in Price (for non-members)
+- Membership Pricing overrides
+
 ### Session Generation
-1. Admin creates template with schedules
+1. Admin creates template with schedules (each schedule has time, days, and optional duration)
 2. `generate-instances` Edge Function triggered
-3. Function generates instances for each schedule × recurrence period
-4. Instances stored in UTC for booking
+3. Function generates instances using schedule-specific duration or template default
+4. Instances stored in UTC with calculated `start_time` and `end_time`
 
 ### Stripe Connect Integration
 Organizations connect their Stripe accounts to receive payments for bookings.

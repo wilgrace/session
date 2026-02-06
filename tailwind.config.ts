@@ -9,7 +9,17 @@ const config: Config = {
     "./src/**/*.{js,ts,jsx,tsx,mdx}"
   ],
   theme: {
+	container: {
+		center: true,
+		padding: "2rem",
+		screens: {
+		  "2xl": "1400px",
+		},
+	  },
   	extend: {
+		fontFamily: {
+			sans: ["Inter", "ui-sans-serif", "system-ui"], // Replace 'Inter' with your font of choice
+		  },
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -62,11 +72,15 @@ const config: Config = {
   				ring: 'hsl(var(--sidebar-ring))'
   			}
   		},
-  		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		},
+		  borderRadius: {
+			lg: 'var(--radius)',
+			md: 'calc(var(--radius) - 2px)',
+			sm: 'calc(var(--radius) - 4px)'
+		  },
+		  boxShadow: {
+			'subtle': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+			'modal': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+		  },
   		keyframes: {
   			'accordion-down': {
   				from: {
@@ -88,7 +102,12 @@ const config: Config = {
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out'
-  		}
+  		},
+		  fontSize: {
+			'xs': ['0.75rem', { lineHeight: '1rem' }],
+			'sm': ['0.875rem', { lineHeight: '1.25rem' }],
+			'base': ['0.9375rem', { lineHeight: '1.5rem' }], // Slightly smaller than standard 16px
+		  }
   	}
   },
   plugins: [require("tailwindcss-animate")],

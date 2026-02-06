@@ -12,6 +12,12 @@ export interface TenantOrganization {
   slug: string;
   description: string | null;
   logoUrl: string | null;
+  // Branding fields
+  faviconUrl: string | null;
+  headerImageUrl: string | null;
+  defaultSessionImageUrl: string | null;
+  buttonColor: string | null;
+  buttonTextColor: string | null;
 }
 
 /**
@@ -46,7 +52,7 @@ export const getOrganizationBySlug = cache(async (slug: string): Promise<TenantO
 
   const { data, error } = await supabase
     .from('organizations')
-    .select('id, name, slug, description, logo_url')
+    .select('id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color')
     .eq('slug', slug)
     .single();
 
@@ -60,6 +66,11 @@ export const getOrganizationBySlug = cache(async (slug: string): Promise<TenantO
     slug: data.slug,
     description: data.description,
     logoUrl: data.logo_url,
+    faviconUrl: data.favicon_url,
+    headerImageUrl: data.header_image_url,
+    defaultSessionImageUrl: data.default_session_image_url,
+    buttonColor: data.button_color,
+    buttonTextColor: data.button_text_color,
   };
 });
 
@@ -72,7 +83,7 @@ export const getOrganizationById = cache(async (id: string): Promise<TenantOrgan
 
   const { data, error } = await supabase
     .from('organizations')
-    .select('id, name, slug, description, logo_url')
+    .select('id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color')
     .eq('id', id)
     .single();
 
@@ -86,6 +97,11 @@ export const getOrganizationById = cache(async (id: string): Promise<TenantOrgan
     slug: data.slug,
     description: data.description,
     logoUrl: data.logo_url,
+    faviconUrl: data.favicon_url,
+    headerImageUrl: data.header_image_url,
+    defaultSessionImageUrl: data.default_session_image_url,
+    buttonColor: data.button_color,
+    buttonTextColor: data.button_text_color,
   };
 });
 
@@ -246,7 +262,7 @@ export const getUserOrganizations = cache(async (
   if (role === 'superadmin') {
     const { data: allOrgs, error: orgsError } = await supabase
       .from('organizations')
-      .select('id, name, slug, description, logo_url')
+      .select('id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color')
       .order('name');
 
     if (orgsError || !allOrgs) {
@@ -263,6 +279,11 @@ export const getUserOrganizations = cache(async (
         slug: org.slug,
         description: org.description,
         logoUrl: org.logo_url,
+        faviconUrl: org.favicon_url,
+        headerImageUrl: org.header_image_url,
+        defaultSessionImageUrl: org.default_session_image_url,
+        buttonColor: org.button_color,
+        buttonTextColor: org.button_text_color,
       },
     }));
   }
@@ -274,7 +295,7 @@ export const getUserOrganizations = cache(async (
 
   const { data: org, error: orgError } = await supabase
     .from('organizations')
-    .select('id, name, slug, description, logo_url')
+    .select('id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color')
     .eq('id', userData.organization_id)
     .single();
 
@@ -292,6 +313,11 @@ export const getUserOrganizations = cache(async (
       slug: org.slug,
       description: org.description,
       logoUrl: org.logo_url,
+      faviconUrl: org.favicon_url,
+      headerImageUrl: org.header_image_url,
+      defaultSessionImageUrl: org.default_session_image_url,
+      buttonColor: org.button_color,
+      buttonTextColor: org.button_text_color,
     },
   }];
 });

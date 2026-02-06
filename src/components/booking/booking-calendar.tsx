@@ -6,23 +6,17 @@ import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, ChevronDown, Lock } from "lucide-react"
+import { ChevronLeft, ChevronRight, Lock, Users, EyeOff } from "lucide-react"
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from "date-fns"
 import { SessionTemplate } from "@/types/session"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
 import { useUser } from "@clerk/nextjs"
-import { Badge } from "@/components/ui/badge"
 import { getInternalUserId } from "@/app/actions/session"
 import { LockedSessionDialog } from "./locked-session-tooltip"
+import { getEventColorValues } from "@/lib/event-colors"
 
 // Add custom styles to hide rbc-event-label
 const calendarStyles = `
@@ -90,38 +84,29 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   // Check if this is a free (locked) session
   const isFreeSession = event.resource.pricing_type === 'free'
 
-  const getAvailabilityColor = (available: number, total: number) => {
-    if (available === 0) return "bg-gray-500"
-    const percentage = (available / total) * 100
-    if (percentage > 50) return "bg-green-500"
-    if (percentage > 25) return "bg-yellow-500"
-    return "bg-red-500"
-  }
+  // Check if this is a hidden session (only admins see these)
+  const isHidden = event.resource.visibility === 'hidden'
+
+  const isFull = availableSpots === 0
 
   return (
-    <div className="flex flex-col gap-1 p-1">
-      <div className="text-xs text-gray-500">
-        {format(event.start, 'HH:mm')} - {event.resource.duration_minutes}mins
+    <div className="session-event-content">
+      <div className="session-meta flex justify-between items-center">
+        <span className="flex items-center gap-1">
+          <Users className="h-3 w-3" />
+          {isFull ? 'Waiting List' : availableSpots}
+        </span>
+        <span className="flex items-center gap-1">
+          {isFreeSession && <Lock className="h-3 w-3" />}
+          {isHidden && <EyeOff className="h-3 w-3" />}
+        </span>
       </div>
-      <div className="font-medium flex items-center gap-1">
-        {isFreeSession && <Lock className="h-3 w-3 text-amber-600" />}
+      <div className="session-name">
         {event.resource.name}
       </div>
-      {isFreeSession ? (
-        <Badge
-          variant="secondary"
-          className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs"
-        >
-          Contact for details
-        </Badge>
-      ) : (
-        <Badge
-          variant="secondary"
-          className={`${getAvailabilityColor(availableSpots, totalCapacity)} text-white px-2 py-0.5 rounded-full text-xs`}
-        >
-          {availableSpots === 0 ? 'Sold out' : `${totalSpotsBooked}/${totalCapacity}`}
-        </Badge>
-      )}
+      <div className="session-meta">
+        {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+      </div>
     </div>
   )
 }
@@ -203,6 +188,9 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
             const scheduleDay = day.toLowerCase()
 
             if (iterDay === scheduleDay) {
+              // Use schedule-specific duration if available, otherwise fall back to template default
+              const effectiveDuration = schedule.duration_minutes || template.duration_minutes;
+
               // Create event date by combining the current date with the schedule time
               const eventDate = new Date(
                 iterDate.getFullYear(),
@@ -220,7 +208,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
                 iterDate.getMonth(),
                 iterDate.getDate(),
                 hours,
-                minutes + template.duration_minutes,
+                minutes + effectiveDuration,
                 0,
                 0
               )
@@ -347,7 +335,22 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
   // Update the components type
   const components: Components<CalendarEvent> = {
     toolbar: () => null,
-    event: CustomEvent
+    event: CustomEvent,
+    header: ({ date, label }) => {
+      // For week and day views, split into day name and date number
+      if (currentView === 'week' || currentView === 'day') {
+        const dayName = format(date, 'EEE').toUpperCase() // SUN, MON, etc.
+        const dateNumber = format(date, 'd') // 21, 22, etc.
+        return (
+          <div className="rbc-header">
+            <span>{dayName}</span>
+            <span>{dateNumber}</span>
+          </div>
+        )
+      }
+      // For month view, use default
+      return <div className="rbc-header">{label}</div>
+    }
   }
 
   // For mobile view
@@ -376,62 +379,46 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
 
   // For desktop view
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-lg font-semibold">
-          {format(currentDate, 'MMMM yyyy')}
-        </div>
-        <div className="flex items-center space-x-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                {currentView.charAt(0).toUpperCase() + currentView.slice(1)}
-                <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setCurrentView('month')}>
-                Month
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCurrentView('week')}>
-                Week
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCurrentView('day')}>
-                Day
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToToday}
-          >
-            Today
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigatePeriod('prev')}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigatePeriod('next')}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+    <div className="border border-gray-200 rounded-lg">
+      {/* Sticky toolbar */}
+      <div className="sticky top-0 z-40 bg-white border-b h-[75px] flex items-center px-4">
+        <div className="flex items-center justify-between w-full">
+          <div className="text-lg font-semibold">
+            {format(currentDate, 'MMMM yyyy')}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToToday}
+            >
+              Today
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigatePeriod('prev')}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigatePeriod('next')}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
-      <div className="h-[600px] border rounded-lg">
-        <BigCalendar
-          localizer={localizer}
-          formats={calendarFormats}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: '100%' }}
+      {/* Calendar without fixed height */}
+      <BigCalendar
+        localizer={localizer}
+        formats={calendarFormats}
+        events={events}
+        startAccessor="start"
+        endAccessor="end"
+        style={{ height: 'auto', minHeight: '60vh' }}
           onSelectEvent={handleSelectEvent}
           view={currentView}
           onView={setCurrentView}
@@ -443,56 +430,47 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
           max={timeRange.max}
           eventPropGetter={(event: CalendarEvent) => {
             const isFreeSession = event.resource.pricing_type === 'free'
+            const customColor = event.resource.event_color
+            const isHidden = event.resource.visibility === 'hidden'
 
-            // Free sessions get amber styling
-            if (isFreeSession && !isAdmin) {
-              return {
-                className: 'cursor-pointer !p-0 free-session',
-                style: {
-                  backgroundColor: '#fffbeb', // amber-50
-                  color: '#92400e', // amber-800
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: '#fcd34d', // amber-300
-                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                  borderRadius: '0.375rem',
-                }
-              }
-            }
+            // Calculate availability for full/sold out state
+            const instance = event.resource.instances?.find(i => {
+              const instanceStart = new Date(i.start_time)
+              return instanceStart.getTime() === event.start.getTime()
+            })
+            const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+            const availableSpots = (event.resource.capacity || 10) - totalSpotsBooked
+            const isFull = availableSpots === 0
 
-            // Booked sessions get green styling
+            // Determine session type class
+            // Priority: booked > hidden > free > full > default
+            let typeClass = 'session-default'
             if (event.isBooked) {
-              return {
-                className: 'cursor-pointer !p-0 booked-session',
-                style: {
-                  backgroundColor: '#dcfce7',
-                  color: '#166534',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: '#86efac',
-                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                  borderRadius: '0.375rem',
-                }
-              }
+              typeClass = 'session-booked'
+            } else if (isHidden) {
+              typeClass = 'session-hidden'
+            } else if (isFreeSession && !isAdmin) {
+              typeClass = 'session-free'
+            } else if (isFull) {
+              typeClass = 'session-full'
             }
 
-            // Default styling for paid sessions
+            // Build style object with custom color if provided (and not overridden by special states)
+            const style: React.CSSProperties = {}
+            if (customColor && !event.isBooked && !isHidden && !(isFreeSession && !isAdmin) && !isFull) {
+              const colors = getEventColorValues(customColor)
+              style.borderLeftColor = colors.color500
+              style.backgroundColor = `${colors.color500}1A` // 10% opacity
+              style.color = colors.color700
+            }
+
             return {
-              className: 'cursor-pointer !p-0',
-              style: {
-                backgroundColor: 'white',
-                color: '#111827',
-                borderWidth: '1px',
-                borderStyle: 'solid',
-                borderColor: '#e5e7eb',
-                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                borderRadius: '0.375rem',
-              }
+              className: `session-event ${typeClass}`,
+              style,
             }
           }}
           components={components}
         />
-      </div>
 
       {/* Locked Session Dialog for free sessions */}
       <LockedSessionDialog
@@ -502,4 +480,4 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
       />
     </div>
   )
-} 
+}

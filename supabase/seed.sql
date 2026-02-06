@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS "public"."session_templates" (
     "description" "text",
     "capacity" integer NOT NULL,
     "duration_minutes" integer NOT NULL,
-    "is_open" boolean DEFAULT true NOT NULL,
+    "visibility" "text" DEFAULT 'open' NOT NULL,
     "is_recurring" boolean DEFAULT false NOT NULL,
     "one_off_start_time" timestamp with time zone,
     "recurrence_start_date" "date",
@@ -172,18 +172,45 @@ TRUNCATE TABLE public.bookings CASCADE;
 TRUNCATE TABLE public.session_instances CASCADE;
 TRUNCATE TABLE public.session_schedules CASCADE;
 TRUNCATE TABLE public.session_templates CASCADE;
+TRUNCATE TABLE public.session_membership_prices CASCADE;
+TRUNCATE TABLE public.memberships CASCADE;
 TRUNCATE TABLE public.stripe_connect_accounts CASCADE;
 TRUNCATE TABLE public.user_memberships CASCADE;
 TRUNCATE TABLE public.clerk_users CASCADE;
 TRUNCATE TABLE public.organizations CASCADE;
 
--- Create sample organizations
-INSERT INTO public.organizations (id, name, slug, description)
+-- ============================================================================
+-- ORGANIZATIONS
+-- ============================================================================
+INSERT INTO public.organizations (
+  id,
+  name,
+  slug,
+  description,
+  logo_url,
+  favicon_url,
+  header_image_url,
+  button_color,
+  button_text_color,
+  member_price_type
+)
 VALUES
-  ('org_2wzj16iQknhJygxeSYnYoOX2MO4', 'Cardiff Community Sawna', 'cardiff', 'Cardiff''s community-run mobile sauna bringing warmth and wellness to the city.'),
-  ('org_bristol_sawna_001', 'Bristol Community Sawna', 'bristol', 'Bristol''s community sauna experience bringing warmth to the harbour city.');
+  (
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'Cardiff Community Sawna',
+    'cardiff',
+    'Cardiff''s community-run mobile sauna bringing warmth and wellness to the city.',
+    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377969192.png',
+    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377972513.png',
+    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377978474.jpg',
+    '#C9501C',
+    '#ffffff',
+    'discount'
+  );
 
--- Create sample clerk users
+-- ============================================================================
+-- CLERK USERS
+-- ============================================================================
 INSERT INTO public.clerk_users (
   id,
   clerk_user_id,
@@ -194,12 +221,38 @@ INSERT INTO public.clerk_users (
   role
 )
 VALUES
-  ('4e376853-0880-4b3e-a669-edf561e116dc', 'user_2y6VL5FKMg9cwwlLvbjg01GPlxT', 'wil.grace@gmail.com', 'Wil', 'Grace', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', 'superadmin');
+  (
+    '4e376853-0880-4b3e-a669-edf561e116dc',
+    'user_2y6VL5FKMg9cwwlLvbjg01GPlxT',
+    'wil.grace@gmail.com',
+    'Wil',
+    'Grace',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'superadmin'
+  ),
+  -- Sample regular user for bookings
+  (
+    '5f487964-1991-4c4f-b77a-fef672f227ed',
+    'user_sample_booking_user_001',
+    'sarah.jones@example.com',
+    'Sarah',
+    'Jones',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'user'
+  ),
+  (
+    '6a598075-2aa2-5d5f-c88b-fef783f338fe',
+    'user_sample_booking_user_002',
+    'tom.williams@example.com',
+    'Tom',
+    'Williams',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'user'
+  );
 
--- Note: Superadmins can access any organization without explicit assignments.
--- The middleware checks the role directly from clerk_users table.
-
--- Create sample Stripe Connect account (connected and ready to accept payments)
+-- ============================================================================
+-- STRIPE CONNECT ACCOUNTS
+-- ============================================================================
 INSERT INTO public.stripe_connect_accounts (
   id,
   organization_id,
@@ -212,10 +265,82 @@ INSERT INTO public.stripe_connect_accounts (
   default_currency
 )
 VALUES
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', 'acct_1Ss2rZ8sdPMiIqvN', 'standard', true, true, true, 'GB', 'gbp'),
-  ('b2c3d4e5-f6a7-8901-bcde-f12345678901', 'org_bristol_sawna_001', 'acct_1Ss2Yt9k1BV0JX1c', 'standard', true, true, true, 'GB', 'gbp');
+  (
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'acct_1Ss2rZ8sdPMiIqvN',
+    'standard',
+    true,
+    true,
+    true,
+    'GB',
+    'gbp'
+  );
 
--- Create sample session templates
+-- ============================================================================
+-- MEMBERSHIPS
+-- ============================================================================
+INSERT INTO public.memberships (
+  id,
+  organization_id,
+  name,
+  description,
+  image_url,
+  price,
+  billing_period,
+  member_price_type,
+  member_discount_percent,
+  display_to_non_members,
+  show_on_booking_page,
+  show_on_membership_page,
+  stripe_product_id,
+  stripe_price_id,
+  is_active,
+  sort_order
+)
+VALUES
+  -- Regular membership: £15/month, 50% discount
+  (
+    '8798523d-e737-4a82-ae92-c7da93286f91',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'Regular',
+    'For people who come once a week',
+    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770383229478.jpg',
+    1500, -- £15.00 in pence
+    'monthly',
+    'discount',
+    50,
+    true,
+    true,
+    true,
+    'prod_TvebqcXpOZ0pVD',
+    'price_1SxnIA8sdPMiIqvNap3MKHiH',
+    true,
+    0
+  ),
+  -- Free membership: £0/month, 100% discount (for outreach)
+  (
+    '8990819e-aacb-494b-abf2-a54b0dd61d10',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'Free',
+    'For use during social outreach',
+    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770383208336.jpg',
+    0, -- Free
+    'monthly',
+    'discount',
+    100,
+    true,
+    true,
+    true,
+    NULL,
+    NULL,
+    true,
+    1
+  );
+
+-- ============================================================================
+-- SESSION TEMPLATES
+-- ============================================================================
 INSERT INTO public.session_templates (
   id,
   organization_id,
@@ -223,7 +348,7 @@ INSERT INTO public.session_templates (
   description,
   capacity,
   duration_minutes,
-  is_open,
+  visibility,
   is_recurring,
   recurrence_start_date,
   recurrence_end_date,
@@ -232,18 +357,39 @@ INSERT INTO public.session_templates (
   pricing_type,
   drop_in_price,
   booking_instructions,
-  image_url
+  image_url,
+  event_color
 )
 VALUES
-  -- Regular paid sauna session (recurring)
+  -- Communal - Off-Peak (Weekdays, Blue, £10)
   (
     '11111111-1111-1111-1111-111111111111',
     'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'Regular Sauna Session',
-    'Our standard 90-minute sauna session. Includes use of the sauna, cold plunge, and relaxation area. Towels provided.',
-    10,
-    90,
+    'Communal - Off-Peak',
+    'Our standard 75-minute communal sauna session during off-peak weekday hours. Includes use of the sauna, cold plunge, and relaxation area. Towels provided.',
+    16,
+    75,
+    'open',
     true,
+    CURRENT_DATE,
+    CURRENT_DATE + INTERVAL '6 months',
+    '4e376853-0880-4b3e-a669-edf561e116dc',
+    'Europe/London',
+    'paid',
+    1000, -- £10.00 in pence
+    'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
+    NULL,
+    'blue'
+  ),
+  -- Communal - Peak (Weekends, Green, £15)
+  (
+    '22222222-2222-2222-2222-222222222222',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'Communal - Peak',
+    'Our standard 75-minute communal sauna session during peak weekend hours. Includes use of the sauna, cold plunge, and relaxation area. Towels provided.',
+    16,
+    75,
+    'open',
     true,
     CURRENT_DATE,
     CURRENT_DATE + INTERVAL '6 months',
@@ -252,86 +398,54 @@ VALUES
     'paid',
     1500, -- £15.00 in pence
     'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
-    NULL
-  ),
-  -- Free community session (recurring)
-  (
-    '22222222-2222-2222-2222-222222222222',
-    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'Community Free Session',
-    'Free community sauna session. Open to all Cardiff residents. First-come, first-served basis.',
-    8,
-    60,
-    true,
-    true,
-    CURRENT_DATE,
-    CURRENT_DATE + INTERVAL '3 months',
-    '4e376853-0880-4b3e-a669-edf561e116dc',
-    'Europe/London',
-    'free',
     NULL,
-    'This is a free community session. Please contact us at hello@cardiffsawna.com for details on how to join.',
-    NULL
+    'green'
   ),
-  -- Premium evening session (recurring)
+  -- Concessions Only (Daily at 1:30pm, Yellow, £5)
   (
     '33333333-3333-3333-3333-333333333333',
     'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'Evening Wellness Session',
-    'Extended 2-hour evening session with guided breathing exercises and aromatherapy. Perfect for unwinding after work.',
-    6,
-    120,
-    true,
+    'Concessions Only',
+    'Discounted 75-minute communal sauna session for those who need a little help. Includes use of the sauna, cold plunge, and relaxation area. Towels provided.',
+    16,
+    75,
+    'open',
     true,
     CURRENT_DATE,
     CURRENT_DATE + INTERVAL '6 months',
     '4e376853-0880-4b3e-a669-edf561e116dc',
     'Europe/London',
     'paid',
-    2500, -- £25.00 in pence
-    'Arrive 15 minutes early for the breathing exercise introduction. Wear comfortable clothing. Herbal tea provided.',
-    NULL
+    500, -- £5.00 in pence
+    'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
+    NULL,
+    'yellow'
   ),
-  -- Bristol: Harbourside Sauna Session (recurring)
+  -- Friends & Family (Friday 3pm, Hidden, £5)
   (
     '44444444-4444-4444-4444-444444444444',
-    'org_bristol_sawna_001',
-    'Harbourside Sauna',
-    'Relax by the harbour with our 75-minute sauna session. Enjoy views of the waterfront while you unwind.',
-    8,
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'Friends & Family',
+    'Special 75-minute sauna session for friends and family. Direct link only. Includes use of the sauna, cold plunge, and relaxation area. Towels provided.',
+    16,
     75,
-    true,
-    true,
-    CURRENT_DATE,
-    CURRENT_DATE + INTERVAL '6 months',
-    '4e376853-0880-4b3e-a669-edf561e116dc',
-    'Europe/London',
-    'paid',
-    1200, -- £12.00 in pence
-    'Meet at the Harbourside near the M Shed. Look for the sauna trailer. Bring swimwear and a towel.',
-    NULL
-  ),
-  -- Bristol: Weekend Wellness (recurring)
-  (
-    '55555555-5555-5555-5555-555555555555',
-    'org_bristol_sawna_001',
-    'Weekend Wellness',
-    'Start your weekend right with our Saturday morning sauna and cold plunge experience.',
-    10,
-    90,
-    true,
+    'hidden',
     true,
     CURRENT_DATE,
     CURRENT_DATE + INTERVAL '6 months',
     '4e376853-0880-4b3e-a669-edf561e116dc',
     'Europe/London',
     'paid',
-    1800, -- £18.00 in pence
-    'Arrive 10 minutes early. We provide towels and refreshments. Located at Castle Park.',
-    NULL
+    500, -- £5.00 in pence
+    'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
+    NULL,
+    'blue'
   );
 
--- Create session schedules for recurring templates
+-- ============================================================================
+-- SESSION SCHEDULES
+-- Day of week: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+-- ============================================================================
 INSERT INTO public.session_schedules (
   id,
   session_template_id,
@@ -341,24 +455,272 @@ INSERT INTO public.session_schedules (
   organization_id
 )
 VALUES
-  -- Regular Sauna Session: Mon/Wed/Fri at 10:00, Sat/Sun at 09:00
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 1, '10:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Monday
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '11111111-1111-1111-1111-111111111111', 3, '10:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Wednesday
-  ('cccccccc-cccc-cccc-cccc-cccccccccccc', '11111111-1111-1111-1111-111111111111', 5, '10:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Friday
-  ('dddddddd-dddd-dddd-dddd-dddddddddddd', '11111111-1111-1111-1111-111111111111', 6, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Saturday
-  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '11111111-1111-1111-1111-111111111111', 0, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Sunday
+  -- ============================================================================
+  -- Communal - Off-Peak: Mon-Fri at 07:30, 09:00, 10:30, 12:00, 16:30, 18:00, 19:30
+  -- ============================================================================
+  -- Monday (day 1)
+  ('a0000001-0001-0001-0001-000000000001', '11111111-1111-1111-1111-111111111111', 1, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0001-0001-000000000002', '11111111-1111-1111-1111-111111111111', 1, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0001-0001-000000000003', '11111111-1111-1111-1111-111111111111', 1, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0001-0001-000000000004', '11111111-1111-1111-1111-111111111111', 1, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0001-0001-000000000005', '11111111-1111-1111-1111-111111111111', 1, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0001-0001-000000000006', '11111111-1111-1111-1111-111111111111', 1, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0001-0001-000000000007', '11111111-1111-1111-1111-111111111111', 1, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  -- Tuesday (day 2)
+  ('a0000001-0001-0002-0001-000000000001', '11111111-1111-1111-1111-111111111111', 2, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0002-0001-000000000002', '11111111-1111-1111-1111-111111111111', 2, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0002-0001-000000000003', '11111111-1111-1111-1111-111111111111', 2, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0002-0001-000000000004', '11111111-1111-1111-1111-111111111111', 2, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0002-0001-000000000005', '11111111-1111-1111-1111-111111111111', 2, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0002-0001-000000000006', '11111111-1111-1111-1111-111111111111', 2, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0002-0001-000000000007', '11111111-1111-1111-1111-111111111111', 2, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  -- Wednesday (day 3)
+  ('a0000001-0001-0003-0001-000000000001', '11111111-1111-1111-1111-111111111111', 3, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0003-0001-000000000002', '11111111-1111-1111-1111-111111111111', 3, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0003-0001-000000000003', '11111111-1111-1111-1111-111111111111', 3, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0003-0001-000000000004', '11111111-1111-1111-1111-111111111111', 3, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0003-0001-000000000005', '11111111-1111-1111-1111-111111111111', 3, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0003-0001-000000000006', '11111111-1111-1111-1111-111111111111', 3, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0003-0001-000000000007', '11111111-1111-1111-1111-111111111111', 3, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  -- Thursday (day 4)
+  ('a0000001-0001-0004-0001-000000000001', '11111111-1111-1111-1111-111111111111', 4, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0004-0001-000000000002', '11111111-1111-1111-1111-111111111111', 4, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0004-0001-000000000003', '11111111-1111-1111-1111-111111111111', 4, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0004-0001-000000000004', '11111111-1111-1111-1111-111111111111', 4, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0004-0001-000000000005', '11111111-1111-1111-1111-111111111111', 4, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0004-0001-000000000006', '11111111-1111-1111-1111-111111111111', 4, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0004-0001-000000000007', '11111111-1111-1111-1111-111111111111', 4, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  -- Friday (day 5)
+  ('a0000001-0001-0005-0001-000000000001', '11111111-1111-1111-1111-111111111111', 5, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0005-0001-000000000002', '11111111-1111-1111-1111-111111111111', 5, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0005-0001-000000000003', '11111111-1111-1111-1111-111111111111', 5, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0005-0001-000000000004', '11111111-1111-1111-1111-111111111111', 5, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0005-0001-000000000005', '11111111-1111-1111-1111-111111111111', 5, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0005-0001-000000000006', '11111111-1111-1111-1111-111111111111', 5, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000001-0001-0005-0001-000000000007', '11111111-1111-1111-1111-111111111111', 5, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
 
-  -- Community Free Session: Saturday at 14:00
-  ('ffffffff-ffff-ffff-ffff-ffffffffffff', '22222222-2222-2222-2222-222222222222', 6, '14:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Saturday
+  -- ============================================================================
+  -- Communal - Peak: Sat-Sun at 07:30, 09:00, 10:30, 12:00, 16:30, 18:00, 19:30
+  -- ============================================================================
+  -- Saturday (day 6)
+  ('a0000002-0002-0006-0001-000000000001', '22222222-2222-2222-2222-222222222222', 6, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0006-0001-000000000002', '22222222-2222-2222-2222-222222222222', 6, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0006-0001-000000000003', '22222222-2222-2222-2222-222222222222', 6, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0006-0001-000000000004', '22222222-2222-2222-2222-222222222222', 6, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0006-0001-000000000005', '22222222-2222-2222-2222-222222222222', 6, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0006-0001-000000000006', '22222222-2222-2222-2222-222222222222', 6, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0006-0001-000000000007', '22222222-2222-2222-2222-222222222222', 6, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  -- Sunday (day 0)
+  ('a0000002-0002-0000-0001-000000000001', '22222222-2222-2222-2222-222222222222', 0, '07:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0000-0001-000000000002', '22222222-2222-2222-2222-222222222222', 0, '09:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0000-0001-000000000003', '22222222-2222-2222-2222-222222222222', 0, '10:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0000-0001-000000000004', '22222222-2222-2222-2222-222222222222', 0, '12:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0000-0001-000000000005', '22222222-2222-2222-2222-222222222222', 0, '16:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0000-0001-000000000006', '22222222-2222-2222-2222-222222222222', 0, '18:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
+  ('a0000002-0002-0000-0001-000000000007', '22222222-2222-2222-2222-222222222222', 0, '19:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'),
 
-  -- Evening Wellness Session: Tue/Thu at 18:30
-  ('00000000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 2, '18:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Tuesday
-  ('00000000-0000-0000-0000-000000000002', '33333333-3333-3333-3333-333333333333', 4, '18:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Thursday
+  -- ============================================================================
+  -- Concessions Only: Every day at 13:30
+  -- ============================================================================
+  ('a0000003-0003-0000-0001-000000000001', '33333333-3333-3333-3333-333333333333', 0, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Sunday
+  ('a0000003-0003-0001-0001-000000000001', '33333333-3333-3333-3333-333333333333', 1, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Monday
+  ('a0000003-0003-0002-0001-000000000001', '33333333-3333-3333-3333-333333333333', 2, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Tuesday
+  ('a0000003-0003-0003-0001-000000000001', '33333333-3333-3333-3333-333333333333', 3, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Wednesday
+  ('a0000003-0003-0004-0001-000000000001', '33333333-3333-3333-3333-333333333333', 4, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Thursday
+  ('a0000003-0003-0005-0001-000000000001', '33333333-3333-3333-3333-333333333333', 5, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Friday
+  ('a0000003-0003-0006-0001-000000000001', '33333333-3333-3333-3333-333333333333', 6, '13:30', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'), -- Saturday
 
-  -- Bristol: Harbourside Sauna: Wed/Fri at 11:00, Sun at 10:00
-  ('00000000-0000-0000-0000-000000000003', '44444444-4444-4444-4444-444444444444', 3, '11:00', true, 'org_bristol_sawna_001'), -- Wednesday
-  ('00000000-0000-0000-0000-000000000004', '44444444-4444-4444-4444-444444444444', 5, '11:00', true, 'org_bristol_sawna_001'), -- Friday
-  ('00000000-0000-0000-0000-000000000005', '44444444-4444-4444-4444-444444444444', 0, '10:00', true, 'org_bristol_sawna_001'), -- Sunday
+  -- ============================================================================
+  -- Friends & Family: Friday at 15:00 (Hidden session)
+  -- ============================================================================
+  ('a0000004-0004-0005-0001-000000000001', '44444444-4444-4444-4444-444444444444', 5, '15:00', true, 'org_2wzj16iQknhJygxeSYnYoOX2MO4'); -- Friday
 
-  -- Bristol: Weekend Wellness: Saturday at 09:00
-  ('00000000-0000-0000-0000-000000000006', '55555555-5555-5555-5555-555555555555', 6, '09:00', true, 'org_bristol_sawna_001') -- Saturday
+-- ============================================================================
+-- SESSION INSTANCES (for sample bookings)
+-- Create instances for the next 7 days based on schedules
+-- Times are in UTC (Europe/London is UTC+0 in winter, UTC+1 in summer)
+-- For simplicity, using UTC times assuming GMT (no DST adjustment)
+-- ============================================================================
+INSERT INTO public.session_instances (
+  id,
+  organization_id,
+  template_id,
+  start_time,
+  end_time,
+  status
+)
+VALUES
+  -- Tomorrow's Off-Peak sessions (assuming tomorrow is a weekday)
+  (
+    'b0000001-0001-0001-0001-000000000001',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '11111111-1111-1111-1111-111111111111',
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '07:30')::timestamptz,
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '08:45')::timestamptz,
+    'scheduled'
+  ),
+  (
+    'b0000001-0001-0001-0001-000000000002',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '11111111-1111-1111-1111-111111111111',
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '09:00')::timestamptz,
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '10:15')::timestamptz,
+    'scheduled'
+  ),
+  (
+    'b0000001-0001-0001-0001-000000000003',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '11111111-1111-1111-1111-111111111111',
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '10:30')::timestamptz,
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '11:45')::timestamptz,
+    'scheduled'
+  ),
+  (
+    'b0000001-0001-0001-0001-000000000004',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '11111111-1111-1111-1111-111111111111',
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '12:00')::timestamptz,
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '13:15')::timestamptz,
+    'scheduled'
+  ),
+  -- Day 2 sessions
+  (
+    'b0000001-0001-0002-0001-000000000001',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '11111111-1111-1111-1111-111111111111',
+    (CURRENT_DATE + INTERVAL '2 days' + TIME '07:30')::timestamptz,
+    (CURRENT_DATE + INTERVAL '2 days' + TIME '08:45')::timestamptz,
+    'scheduled'
+  ),
+  (
+    'b0000001-0001-0002-0001-000000000002',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '11111111-1111-1111-1111-111111111111',
+    (CURRENT_DATE + INTERVAL '2 days' + TIME '09:00')::timestamptz,
+    (CURRENT_DATE + INTERVAL '2 days' + TIME '10:15')::timestamptz,
+    'scheduled'
+  ),
+  -- Concessions session
+  (
+    'b0000003-0003-0001-0001-000000000001',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '33333333-3333-3333-3333-333333333333',
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '13:30')::timestamptz,
+    (CURRENT_DATE + INTERVAL '1 day' + TIME '14:45')::timestamptz,
+    'scheduled'
+  ),
+  (
+    'b0000003-0003-0002-0001-000000000001',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '33333333-3333-3333-3333-333333333333',
+    (CURRENT_DATE + INTERVAL '2 days' + TIME '13:30')::timestamptz,
+    (CURRENT_DATE + INTERVAL '2 days' + TIME '14:45')::timestamptz,
+    'scheduled'
+  ),
+  -- Peak weekend session (assuming weekend is coming up)
+  (
+    'b0000002-0002-0003-0001-000000000001',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '22222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE + INTERVAL '3 days' + TIME '09:00')::timestamptz,
+    (CURRENT_DATE + INTERVAL '3 days' + TIME '10:15')::timestamptz,
+    'scheduled'
+  ),
+  (
+    'b0000002-0002-0003-0001-000000000002',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    '22222222-2222-2222-2222-222222222222',
+    (CURRENT_DATE + INTERVAL '3 days' + TIME '10:30')::timestamptz,
+    (CURRENT_DATE + INTERVAL '3 days' + TIME '11:45')::timestamptz,
+    'scheduled'
+  );
+
+-- ============================================================================
+-- SAMPLE BOOKINGS
+-- ============================================================================
+INSERT INTO public.bookings (
+  id,
+  organization_id,
+  session_instance_id,
+  user_id,
+  status,
+  number_of_spots,
+  notes,
+  payment_status,
+  amount_paid,
+  unit_price
+)
+VALUES
+  -- Sarah booked the 9am Off-Peak session tomorrow
+  (
+    'c0000001-0001-0001-0001-000000000001',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'b0000001-0001-0001-0001-000000000002',
+    '5f487964-1991-4c4f-b77a-fef672f227ed',
+    'confirmed',
+    2,
+    'Bringing a friend!',
+    'completed',
+    2000, -- £20 (2 x £10)
+    1000
+  ),
+  -- Tom booked the 10:30am Off-Peak session tomorrow
+  (
+    'c0000001-0001-0001-0001-000000000002',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'b0000001-0001-0001-0001-000000000003',
+    '6a598075-2aa2-5d5f-c88b-fef783f338fe',
+    'confirmed',
+    1,
+    NULL,
+    'completed',
+    1000, -- £10
+    1000
+  ),
+  -- Admin (Wil) booked a Concessions session
+  (
+    'c0000001-0001-0001-0001-000000000003',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'b0000003-0003-0001-0001-000000000001',
+    '4e376853-0880-4b3e-a669-edf561e116dc',
+    'confirmed',
+    1,
+    'Testing concessions pricing',
+    'completed',
+    500, -- £5
+    500
+  ),
+  -- Sarah also booked a Peak weekend session
+  (
+    'c0000001-0001-0001-0001-000000000004',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'b0000002-0002-0003-0001-000000000001',
+    '5f487964-1991-4c4f-b77a-fef672f227ed',
+    'confirmed',
+    1,
+    NULL,
+    'completed',
+    1500, -- £15 (peak rate)
+    1500
+  ),
+  -- Tom booked Peak weekend with 3 spots
+  (
+    'c0000001-0001-0001-0001-000000000005',
+    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
+    'b0000002-0002-0003-0001-000000000002',
+    '6a598075-2aa2-5d5f-c88b-fef783f338fe',
+    'confirmed',
+    3,
+    'Family booking',
+    'completed',
+    4500, -- £45 (3 x £15)
+    1500
+  );
+
+-- ============================================================================
+-- Notes:
+-- - Session instances are typically generated by the Edge Function (generate-instances)
+-- - The instances above are just samples for testing bookings
+-- - Run `supabase db reset` to apply this seed locally
+-- - For remote: ensure images are uploaded to production storage before running
+-- ============================================================================

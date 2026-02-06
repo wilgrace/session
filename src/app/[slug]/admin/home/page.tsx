@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DayPicker } from '@/components/admin/day-picker';
 import { useSessions } from '@/hooks/use-sessions';
 import { addDays, startOfDay, format, endOfDay } from 'date-fns';
 import { SessionDetails } from '@/components/admin/session-details';
 import { BookingsList } from '@/components/admin/bookings-list';
 import { BookingDetailsPanel } from '@/components/admin/booking-details-panel';
+import { BookingsListView } from '@/components/admin/bookings-list-view';
 import { useIsMobile } from '@/hooks/use-mobile';
-// import { UserButton } from "@clerk/nextjs"; // Uncomment and use in your header if needed
+import { useBookingsView } from '@/hooks/use-bookings-view';
 
 const NUM_DAYS = 14;
 
@@ -20,6 +21,14 @@ export default function AdminHomePage() {
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const isMobile = useIsMobile();
+  const { view, searchQuery, setView, setSearchQuery } = useBookingsView();
+
+  // Auto-switch to list view when search is active
+  useEffect(() => {
+    if (searchQuery && view === "calendar") {
+      setView("list");
+    }
+  }, [searchQuery, view, setView]);
 
   // Generate visible days - memoized to prevent infinite re-fetching
   const days = useMemo(
@@ -97,6 +106,46 @@ export default function AdminHomePage() {
     }
   }, [selectedBooking]);
 
+  // Render List View
+  if (view === "list") {
+    return (
+      <main className="flex-1 flex flex-col">
+        <div className="flex-1 flex">
+          <div className={selectedBooking && !isMobile ? 'border-r border-gray-200 flex-1' : 'flex-1 border-gray-200'}>
+            <BookingsListView
+              searchQuery={searchQuery}
+              onSelectBooking={setSelectedBooking}
+              onClearSearch={() => setSearchQuery("")}
+            />
+          </div>
+          {/* Booking Details Panel */}
+          {selectedBooking && !isMobile && (
+            <div className="w-full lg:w-96">
+              <BookingDetailsPanel
+                booking={selectedBooking}
+                onClose={() => setSelectedBooking(null)}
+                onEdit={() => {}}
+                onCheckIn={handleCheckIn}
+              />
+            </div>
+          )}
+        </div>
+        {/* Mobile overlay */}
+        {selectedBooking && isMobile && (
+          <div className="w-full lg:w-96 absolute inset-0 bg-background z-50">
+            <BookingDetailsPanel
+              booking={selectedBooking}
+              onClose={() => setSelectedBooking(null)}
+              onEdit={() => {}}
+              onCheckIn={handleCheckIn}
+            />
+          </div>
+        )}
+      </main>
+    );
+  }
+
+  // Render Calendar View (default)
   return (
     <main className="flex-1 flex flex-col">
       <DayPicker
@@ -140,7 +189,7 @@ export default function AdminHomePage() {
           ) : (
             <div className="text-muted-foreground text-center py-12">No sessions for this day.</div>
           )}
-        </div>  
+        </div>
         {/* Booking Details Panel */}
         {selectedBooking && !isMobile && (
           <div className="w-full lg:w-96">
@@ -166,4 +215,4 @@ export default function AdminHomePage() {
       )}
     </main>
   );
-} 
+}

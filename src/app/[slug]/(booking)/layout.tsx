@@ -1,34 +1,29 @@
-import { auth } from "@clerk/nextjs/server"
-import { BookingHeader } from "@/components/booking/booking-header"
 import { AuthOverlay } from "@/components/auth/auth-overlay"
-import { getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
+import { getTenantOrganization } from "@/lib/tenant-utils"
 
 interface BookingLayoutProps {
   children: React.ReactNode
-  params: Promise<{ slug: string }>
 }
 
 export default async function BookingLayout({
   children,
-  params,
 }: BookingLayoutProps) {
-  const { slug } = await params
   const organization = await getTenantOrganization()
-  const { userId } = await auth()
 
-  // Check if user has admin access (admin or superadmin role) for this org
-  const isAdmin = userId && organization
-    ? await canAccessAdminForOrg(userId, organization.id)
-    : false
+  // Get branding colors with defaults
+  const buttonColor = organization?.buttonColor || "#6c47ff"
+  const buttonTextColor = organization?.buttonTextColor || "#ffffff"
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      <BookingHeader
-        isAdmin={isAdmin}
-        slug={slug}
-        organizationName={organization?.name}
-      />
-      <main className="flex-1 overflow-auto md:p-6">{children}</main>
+    <div
+      className="min-h-screen"
+      style={{
+        backgroundColor: "#F6F2EF",
+        "--button-color": buttonColor,
+        "--button-text-color": buttonTextColor,
+      } as React.CSSProperties}
+    >
+      {children}
       <AuthOverlay />
     </div>
   )

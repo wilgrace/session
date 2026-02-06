@@ -53,7 +53,7 @@ export function CalendarPage({ initialSessions }: CalendarPageProps) {
   };
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex-1 space-y-4 pt-0">
       {!sessions || sessions.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-gray-500">No sessions found. Click "New Session" to create one.</p>

@@ -2,13 +2,19 @@
 
 import { format } from "date-fns"
 import Image from "next/image"
-import { Card, CardContent } from "@/components/ui/card"
-import { SessionTemplate } from "@/types/session"
+import { SessionTemplate, SessionVisibility } from "@/types/session"
 
 interface SessionDetailsProps {
   session: SessionTemplate
   startTime?: Date
   currentUserSpots?: number
+}
+
+function getStatusLabel(visibility: SessionVisibility, spotsRemaining: number): string {
+  if (visibility === 'closed') return 'Closed'
+  if (visibility === 'hidden') return 'Hidden'
+  if (spotsRemaining <= 0) return 'Waiting List'
+  return 'Open'
 }
 
 export function SessionDetails({
@@ -25,11 +31,14 @@ export function SessionDetails({
   // Calculate spots remaining
   const spotsRemaining = session.capacity - totalSpotsBooked
 
+  // Get status label
+  const statusLabel = getStatusLabel(session.visibility, spotsRemaining)
+
   return (
-    <Card className="border-0 shadow-none md:border md:shadow overflow-hidden">
+    <div>
       {/* Session Image */}
       {session.image_url && (
-        <div className="relative w-full h-48 md:h-64">
+        <div className="relative w-full h-48 md:h-64 rounded-lg overflow-hidden">
           <Image
             src={session.image_url}
             alt={session.name}
@@ -39,36 +48,35 @@ export function SessionDetails({
           />
         </div>
       )}
-      <CardContent className="p-6 space-y-6">
-        <div className="space-y-4">
-          <div>
-            {startTime && (
-              <h2 className="text-2xl font-bold">
-                {format(startTime, "hh:mm")} • {format(startTime, "EEEE d MMM")}
-              </h2>
-            )}
-            <p className="text-muted-foreground text-lg">{session.name}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Duration</h3>
-              <p>{session.duration_minutes} minutes</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Availability</h3>
-              <p>
-                {spotsRemaining} of {session.capacity} spots
-              </p>
-            </div>
-          </div>
-
-          <div className="prose prose-sm">
-            <p>{session.description}</p>
-          </div>
-
+      <div className="py-6 space-y-4">
+        <div>
+          {startTime && (
+            <h2 className="text-2xl font-bold">
+              {format(startTime, "HH:mm")} - {format(startTime, "EEEE d MMMM")}
+            </h2>
+          )}
+          <p className="text-muted-foreground text-lg">{session.name}</p>
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Duration</h3>
+            <p className="font-medium">{session.duration_minutes} minutes</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Availability</h3>
+            <p className="font-medium">
+              {spotsRemaining > 0 ? `${spotsRemaining} of ${session.capacity}` : 'Full'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
+            <p className="font-medium">{statusLabel}</p>
+          </div>
+        </div>
+
+        <p className="text-muted-foreground">{session.description}</p>
+      </div>
+    </div>
   )
 }

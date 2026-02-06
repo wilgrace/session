@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { List, ChevronLeft, ChevronRight, Calendar, ChevronDown, RefreshCw, Trash2, Pencil } from "lucide-react"
+import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Trash2, Pencil, Users, Lock, ArrowUp, ArrowDown, EyeOff } from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek as dateFnsStartOfWeek, endOfWeek as dateFnsEndOfWeek, startOfDay, endOfDay, getDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { cn } from "@/lib/utils"
@@ -13,13 +13,8 @@ import { Calendar as BigCalendar, momentLocalizer, View, Components, EventProps,
 import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { mapIntToDayString } from "@/lib/day-utils"
+import { getEventColorValues } from "@/lib/event-colors"
 
 // Add custom styles to hide rbc-event-label
 const calendarStyles = `
@@ -58,7 +53,7 @@ interface CalendarViewProps {
   showControls?: boolean
 }
 
-// Add this before the CalendarView component
+// Custom event component matching the public booking calendar style
 const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   const totalCapacity = event.resource.capacity || 10
   // Find the instance for this event
@@ -70,36 +65,47 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
   const availableSpots = totalCapacity - totalSpotsBooked
 
-  const getAvailabilityColor = (available: number, total: number) => {
-    if (available === 0) return "bg-gray-500"
-    const percentage = (available / total) * 100
-    if (percentage > 50) return "bg-green-500"
-    if (percentage > 25) return "bg-yellow-500"
-    return "bg-red-500"
-  }
+  // Check if this is a free (locked) session
+  const isFreeSession = event.resource.pricing_type === 'free'
+  const isFull = availableSpots === 0
+
+  // Check visibility status
+  const visibility = event.resource.visibility ?? 'open'
+  const isHidden = visibility === 'hidden'
+  const isClosed = visibility === 'closed'
 
   return (
-    <div className="flex flex-col gap-1 p-1">
-      <div className="text-xs text-gray-500">
-        {format(event.start, 'HH:mm')} - {event.resource.duration_minutes}mins
+    <div className="session-event-content">
+      <div className="session-meta flex justify-between items-center">
+        <span className="flex items-center gap-1">
+          <Users className="h-3 w-3" />
+          {isFull ? 'Waiting List' : `${totalSpotsBooked}/${totalCapacity}`}
+        </span>
+        <span className="flex items-center gap-1">
+          {isFreeSession && <Lock className="h-3 w-3" />}
+          {isHidden && <EyeOff className="h-3 w-3" />}
+          {isClosed && <Lock className="h-3 w-3" />}
+        </span>
       </div>
-      <div className="font-medium">
+      <div className="session-name">
         {event.resource.name}
       </div>
-      <Badge 
-        variant="secondary" 
-        className={`${getAvailabilityColor(availableSpots, totalCapacity)} text-white px-2 py-0.5 rounded-full text-xs`}
-      >
-        {availableSpots === 0 ? 'Sold out' : `${totalSpotsBooked}/${totalCapacity}`}
-      </Badge>
+      <div className="session-meta">
+        {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+      </div>
     </div>
   )
 }
+
+type SortDirection = "asc" | "desc" | null
+type SortColumn = "name" | "schedule" | "duration" | "capacity" | "status" | null
 
 export function CalendarView({ sessions, onEditSession, onCreateSession, onDeleteSession, showControls = true }: CalendarViewProps) {
   const { view, setView, date, setDate } = useCalendarView()
   const [currentView, setCurrentView] = useState<View>('week')
   const [isMobile, setIsMobile] = useState(false)
+  const [sortColumn, setSortColumn] = useState<SortColumn>("name")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
 
   // Debug logging for sessions data
   useEffect(() => {
@@ -176,6 +182,9 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
           
           // Check if this day is in the schedule
           if (schedule.days.includes(mapIntToDayString(adjustedDayOfWeek, true))) {
+            // Use schedule-specific duration if available, otherwise fall back to template default
+            const effectiveDuration = schedule.duration_minutes || session.duration_minutes;
+
             // Create event in local time to match what the user sees
             const startTime = new Date(
               currentDate.getFullYear(),
@@ -192,7 +201,7 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               currentDate.getMonth(),
               currentDate.getDate(),
               hours,
-              minutes + session.duration_minutes,
+              minutes + effectiveDuration,
               0,
               0
             );
@@ -328,21 +337,93 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
     setDate(new Date())
   }
 
+  // Handle column header click for sorting
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> off
+      if (sortDirection === "asc") {
+        setSortDirection("desc")
+      } else if (sortDirection === "desc") {
+        setSortColumn(null)
+        setSortDirection(null)
+      }
+    } else {
+      setSortColumn(column)
+      setSortDirection("asc")
+    }
+  }
+
+  // Sort sessions based on current sort state
+  const sortedSessions = useMemo(() => {
+    if (!sortColumn || !sortDirection) return sessions
+
+    return [...sessions].sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (sortColumn) {
+        case "name":
+          aVal = a.name.toLowerCase()
+          bVal = b.name.toLowerCase()
+          break
+        case "duration":
+          aVal = a.duration_minutes
+          bVal = b.duration_minutes
+          break
+        case "capacity":
+          aVal = a.capacity
+          bVal = b.capacity
+          break
+        case "status":
+          // Sort by visibility: open=2, hidden=1, closed=0
+          const visOrder = { 'open': 2, 'hidden': 1, 'closed': 0 }
+          aVal = visOrder[a.visibility ?? 'open'] ?? 2
+          bVal = visOrder[b.visibility ?? 'open'] ?? 2
+          break
+        default:
+          return 0
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1
+      return 0
+    })
+  }, [sessions, sortColumn, sortDirection])
+
+  // Sortable column header component
+  const SortableHeader = ({ column, children, className }: { column: SortColumn; children: React.ReactNode; className?: string }) => {
+    const isActive = sortColumn === column
+    return (
+      <TableHead
+        className={`cursor-pointer select-none hover:bg-muted/50 group ${className || ""}`}
+        onClick={() => handleSort(column)}
+      >
+        <div className="flex items-center gap-1">
+          {children}
+          {isActive && sortDirection === "asc" && <ArrowUp className="h-3 w-3" />}
+          {isActive && sortDirection === "desc" && <ArrowDown className="h-3 w-3" />}
+          {!isActive && <ArrowUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity" />}
+        </div>
+      </TableHead>
+    )
+  }
+
   // Custom components for the calendar
   const components: Components<CalendarEvent> = {
     toolbar: () => null,
     header: ({ date, label }) => {
-      if (currentView === 'month') {
-        return <div className="rbc-header">{label}</div>
-      }
-      if (currentView === 'day') {
+      // For week and day views, split into day name and date number
+      if (currentView === 'week' || currentView === 'day') {
+        const dayName = format(date, 'EEE').toUpperCase() // SUN, MON, etc.
+        const dateNumber = format(date, 'd') // 21, 22, etc.
         return (
           <div className="rbc-header">
-            <div className="text-lg font-semibold mb-2">{format(date, 'EEEE, MMMM d, yyyy')}</div>
-            {label}
+            <span>{dayName}</span>
+            <span>{dateNumber}</span>
           </div>
         )
       }
+      // For month view, use default
       return <div className="rbc-header">{label}</div>
     },
     event: CustomEvent
@@ -351,62 +432,46 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
   return (
     <div className="space-y-6">
       {view === "calendar" ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold">
-              {format(date, 'MMMM yyyy')}
-            </div>
-            <div className="flex items-center space-x-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    {currentView.charAt(0).toUpperCase() + currentView.slice(1)}
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setCurrentView('month')}>
-                    Month
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setCurrentView('week')}>
-                    Week
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setCurrentView('day')}>
-                    Day
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={goToToday}
-              >
-                Today
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigatePeriod('prev')}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigatePeriod('next')}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+        <div>
+          {/* Sticky toolbar */}
+          <div className="sticky top-[65px] z-30 bg-white h-[75px] flex items-center px-8">
+            <div className="flex items-center justify-between w-full">
+              <div className="text-lg font-semibold">
+                {format(date, 'MMMM yyyy')}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToToday}
+                >
+                  Today
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => navigatePeriod('prev')}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => navigatePeriod('next')}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
-          <div className="h-[600px] border rounded-lg">
-            <BigCalendar
-              localizer={localizer}
-              formats={calendarFormats}
-              events={events}
-              startAccessor="start"
-              endAccessor="end"
-              style={{ height: '100%' }}
+          {/* Calendar without fixed height */}
+          <BigCalendar
+            localizer={localizer}
+            formats={calendarFormats}
+            events={events}
+            startAccessor="start"
+            endAccessor="end"
+            style={{ height: 'auto', minHeight: '60vh' }}
               selectable
               onSelectSlot={handleSelectSlot}
               onSelectEvent={handleSelectEvent}
@@ -418,41 +483,69 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               timeslots={2}
               min={timeRange.min}
               max={timeRange.max}
-              eventPropGetter={(event: CalendarEvent) => ({
-                className: 'cursor-pointer !p-0',
-                style: {
-                  backgroundColor: 'white',
-                  color: '#111827',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: '#e5e7eb',
-                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                  borderRadius: '0.375rem',
-                  '&:hover': {
-                    backgroundColor: '#f3f4f6'
-                  }
+              eventPropGetter={(event: CalendarEvent) => {
+                const isFreeSession = event.resource.pricing_type === 'free'
+                const customColor = event.resource.event_color
+
+                // Calculate availability for full/sold out state
+                const instance = event.resource.instances?.find(i => {
+                  const instanceStart = new Date(i.start_time)
+                  return instanceStart.getTime() === event.start.getTime()
+                })
+                const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+                const availableSpots = (event.resource.capacity || 10) - totalSpotsBooked
+                const isFull = availableSpots === 0
+
+                // Check visibility status
+                const visibility = event.resource.visibility ?? 'open'
+                const isHidden = visibility === 'hidden'
+                const isClosed = visibility === 'closed'
+
+                // Determine session type class
+                // Priority: closed > hidden > free > full > default
+                let typeClass = 'session-default'
+                if (isClosed) {
+                  typeClass = 'session-closed'
+                } else if (isHidden) {
+                  typeClass = 'session-hidden'
+                } else if (isFreeSession) {
+                  typeClass = 'session-free'
+                } else if (isFull) {
+                  typeClass = 'session-full'
                 }
-              })}
+
+                // Build style object with custom color if provided (and not overridden by special states)
+                const style: React.CSSProperties = {}
+                if (customColor && !isFreeSession && !isFull && !isHidden && !isClosed) {
+                  const colors = getEventColorValues(customColor)
+                  style.borderLeftColor = colors.color500
+                  style.backgroundColor = `${colors.color500}1A` // 10% opacity
+                  style.color = colors.color700
+                }
+
+                return {
+                  className: `session-event ${typeClass}`,
+                  style,
+                }
+              }}
               components={components}
               defaultView="week"
             />
-          </div>
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Schedule</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Capacity</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sessions.map((template) => (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <SortableHeader column="name">Name</SortableHeader>
+              <TableHead>Schedule</TableHead>
+              <SortableHeader column="duration">Duration</SortableHeader>
+              <SortableHeader column="capacity">Capacity</SortableHeader>
+              <SortableHeader column="status">Status</SortableHeader>
+              <TableHead className="w-[100px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedSessions.map((template) => (
                 <TableRow
                   key={template.id}
                   className="cursor-pointer"
@@ -508,8 +601,16 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                   <TableCell>{template.duration_minutes} minutes</TableCell>
                   <TableCell>{template.capacity}</TableCell>
                   <TableCell>
-                    <Badge variant={template.is_open ? "success" : "secondary"}>
-                      {template.is_open ? "Open" : "Closed"}
+                    <Badge
+                      variant={
+                        template.visibility === 'open' ? "success" :
+                        template.visibility === 'hidden' ? "outline" :
+                        "secondary"
+                      }
+                    >
+                      {template.visibility === 'open' ? "Open" :
+                       template.visibility === 'hidden' ? "Hidden" :
+                       "Closed"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -546,7 +647,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               ))}
             </TableBody>
           </Table>
-        </div>
       )}
     </div>
   )

@@ -1,13 +1,16 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import Link from "next/link"
+import { ChevronLeft } from "lucide-react"
 import { SessionDetails } from "@/components/booking/session-details"
 import { BookingForm } from "@/components/booking/booking-form"
+import { SessionAuthControls } from "@/components/booking/session-auth-controls"
 import { SessionTemplate } from "@/types/session"
 import { useUser } from "@clerk/nextjs"
 import { getBookingDetails, getPublicSessionById, checkUserExistingBooking } from "@/app/actions/session"
-import { getBookingPricingData, BookingPricingData } from "@/app/actions/membership"
-import { useRouter, useSearchParams } from "next/navigation"
+import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
+import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
 interface SessionPageClientProps {
@@ -20,6 +23,8 @@ interface SessionPageClientProps {
     confirmed?: string // Show confirmation toast
   }
   slug: string
+  organizationName: string | null
+  isAdmin: boolean
 }
 
 // Calculate spots remaining for a session
@@ -32,7 +37,7 @@ function calculateSpotsRemaining(session: SessionTemplate, currentUserSpots: num
   return session.capacity - totalSpotsBooked
 }
 
-export function SessionPageClient({ sessionId, searchParams, slug }: SessionPageClientProps) {
+export function SessionPageClient({ sessionId, searchParams, slug, organizationName, isAdmin }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
   const { toast } = useToast()
@@ -42,7 +47,7 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [bookingDetails, setBookingDetails] = useState<any>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
-  const [pricingData, setPricingData] = useState<BookingPricingData | null>(null)
+  const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
   const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
   const initialFetchDoneRef = useRef(false)
@@ -186,10 +191,10 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
 
         // Fetch pricing data for paid sessions
         if (result.data.pricing_type === "paid" && result.data.drop_in_price) {
-          const pricingResult = await getBookingPricingData({
+          const pricingResult = await getBookingMembershipPricingData({
             organizationId: result.data.organization_id,
             dropInPrice: result.data.drop_in_price,
-            templateMemberPrice: result.data.member_price,
+            sessionTemplateId: sessionId,
           })
           if (pricingResult.success && pricingResult.data) {
             setPricingData(pricingResult.data)
@@ -257,32 +262,72 @@ export function SessionPageClient({ sessionId, searchParams, slug }: SessionPage
   } : null
 
   return (
-    <div className="container mx-auto py-4 md:py-0">
-      <div className="grid md:grid-cols-2 md:gap-8">
-        <SessionDetails
-          session={session}
-          startTime={startTime || undefined}
-          currentUserSpots={bookingDetails?.number_of_spots || 0}
-        />
-        <div className="md:hidden">
-          <hr className="border-gray-200 my-0 mx-6" />
+    <div className="md:grid md:grid-cols-2 min-h-screen">
+      {/* Left Column - Beige background */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px]">
+          {/* Mobile header row */}
+          <div className="flex items-center justify-between py-4 md:hidden">
+            <Link
+              href={`/${slug}`}
+              className="flex items-center gap-1 hover:opacity-80"
+              style={{ color: "var(--button-color, #6c47ff)" }}
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span>Calendar</span>
+            </Link>
+            <span className="font-medium text-sm truncate max-w-[40%]">{organizationName}</span>
+            <SessionAuthControls isAdmin={isAdmin} slug={slug} />
+          </div>
+
+          {/* Desktop-only nav row */}
+          <div className="hidden md:flex items-center justify-between h-20">
+            <Link
+              href={`/${slug}`}
+              className="flex items-center gap-1 hover:opacity-80"
+              style={{ color: "var(--button-color, #6c47ff)" }}
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span>Calendar</span>
+            </Link>
+            <span className="font-medium">{organizationName}</span>
+            <div className="w-16" />
+          </div>
+
+          <SessionDetails
+            session={session}
+            startTime={startTime || undefined}
+            currentUserSpots={bookingDetails?.number_of_spots || 0}
+          />
         </div>
-        <BookingForm
-          session={session}
-          startTime={startTime || undefined}
-          bookingDetails={bookingDetails}
-          slug={slug}
-          sessionId={sessionId}
-          spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
-          memberPrice={pricingData?.memberPrice}
-          monthlyMembershipPrice={pricingData?.monthlyMembershipPrice}
-          isActiveMember={pricingData?.isActiveMember}
-          defaultToMembership={searchParams.membership === "true"}
-          mode={mode}
-          userDetails={userDetails}
-          isGuest={isGuest}
-          guestEmail={guestEmail}
-        />
+      </div>
+
+      {/* Right Column - White background */}
+      <div className="bg-white flex justify-center">
+        <div className="w-full max-w-[550px] px-4 md:px-8 pt-6 md:pt-[60px] pb-6">
+          {/* Desktop-only auth row */}
+          <div className="hidden md:flex justify-end h-20">
+            <SessionAuthControls isAdmin={isAdmin} slug={slug} />
+          </div>
+          <BookingForm
+            session={session}
+            startTime={startTime || undefined}
+            bookingDetails={bookingDetails}
+            slug={slug}
+            sessionId={sessionId}
+            spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
+            memberships={pricingData?.memberships}
+            userMembershipId={pricingData?.userMembershipId}
+            memberPrice={pricingData?.memberPrice}
+            monthlyMembershipPrice={pricingData?.monthlyMembershipPrice}
+            isActiveMember={pricingData?.isActiveMember}
+            defaultToMembership={searchParams.membership === "true"}
+            mode={mode}
+            userDetails={userDetails}
+            isGuest={isGuest}
+            guestEmail={guestEmail}
+          />
+        </div>
       </div>
     </div>
   )

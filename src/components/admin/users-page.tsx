@@ -1,12 +1,15 @@
 "use client"
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Profile } from "@/types/profile";
 import { UserForm } from "@/components/admin/user-form";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+type SortDirection = "asc" | "desc" | null;
+type SortColumn = "name" | "email" | "role" | null;
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,10 +32,77 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [userToDelete, setUserToDelete] = useState<Profile | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const handleEdit = (user: Profile) => {
     setSelectedUser(user);
     setShowUserForm(true);
+  };
+
+  // Handle column header click for sorting
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> off
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortColumn(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  // Sort users based on current sort state
+  const sortedUsers = useMemo(() => {
+    if (!sortColumn || !sortDirection) return users;
+
+    return [...users].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortColumn) {
+        case "name":
+          aVal = [a.first_name, a.last_name].filter(Boolean).join(" ").toLowerCase();
+          bVal = [b.first_name, b.last_name].filter(Boolean).join(" ").toLowerCase();
+          break;
+        case "email":
+          aVal = a.email?.toLowerCase() || "";
+          bVal = b.email?.toLowerCase() || "";
+          break;
+        case "role":
+          aVal = a.roleLabel?.toLowerCase() || "user";
+          bVal = b.roleLabel?.toLowerCase() || "user";
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [users, sortColumn, sortDirection]);
+
+  // Sortable column header component
+  const SortableHeader = ({ column, children, className }: { column: SortColumn; children: React.ReactNode; className?: string }) => {
+    const isActive = sortColumn === column;
+    return (
+      <TableHead
+        className={`cursor-pointer select-none hover:bg-muted/50 group ${className || ""}`}
+        onClick={() => handleSort(column)}
+      >
+        <div className="flex items-center gap-1">
+          {children}
+          {isActive && sortDirection === "asc" && <ArrowUp className="h-3 w-3" />}
+          {isActive && sortDirection === "desc" && <ArrowDown className="h-3 w-3" />}
+          {!isActive && <ArrowUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity" />}
+        </div>
+      </TableHead>
+    );
   };
 
   const handleDelete = async () => {
@@ -49,25 +119,24 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
   };
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex flex-col h-full">
       {!users || users.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-gray-500">No users found.</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email address</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="w-[100px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
+        <div className="flex-1 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <SortableHeader column="name">Name</SortableHeader>
+                <SortableHeader column="email">Email address</SortableHeader>
+                <SortableHeader column="role">Role</SortableHeader>
+                <TableHead className="w-[100px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedUsers.map((user) => (
                   <TableRow 
                     key={user.id}
                     className="cursor-pointer"
@@ -123,7 +192,6 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
                 ))}
               </TableBody>
             </Table>
-          </div>
         </div>
       )}
 

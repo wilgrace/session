@@ -13,7 +13,7 @@ import { createBooking, updateBooking, deleteBooking } from "@/app/actions/sessi
 import { getClerkUser } from "@/app/actions/clerk"
 import { createClerkUser } from "@/app/actions/clerk"
 import { createEmbeddedCheckoutSession } from "@/app/actions/checkout"
-import { PreCheckoutForm, CheckoutFormData } from "./pre-checkout-form"
+import { PreCheckoutForm, CheckoutFormData, MembershipPricingOption } from "./pre-checkout-form"
 import { CheckoutStep } from "./checkout-step"
 import { BookingPanel } from "./booking-panel"
 import { Loader2 } from "lucide-react"
@@ -45,7 +45,10 @@ interface BookingFormProps {
   slug: string
   sessionId?: string // Session instance ID for sharing links
   spotsRemaining?: number
-  // Membership pricing props (passed from server component)
+  // Multi-membership pricing props
+  memberships?: MembershipPricingOption[]
+  userMembershipId?: string | null
+  // Backward compatible membership pricing props
   memberPrice?: number
   monthlyMembershipPrice?: number | null
   isActiveMember?: boolean
@@ -72,6 +75,8 @@ export function BookingForm({
   slug,
   sessionId,
   spotsRemaining = session.capacity,
+  memberships = [],
+  userMembershipId,
   memberPrice = 0,
   monthlyMembershipPrice = null,
   isActiveMember = false,
@@ -163,6 +168,7 @@ export function BookingForm({
         promotionCode: formData.promotionCode,
         pricingType: formData.pricingType,
         isNewMembership: formData.isNewMembership,
+        membershipId: formData.membershipId, // For multi-membership support
         slug: slug,
       })
 
@@ -378,6 +384,8 @@ export function BookingForm({
           organizationId={session.organization_id}
           onProceedToCheckout={handleProceedToCheckout}
           isLoading={checkoutLoading}
+          memberships={memberships}
+          userMembershipId={userMembershipId}
           memberPrice={memberPrice}
           monthlyMembershipPrice={monthlyMembershipPrice}
           isActiveMember={isActiveMember}

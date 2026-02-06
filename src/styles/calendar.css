@@ -1,14 +1,58 @@
+/* CSS Variables for sticky header offsets */
+:root {
+  --header-height: 0px;  /* Header no longer sticky */
+  --toolbar-height: 75px;
+}
+
 /* Custom styles for react-big-calendar */
 .rbc-calendar {
-  font-family: inherit;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
 }
 
+/* Header row with day names and dates */
 .rbc-header {
-  padding: 0.5rem 0;
-  font-weight: 500;
-  font-size: 0.875rem;
+  padding: 4px 8px;
+  background: #FAFAFA;
+  border: 1px solid #E0E0E0;
+  box-shadow: -1px -1px 0 0 #E0E0E0 inset;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: none;
 }
 
+.rbc-header > span,
+.rbc-header a {
+  width: 100%;
+}
+
+.rbc-button-link .rbc-header {
+  border: none;
+  box-shadow: none;
+}
+
+/* Day name styling (SUN, MON, etc.) */
+.rbc-header span:first-child {
+  color: #71717A;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+
+/* Date number styling (21, 22, etc.) */
+.rbc-header span:last-child,
+.rbc-header a {
+  color: #000;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 32px;
+}
+
+/* Event styling */
 .rbc-event {
   border: 1px solid #e5e7eb;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -19,10 +63,12 @@
   height: 100%;
 }
 
+/* Today column background */
 .rbc-today {
-  background-color: #eff6ff;
+  background-color: #EFF6FF !important;
 }
 
+/* Off-range (other month) background */
 .rbc-off-range-bg {
   background-color: #f9fafb;
 }
@@ -37,6 +83,25 @@
   min-height: 2.5rem;
 }
 
+/* Remove border from time view and setup for sticky headers */
+.rbc-time-view {
+  border: none !important;
+  min-height: auto;
+}
+
+/* Make time header sticky (day names and dates row) */
+.rbc-time-header {
+  position: sticky;
+  top: var(--toolbar-height);  /* 75px only, no header offset */
+  z-index: 30;
+  background: white;
+}
+
+/* Remove internal scrolling - let document scroll */
+.rbc-time-content {
+  overflow: visible !important;
+}
+
 /* Ensure day/week view events have proper padding */
 .rbc-time-view .rbc-event {
   padding: 2px;
@@ -44,6 +109,11 @@
 
 /* Hide event label */
 .rbc-event-label {
+  display: none !important;
+}
+
+/* Hide all-day cell */
+.rbc-allday-cell {
   display: none !important;
 }
 
@@ -63,21 +133,58 @@
   border-color: #e5e7eb;
 }
 
-/* Increase hour row height */
+/* Time slot group height (72px per hour = 36px per 30-min block) */
 .rbc-time-view .rbc-time-gutter .rbc-timeslot-group {
-  min-height: 80px;
+  min-height: 72px;
 }
 
 .rbc-time-view .rbc-time-content .rbc-timeslot-group {
-  min-height: 80px;
+  min-height: 72px;
+}
+
+/* Individual 30-minute time slot */
+.rbc-time-slot {
+  min-height: 36px;
+}
+
+/* Time gutter (left side with time labels) */
+.rbc-time-view .rbc-time-gutter {
+  border-top: 1px solid #E0E0E0;
+  background: white;
 }
 
 .rbc-time-view .rbc-time-content {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #E0E0E0;
 }
 
-.rbc-time-view .rbc-time-gutter {
-  border-top: 1px solid #e5e7eb;
+/* Time labels styling */
+.rbc-time-view .rbc-time-gutter .rbc-time-slot {
+  color: #71717A;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+/* Day columns - alternate background */
+.rbc-time-view .rbc-day-slot {
+  background: rgba(252, 252, 252, 1);
+  box-shadow: -1px -1px 0 0 #E0E0E0 inset;
+}
+
+.rbc-time-view .rbc-day-slot:nth-child(odd) {
+  background: #FAFAFA;
+  box-shadow: -1px -1px 0 0 #E0E0E0 inset;
+}
+
+/* 30-minute block styling with subtle divider */
+.rbc-time-view .rbc-time-slot:first-child {
+  box-shadow: 0 -1px 0 0 #F7F7F7 inset;
+}
+
+/* Today column in time view */
+.rbc-time-view .rbc-today {
+  background-color: #EFF6FF !important;
 }
 
 /* Booked session styling */
@@ -89,6 +196,37 @@
 
 .rbc-event.booked-session:hover {
   background-color: #bbf7d0 !important;
+}
+
+/* Toolbar styling */
+.rbc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+.rbc-toolbar button {
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  padding: 4px 16px;
+  border-radius: 8px;
+  color: #71717A;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.rbc-toolbar button:hover {
+  background: #F4F4F5;
+}
+
+.rbc-toolbar button.rbc-active {
+  background: #DC2626;
+  color: rgba(252, 252, 252, 1);
 }
 
 /* Custom styles for react-day-picker (session form calendar) */
@@ -156,4 +294,123 @@
 .DayPicker-Day--disabled {
   color: hsl(var(--muted-foreground));
   opacity: 0.4;
-} 
+}
+
+/* ========================================
+   Session Type Styling
+   ======================================== */
+
+/* Session type color variables - easy to customize per type */
+:root {
+  /* Free session (yellow) */
+  --session-free-border: #FDD34E;
+  --session-free-bg: rgba(253, 211, 78, 0.1);
+  --session-free-text: #92400D;
+
+  /* Default/paid session (blue) */
+  --session-default-border: #0EA5E9;
+  --session-default-bg: rgba(14, 165, 233, 0.1);
+  --session-default-text: #0369A1;
+
+  /* Full/sold out session (grey) */
+  --session-full-border: #9CA3AF;
+  --session-full-bg: rgba(156, 163, 175, 0.1);
+  --session-full-text: #6B7280;
+
+  /* Hidden session (grey, admin only) */
+  --session-hidden-border: #9CA3AF;
+  --session-hidden-bg: #ffffff;
+  --session-hidden-text: #6B7280;
+
+  /* Closed session (grey, admin only) */
+  --session-closed-border: #9CA3AF;
+  --session-closed-bg: #ffffff;
+  --session-closed-text: #6B7280;
+
+  /* Booked by current user (green) */
+  --session-booked-border: #86efac;
+  --session-booked-bg: #dcfce7;
+  --session-booked-text: #166534;
+}
+
+/* Base session event styling */
+.rbc-event.session-event {
+  border-radius: 6px;
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  padding: 0 !important;
+  cursor: pointer;
+}
+
+/* Session type: Free (yellow) */
+.rbc-event.session-free {
+  background-color: var(--session-free-bg);
+  border-left-color: var(--session-free-border);
+  color: var(--session-free-text);
+}
+
+/* Session type: Default/paid (blue) */
+.rbc-event.session-default {
+  background-color: var(--session-default-bg);
+  border-left-color: var(--session-default-border);
+  color: var(--session-default-text);
+}
+
+/* Session type: Full/sold out (grey) */
+.rbc-event.session-full {
+  background-color: var(--session-full-bg);
+  border-left-color: var(--session-full-border);
+  color: var(--session-full-text);
+}
+
+/* Session type: Booked by current user (green) */
+.rbc-event.session-booked {
+  background-color: var(--session-booked-bg);
+  border-left-color: var(--session-booked-border);
+  color: var(--session-booked-text);
+}
+
+/* Session type: Hidden (admin only) */
+.rbc-event.session-hidden {
+  background-color: var(--session-hidden-bg);
+  border-left-color: var(--session-hidden-border);
+  color: var(--session-hidden-text);
+}
+
+/* Session type: Closed (admin only) */
+.rbc-event.session-closed {
+  background-color: var(--session-closed-bg);
+  border-left-color: var(--session-closed-border);
+  color: var(--session-closed-text);
+}
+
+/* Session event typography */
+.session-event-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  height: 100%;
+}
+
+.session-event-content .session-name {
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.session-event-content .session-meta {
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  opacity: 0.85;
+}

@@ -103,6 +103,14 @@ export async function POST(req: NextRequest) {
           break
         }
 
+        // Check if this is a membership-only purchase (no session booking)
+        const isMembershipOnly = metadata.is_membership_only === "true"
+        if (isMembershipOnly) {
+          console.log(`Membership-only checkout completed: ${session.id}`)
+          // Membership creation is handled by customer.subscription.created webhook
+          break
+        }
+
         // V2/V3 flow: No booking_id - create booking from metadata
         const sessionTemplateId = metadata.session_template_id
         const organizationId = metadata.organization_id
@@ -258,13 +266,14 @@ export async function POST(req: NextRequest) {
         const subOrgId = subMetadata.organization_id
         const subClerkUserId = subMetadata.clerk_user_id
         const subCustomerEmail = subMetadata.customer_email
+        const subMembershipId = subMetadata.membership_id // New multi-membership support
 
         if (!subOrgId) {
           console.error("No organization_id in subscription metadata:", subMetadata)
           break
         }
 
-        console.log(`Subscription created: ${subscription.id} for org ${subOrgId}`)
+        console.log(`Subscription created: ${subscription.id} for org ${subOrgId}${subMembershipId ? `, membership ${subMembershipId}` : ""}`)
 
         // Find the user
         let subInternalUserId: string | null = null
@@ -302,20 +311,27 @@ export async function POST(req: NextRequest) {
           ? new Date(subscriptionItem.current_period_end * 1000).toISOString()
           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Default 30 days
 
+        const membershipData: Record<string, unknown> = {
+          user_id: subInternalUserId,
+          organization_id: subOrgId,
+          status: "active",
+          stripe_subscription_id: subscription.id,
+          stripe_customer_id: subscription.customer as string,
+          current_period_start: currentPeriodStart,
+          current_period_end: currentPeriodEnd,
+          cancelled_at: null,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Add membership_id if provided (multi-membership support)
+        if (subMembershipId) {
+          membershipData.membership_id = subMembershipId
+        }
+
         const { error: membershipError } = await supabase
           .from("user_memberships")
           .upsert(
-            {
-              user_id: subInternalUserId,
-              organization_id: subOrgId,
-              status: "active",
-              stripe_subscription_id: subscription.id,
-              stripe_customer_id: subscription.customer as string,
-              current_period_start: currentPeriodStart,
-              current_period_end: currentPeriodEnd,
-              cancelled_at: null,
-              updated_at: new Date().toISOString(),
-            },
+            membershipData,
             {
               onConflict: "user_id,organization_id",
             }
@@ -324,7 +340,7 @@ export async function POST(req: NextRequest) {
         if (membershipError) {
           console.error("Error creating membership:", membershipError)
         } else {
-          console.log(`Membership created/updated for user ${subInternalUserId}`)
+          console.log(`Membership created/updated for user ${subInternalUserId}${subMembershipId ? ` with membership_id ${subMembershipId}` : ""}`)
         }
         break
       }

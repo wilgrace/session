@@ -67,6 +67,7 @@ interface SessionSchedule {
   time: string;
   start_time_local: string;
   is_active: boolean;
+  duration_minutes?: number | null;
 }
 
 // Helper function to convert local time to UTC
@@ -235,7 +236,8 @@ serveWithoutAuth(async (req) => {
           id,
           time,
           day_of_week,
-          is_active
+          is_active,
+          duration_minutes
         )
       `)
       .eq("id", specificTemplateIdToProcess);
@@ -325,7 +327,9 @@ serveWithoutAuth(async (req) => {
 
               // Convert to UTC using the timezone
               const instanceStartTimeUTC = localToUTC(localDateWithTime, SAUNA_TIMEZONE);
-              const instanceEndTimeUTC = addMinutes(instanceStartTimeUTC, template.duration_minutes);
+              // Use schedule-specific duration if available, otherwise fall back to template default
+              const effectiveDuration = schedule.duration_minutes || template.duration_minutes;
+              const instanceEndTimeUTC = addMinutes(instanceStartTimeUTC, effectiveDuration);
 
               // Check if an instance already exists for this time
               const { data: existingInstance, error: checkError } = await supabaseClient

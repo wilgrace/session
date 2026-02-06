@@ -21,6 +21,26 @@ export interface StripeConnectStatus {
   chargesEnabled: boolean
   payoutsEnabled: boolean
   stripeAccountId: string | null
+  // Enhanced account details (populated when connected)
+  businessName?: string
+  balance?: {
+    available: number  // in pence
+    pending: number    // in pence
+    currency: string   // e.g., "gbp"
+  }
+}
+
+export interface PromotionCodeInfo {
+  id: string
+  code: string
+  percentOff?: number
+  amountOff?: number
+  currency?: string
+  duration: "forever" | "once" | "repeating"
+  durationInMonths?: number
+  active: boolean
+  timesRedeemed: number
+  maxRedemptions?: number
 }
 
 interface ActionResult<T = void> {
@@ -127,6 +147,40 @@ export async function getStripeConnectStatus(): Promise<ActionResult<StripeConne
       }
     }
 
+    // Fetch additional account details from Stripe when connected
+    let businessName: string | undefined
+    let balance: StripeConnectStatus["balance"] | undefined
+
+    if (account.charges_enabled) {
+      try {
+        const stripe = getStripe()
+
+        // Fetch account details for business name
+        const stripeAccount = await stripe.accounts.retrieve(account.stripe_account_id)
+        businessName = stripeAccount.business_profile?.name || stripeAccount.settings?.dashboard?.display_name || undefined
+
+        // Fetch balance
+        const balanceData = await stripe.balance.retrieve({
+          stripeAccount: account.stripe_account_id,
+        })
+
+        // Sum up available and pending balances (in case of multiple currencies, use the first/primary)
+        const availableBalance = balanceData.available[0]
+        const pendingBalance = balanceData.pending[0]
+
+        if (availableBalance) {
+          balance = {
+            available: availableBalance.amount,
+            pending: pendingBalance?.amount || 0,
+            currency: availableBalance.currency,
+          }
+        }
+      } catch (stripeError) {
+        // Log but don't fail - these are optional enhancements
+        console.error("Error fetching Stripe account details:", stripeError)
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -135,6 +189,8 @@ export async function getStripeConnectStatus(): Promise<ActionResult<StripeConne
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         stripeAccountId: account.stripe_account_id,
+        businessName,
+        balance,
       }
     }
   } catch (error) {
@@ -339,6 +395,87 @@ export async function disconnectStripeAccount(): Promise<ActionResult> {
     return { success: true }
   } catch (error) {
     console.error("Error in disconnectStripeAccount:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    }
+  }
+}
+
+/**
+ * Get all active promotion codes from the Connected Stripe account
+ */
+export async function getPromotionCodes(): Promise<ActionResult<PromotionCodeInfo[]>> {
+  try {
+    const authResult = await getAuthenticatedOrg()
+    if ("error" in authResult) {
+      return { success: false, error: authResult.error }
+    }
+
+    const { orgId } = authResult
+    const supabase = createSupabaseServerClient()
+
+    // Get the Stripe account ID
+    const { data: account } = await supabase
+      .from("stripe_connect_accounts")
+      .select("stripe_account_id, charges_enabled")
+      .eq("organization_id", orgId)
+      .single()
+
+    if (!account) {
+      return { success: false, error: "No Stripe account found" }
+    }
+
+    if (!account.charges_enabled) {
+      return { success: true, data: [] }
+    }
+
+    const stripe = getStripe()
+
+    // Fetch all active promotion codes
+    const promotionCodes = await stripe.promotionCodes.list(
+      { active: true, limit: 100 },
+      { stripeAccount: account.stripe_account_id }
+    )
+
+    // Fetch coupon details for each promotion code
+    // The coupon ID is nested under promotion.coupon in newer API versions
+    const codes: PromotionCodeInfo[] = await Promise.all(
+      promotionCodes.data.map(async (promoCode) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const promoCodeAny = promoCode as any
+        const couponId = promoCodeAny.promotion?.coupon as string | undefined
+
+        let coupon: Stripe.Coupon | null = null
+        if (couponId) {
+          try {
+            coupon = await stripe.coupons.retrieve(
+              couponId,
+              { stripeAccount: account.stripe_account_id }
+            )
+          } catch (e) {
+            console.error("Failed to fetch coupon", couponId, e)
+          }
+        }
+
+        return {
+          id: promoCode.id,
+          code: promoCode.code,
+          percentOff: coupon?.percent_off ?? undefined,
+          amountOff: coupon?.amount_off ?? undefined,
+          currency: coupon?.currency ?? undefined,
+          duration: (coupon?.duration as "forever" | "once" | "repeating") ?? "once",
+          durationInMonths: coupon?.duration_in_months ?? undefined,
+          active: promoCode.active,
+          timesRedeemed: promoCode.times_redeemed,
+          maxRedemptions: promoCode.max_redemptions ?? undefined,
+        }
+      })
+    )
+
+    return { success: true, data: codes }
+  } catch (error) {
+    console.error("Error in getPromotionCodes:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error"
