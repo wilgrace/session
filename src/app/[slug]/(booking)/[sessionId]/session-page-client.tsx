@@ -140,8 +140,10 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
         // Fetch booking details if bookingId is provided
         // This handles both edit mode (logged-in users) and confirmation view (guests)
         if (bookingId) {
+          console.log('Session page: fetching booking details', { bookingId, userId: user?.id })
           try {
             const result = await getBookingDetails(bookingId)
+            console.log('Session page: getBookingDetails result', { success: result.success, hasData: !!(result as any).data })
             if (!result.success) {
               throw new Error("Failed to fetch booking details")
             }
@@ -150,6 +152,13 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
             // For logged-in users in edit mode, verify the booking belongs to them
             // For guests, allow viewing if the booking was made by a guest account
             const isGuestBooking = booking.user?.clerk_user_id?.startsWith('guest_')
+            console.log('Session page: permission check', {
+              isGuestBooking,
+              hasUser: !!user,
+              userId: user?.id,
+              bookingUserClerkId: booking.user?.clerk_user_id,
+              match: booking.user?.clerk_user_id === user?.id
+            })
             if (user && !isGuestBooking) {
               // Logged-in user - verify they own the booking
               if (!booking.user || booking.user.clerk_user_id !== user.id) {
@@ -173,11 +182,12 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
           } catch (error: any) {
             // If booking fetch fails, fall through to fetch session normally
             // This allows the page to still work for new bookings
-            console.warn("Could not fetch booking details:", error.message)
+            console.warn("Session page: booking fetch failed, falling through:", error.message)
           }
         }
 
         // No bookingId or booking fetch failed - fetch session template normally
+        console.log('Session page: falling through to getPublicSessionById', { sessionId, startParam })
         // Fetch session template using server action
         // Pass startParam to fetch the specific instance with its bookings for availability calculation
         const result = await getPublicSessionById(sessionId, startParam ? decodeURIComponent(startParam) : undefined)
