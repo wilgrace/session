@@ -156,6 +156,47 @@ export async function updateCurrentUserProfile(params: {
  * Create a new organization.
  * Only superadmins can create organizations.
  */
+/**
+ * Check if the current user's community profile is complete.
+ * Returns true if lives_in_cardiff is NOT NULL (i.e., they've answered the question).
+ */
+export async function isProfileComplete(): Promise<{
+  success: boolean;
+  isComplete?: boolean;
+  error?: string;
+}> {
+  try {
+    const { userId: clerkUserId } = await auth();
+
+    if (!clerkUserId) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    const supabase = createSupabaseServerClient();
+
+    const { data: user, error } = await supabase
+      .from('clerk_users')
+      .select('lives_in_cardiff')
+      .eq('clerk_user_id', clerkUserId)
+      .single();
+
+    if (error) {
+      console.error('[isProfileComplete] Error:', error);
+      return { success: false, error: 'Failed to check profile' };
+    }
+
+    // Profile is complete if lives_in_cardiff is not null
+    return { success: true, isComplete: user.lives_in_cardiff !== null };
+  } catch (error) {
+    console.error('[isProfileComplete] Error:', error);
+    return { success: false, error: 'Failed to check profile' };
+  }
+}
+
+/**
+ * Create a new organization.
+ * Only superadmins can create organizations.
+ */
 export async function createOrganization(params: {
   name: string;
   slug: string;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,6 +32,7 @@ interface AccountPageClientProps {
 }
 
 export function AccountPageClient({ slug, organizationId }: AccountPageClientProps) {
+  const router = useRouter()
   const { user } = useUser()
   const [membership, setMembership] = useState<MembershipStatus | null>(null)
   const [billingHistory, setBillingHistory] = useState<BillingHistoryItem[]>([])
@@ -65,10 +67,9 @@ export function AccountPageClient({ slug, organizationId }: AccountPageClientPro
     const result = await createBillingPortalSession(organizationId)
 
     if (result.success && result.data?.url) {
-      window.location.href = result.data.url
-    } else {
-      setPortalLoading(false)
+      window.open(result.data.url, '_blank')
     }
+    setPortalLoading(false)
   }
 
   if (loading) {
@@ -82,16 +83,14 @@ export function AccountPageClient({ slug, organizationId }: AccountPageClientPro
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Back button */}
-      <Link href={`/${slug}`}>
-        <Button variant="ghost" className="gap-2 -ml-2">
-          <ChevronLeft className="h-4 w-4" />
-          Back to Booking
-        </Button>
-      </Link>
+      <Button variant="ghost" className="gap-2 -ml-2" onClick={() => router.back()}>
+        <ChevronLeft className="h-4 w-4" />
+        Back
+      </Button>
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">My Account</h1>
+        <h1 className="text-2xl font-bold">Membership & Billing</h1>
         <p className="text-muted-foreground">
           {user?.primaryEmailAddress?.emailAddress}
         </p>
@@ -128,11 +127,15 @@ export function AccountPageClient({ slug, organizationId }: AccountPageClientPro
                 <div className="flex-1">
                   <p className="font-medium text-green-800 dark:text-green-200">
                     {membership.status === "cancelled"
-                      ? "Membership Active (Cancelling)"
-                      : "Active Membership"}
+                      ? `${membership.membershipName || "Membership"} (Cancelling)`
+                      : membership.membershipName || "Active Membership"}
                   </p>
                   <p className="text-sm text-green-700 dark:text-green-300">
-                    You get member pricing on all sessions.
+                    {membership.membershipDescription || (
+                      membership.membershipDiscountPercent
+                        ? `${membership.membershipDiscountPercent}% off all sessions`
+                        : "You get member pricing on all sessions."
+                    )}
                   </p>
                 </div>
               </div>

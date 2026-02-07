@@ -30,6 +30,11 @@ export interface MembershipStatus {
   stripeSubscriptionId: string | null
   currentPeriodEnd: Date | null
   cancelledAt: Date | null
+  // Membership tier details
+  membershipName: string | null
+  membershipDescription: string | null
+  membershipPriceType: "discount" | "fixed" | null
+  membershipDiscountPercent: number | null
 }
 
 export interface MembershipConfig {
@@ -169,11 +174,33 @@ export async function getUserMembership(
           stripeSubscriptionId: null,
           currentPeriodEnd: null,
           cancelledAt: null,
+          membershipName: null,
+          membershipDescription: null,
+          membershipPriceType: null,
+          membershipDiscountPercent: null,
         },
       }
     }
 
     const isActive = isMembershipActive(membership as UserMembership)
+
+    // Fetch membership tier details if user has a membership_id
+    let membershipDetails: {
+      name: string
+      description: string | null
+      member_price_type: string
+      member_discount_percent: number | null
+    } | null = null
+
+    if (membership.membership_id) {
+      const { data: tier } = await supabase
+        .from("memberships")
+        .select("name, description, member_price_type, member_discount_percent")
+        .eq("id", membership.membership_id)
+        .single()
+
+      membershipDetails = tier
+    }
 
     return {
       success: true,
@@ -188,6 +215,10 @@ export async function getUserMembership(
         cancelledAt: membership.cancelled_at
           ? new Date(membership.cancelled_at)
           : null,
+        membershipName: membershipDetails?.name ?? null,
+        membershipDescription: membershipDetails?.description ?? null,
+        membershipPriceType: (membershipDetails?.member_price_type as "discount" | "fixed") ?? null,
+        membershipDiscountPercent: membershipDetails?.member_discount_percent ?? null,
       },
     }
   } catch (error) {

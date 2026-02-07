@@ -1,13 +1,16 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { UserButton, SignedIn, SignedOut, useAuth } from "@clerk/nextjs"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { ChevronLeft, MoreHorizontal } from "lucide-react"
+import { ChevronLeft, CreditCard, UserCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { cn } from "@/lib/utils"
+import { isProfileComplete } from "@/app/actions/user"
+import { CommunityProfileOverlay } from "@/components/auth/community-profile-overlay"
 
 interface BookingHeaderProps {
   isAdmin: boolean
@@ -26,7 +29,21 @@ export function BookingHeader({
 }: BookingHeaderProps) {
   const pathname = usePathname()
   const { openSignIn } = useAuthOverlay()
-  const { isLoaded } = useAuth()
+  const { isLoaded, isSignedIn } = useAuth()
+  const [profileIncomplete, setProfileIncomplete] = useState(false)
+  const [showProfileOverlay, setShowProfileOverlay] = useState(false)
+
+  // Check if user's profile is incomplete
+  useEffect(() => {
+    async function checkProfile() {
+      if (!isSignedIn) return
+      const result = await isProfileComplete()
+      if (result.success && result.isComplete === false) {
+        setProfileIncomplete(true)
+      }
+    }
+    checkProfile()
+  }, [isSignedIn])
 
   // Determine if we should show the back button (not on calendar page)
   const isCalendarPage = pathname === `/${slug}` || pathname === `/${slug}/`
@@ -62,7 +79,22 @@ export function BookingHeader({
                     Admin
                   </Link>
                 )}
-                <UserButton />
+                <UserButton>
+                  <UserButton.MenuItems>
+                    <UserButton.Link
+                      label="Membership & Billing"
+                      labelIcon={<CreditCard size={16} />}
+                      href={`/${slug}/account`}
+                    />
+                    {profileIncomplete && (
+                      <UserButton.Action
+                        label="Complete your Profile"
+                        labelIcon={<UserCircle size={16} />}
+                        onClick={() => setShowProfileOverlay(true)}
+                      />
+                    )}
+                  </UserButton.MenuItems>
+                </UserButton>
               </SignedIn>
               <SignedOut>
                 <Button
@@ -87,21 +119,21 @@ export function BookingHeader({
       {/* Centered logo with ring border */}
       <div className={cn(
         "flex justify-center pb-2",
-        hasHeaderImage ? "-mt-[160px] md:-mt-[176px]" : "pt-2"
+        hasHeaderImage ? "-mt-[110px] md:-mt-[176px]" : "pt-2"
       )}>
         <Link href={`/${slug}`} className="block">
-          <div className="rounded-full bg-[#F6F2EF] p-2 ring-[8px] ring-[#F6F2EF] shadow-sm">
+          <div className="rounded-full bg-[#F6F2EF] p-2 ring-[8px] ring-[#F6F2EF]">
             {logoUrl ? (
               <Image
                 src={logoUrl}
                 alt={organizationName || "Organization logo"}
                 width={200}
                 height={200}
-                className="h-[200px] w-[200px] rounded-full object-cover"
+                className="h-[150px] w-[150px] md:h-[200px] md:w-[200px] rounded-full object-cover"
                 priority
               />
             ) : (
-              <div className="h-[200px] w-[200px] rounded-full bg-gray-200 flex items-center justify-center">
+              <div className="h-[150px] w-[150px] md:h-[200px] md:w-[200px] rounded-full bg-gray-200 flex items-center justify-center">
                 <span className="text-4xl font-bold text-gray-600">
                   {organizationName?.charAt(0) || "S"}
                 </span>
@@ -110,6 +142,16 @@ export function BookingHeader({
           </div>
         </Link>
       </div>
+
+      {/* Community Profile Overlay */}
+      <CommunityProfileOverlay
+        isOpen={showProfileOverlay}
+        onComplete={() => {
+          setShowProfileOverlay(false)
+          setProfileIncomplete(false)
+        }}
+        onSkip={() => setShowProfileOverlay(false)}
+      />
     </header>
   )
 }

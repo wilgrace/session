@@ -179,10 +179,10 @@ function SettingsPageContent() {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-8 pt-6">
+    <div className="flex-1 space-y-6 pt-6 pb-6">
       {/* Basic Information */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-base font-medium text-gray-900">Basic Information</h3>
+      <div className="border-b border-gray-200 bg-white p-6 space-y-6">
+        <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
 
         <div className="space-y-4">
           {/* Name */}
@@ -249,9 +249,9 @@ function SettingsPageContent() {
         </div>
       </div>
 
-      {/* Logo & Favicon */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-base font-medium text-gray-900">Logo & Favicon</h3>
+      {/* Brand & Design */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-6">
+        <h3 className="text-lg font-medium text-gray-900">Brand & Design</h3>
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Logo */}
@@ -272,11 +272,8 @@ function SettingsPageContent() {
             aspectRatio="square"
           />
         </div>
-      </div>
 
       {/* Images */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-base font-medium text-gray-900">Images</h3>
 
         <div className="space-y-6">
           {/* Header Image */}
@@ -297,13 +294,9 @@ function SettingsPageContent() {
             aspectRatio="standard"
           />
         </div>
-      </div>
 
       {/* Button Colors */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-base font-medium text-gray-900">Button Colors</h3>
-
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           {/* Button Color */}
           <div className="space-y-2">
             <Label htmlFor="buttonColor">Button Colour</Label>
@@ -349,10 +342,9 @@ function SettingsPageContent() {
               Primary button text color. Default: #ffffff (white)
             </p>
           </div>
-        </div>
 
         {/* Preview */}
-        <div className="pt-4 border-t">
+        <div className="pt-1">
           <Label className="mb-3 block">Preview</Label>
           <Button
             style={{
@@ -365,6 +357,7 @@ function SettingsPageContent() {
             Book Now
           </Button>
         </div>
+      </div>
       </div>
 
       {/* Save Button */}
@@ -449,9 +442,10 @@ function BrandingImageUpload({
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
+      <p className="text-sm text-gray-500">{description}</p>
 
       {value ? (
-        <div className="relative inline-block">
+        <div className="relative">
           <div
             className={cn(
               "relative rounded-lg overflow-hidden border bg-gray-50",
@@ -470,7 +464,7 @@ function BrandingImageUpload({
             type="button"
             variant="destructive"
             size="icon"
-            className="absolute -top-2 -right-2 h-6 w-6"
+            className="absolute -top-0 -right-0 h-6 w-6"
             onClick={handleRemove}
           >
             <X className="h-3 w-3" />
@@ -503,7 +497,6 @@ function BrandingImageUpload({
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <p className="text-sm text-gray-500">{description}</p>
     </div>
   )
 }
