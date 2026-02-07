@@ -173,8 +173,11 @@ export function BookingForm({
       })
 
       // Handle zero-price bypass - booking created directly
+      // Navigate directly to session page with confirmation params (skip confirmation page to avoid redirect issues)
       if (result.success && result.zeroPrice && result.bookingId) {
-        router.push(`/${slug}/confirmation?bookingId=${result.bookingId}`)
+        const confirmUrl = `/${slug}/${session.id}?confirmed=true&bookingId=${result.bookingId}&start=${encodeURIComponent(startTime.toISOString())}`
+        console.log('Free checkout: navigating directly to session page', { bookingId: result.bookingId, url: confirmUrl })
+        router.push(confirmUrl)
         return
       }
 
