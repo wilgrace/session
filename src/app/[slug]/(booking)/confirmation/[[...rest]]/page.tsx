@@ -69,6 +69,15 @@ export default async function ConfirmationPage({ params, searchParams }: Confirm
   const { session, startTime } = (result as any).data
   const sessionId = session.id
 
+  // Diagnostic logging
+  console.log('Confirmation page redirect debug:', {
+    hasSession: !!session,
+    sessionId,
+    sessionKeys: session ? Object.keys(session) : [],
+    hasStartTime: !!startTime,
+    startTimeValue: startTime?.toISOString?.() || String(startTime)
+  })
+
   // Build redirect URL with confirmation flag
   const redirectParams = new URLSearchParams({
     confirmed: 'true',
