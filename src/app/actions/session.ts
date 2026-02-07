@@ -2028,6 +2028,16 @@ export async function getBookingDetails(bookingId: string) {
       .eq("id", bookingId)
       .single();
 
+    // Diagnostic logging for debugging "Session not found" issues
+    console.log('getBookingDetails debug:', {
+      bookingId,
+      hasBookingData: !!bookingData,
+      hasSessionInstance: !!bookingData?.session_instance,
+      hasTemplate: !!bookingData?.session_instance?.template,
+      sessionInstanceId: bookingData?.session_instance_id,
+      error: bookingError?.message
+    })
+
     if (bookingError) {
       return {
         success: false,
@@ -2358,7 +2368,12 @@ export async function getPublicSessionById(
         `)
         .eq('template_id', sessionId)
         .eq('start_time', startTime)
-        .single();
+        .maybeSingle();
+
+      // Log instance lookup failures for debugging
+      if (instanceError) {
+        console.error('Instance lookup failed:', { sessionId, startTime, error: instanceError.message })
+      }
 
       if (!instanceError && instanceData) {
         // Transform to match expected format
