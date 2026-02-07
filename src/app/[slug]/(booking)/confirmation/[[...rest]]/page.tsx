@@ -2,6 +2,7 @@ import { getBookingDetails } from "@/app/actions/session"
 import { getBookingByCheckoutSession } from "@/app/actions/checkout"
 import { redirect, notFound } from "next/navigation"
 import { getTenantFromHeaders } from "@/lib/tenant-utils"
+import { ConfirmationPolling } from "../confirmation-polling"
 
 interface ConfirmationPageProps {
   params: Promise<{ slug: string }>
@@ -25,20 +26,8 @@ export default async function ConfirmationPage({ params, searchParams }: Confirm
     if (lookupResult.success && lookupResult.bookingId) {
       bookingId = lookupResult.bookingId
     } else {
-      // Booking might not be created yet (webhook delay) - show loading message
-      return (
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-md mx-auto text-center space-y-6">
-            <h1 className="text-2xl font-bold">Processing Your Booking...</h1>
-            <p className="text-muted-foreground">
-              Your payment was successful! Please wait a moment while we confirm your booking.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              If this page doesn&apos;t update automatically, please refresh in a few seconds.
-            </p>
-          </div>
-        </div>
-      )
+      // Booking might not be created yet (webhook delay) - use polling component
+      return <ConfirmationPolling stripeSessionId={stripeSessionId} slug={slug} />
     }
   }
 
