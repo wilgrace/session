@@ -52,12 +52,11 @@ interface SessionTemplate {
   id: string;
   name: string;
   is_recurring: boolean;
-  is_open: boolean;
+  visibility: string;
   session_schedules: SessionSchedule[];
   recurrence_start_date: string | null;
   recurrence_end_date: string | null;
   duration_minutes: number;
-  created_by: string;
   organization_id: string;
 }
 
@@ -227,7 +226,7 @@ serveWithoutAuth(async (req) => {
         id,
         name,
         is_recurring,
-        is_open,
+        visibility,
         recurrence_start_date,
         recurrence_end_date,
         duration_minutes,
@@ -270,7 +269,7 @@ serveWithoutAuth(async (req) => {
         console.log(`[Info] Processing specific template: ${template.id}. Handling future instances...`);
         console.log('Template details:', {
           is_recurring: template.is_recurring,
-          is_open: template.is_open,
+          visibility: template.visibility,
           recurrence_start_date: template.recurrence_start_date,
           recurrence_end_date: template.recurrence_end_date,
           schedules: template.session_schedules,

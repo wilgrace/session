@@ -616,7 +616,7 @@ export async function createEmbeddedCheckoutSession(
     // Get the organization's Stripe account with membership info
     const { data: stripeAccount, error: stripeError } = await supabase
       .from("stripe_connect_accounts")
-      .select("stripe_account_id, charges_enabled, membership_price_id, membership_monthly_price")
+      .select("stripe_account_id, charges_enabled")
       .eq("organization_id", template.organization_id)
       .single()
 
@@ -658,6 +658,41 @@ export async function createEmbeddedCheckoutSession(
       isActiveMember = isMembershipActive(membership)
     }
 
+    // Determine checkout mode
+    const isNewMembership = params.isNewMembership && !isActiveMember
+    const checkoutMode = isNewMembership ? "subscription" : "payment"
+
+    // Fetch membership data if user is purchasing a new membership
+    let selectedMembership: { id: string; stripe_price_id: string | null; price: number } | null = null
+    if (isNewMembership) {
+      if (!params.membershipId) {
+        return { success: false, error: "Please select a membership tier" }
+      }
+
+      const { data: membership, error: membershipError } = await supabase
+        .from("memberships")
+        .select("id, stripe_price_id, price")
+        .eq("id", params.membershipId)
+        .eq("organization_id", template.organization_id)
+        .eq("is_active", true)
+        .single()
+
+      if (membershipError || !membership) {
+        return { success: false, error: "Selected membership not found or not available" }
+      }
+
+      // For paid memberships, require Stripe price ID
+      if (membership.price > 0 && !membership.stripe_price_id) {
+        return { success: false, error: "Membership is not configured for this organization" }
+      }
+
+      selectedMembership = membership
+
+      if (params.numberOfSpots > 1) {
+        return { success: false, error: "New membership purchases can only be for 1 person. Book additional spots separately after completing membership signup." }
+      }
+    }
+
     // Calculate member price using pricing utilities
     const { calculateMemberPrice, calculateBookingPrice } = await import("@/lib/pricing-utils")
     const memberPrice = calculateMemberPrice({
@@ -669,6 +704,7 @@ export async function createEmbeddedCheckoutSession(
     })
 
     // Calculate pricing breakdown
+    // Use selected membership price if purchasing new membership, otherwise null
     const priceBreakdown = calculateBookingPrice(
       {
         numberOfSpots: params.numberOfSpots,
@@ -677,22 +713,8 @@ export async function createEmbeddedCheckoutSession(
         dropInPrice: template.drop_in_price,
         memberPrice,
       },
-      stripeAccount.membership_monthly_price
+      selectedMembership?.price ?? null
     )
-
-    // Determine checkout mode
-    const isNewMembership = params.isNewMembership && !isActiveMember
-    const checkoutMode = isNewMembership ? "subscription" : "payment"
-
-    // Validate new membership requirements
-    if (isNewMembership) {
-      if (!stripeAccount.membership_price_id) {
-        return { success: false, error: "Membership is not configured for this organization" }
-      }
-      if (params.numberOfSpots > 1) {
-        return { success: false, error: "New membership purchases can only be for 1 person. Book additional spots separately after completing membership signup." }
-      }
-    }
 
     // Calculate discount if promotion code is provided
     let discountAmount = 0
@@ -770,7 +792,7 @@ export async function createEmbeddedCheckoutSession(
 
       // 1. Monthly membership (recurring)
       lineItems.push({
-        price: stripeAccount.membership_price_id,
+        price: selectedMembership!.stripe_price_id,
         quantity: 1,
       })
 
