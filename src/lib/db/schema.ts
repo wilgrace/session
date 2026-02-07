@@ -215,6 +215,37 @@ export const sessionMembershipPrices = pgTable('session_membership_prices', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Agreement type for waivers
+export type AgreementType = 'checkbox' | 'signature';
+
+// Waivers that organizations can require users to agree to
+export const waivers = pgTable('waivers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  summary: text('summary'),
+  content: text('content').notNull(),
+  agreementType: text('agreement_type').notNull().default('checkbox'), // 'checkbox' | 'signature'
+  version: integer('version').notNull().default(1),
+  isActive: boolean('is_active').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// User waiver agreements (audit trail)
+export const waiverAgreements = pgTable('waiver_agreements', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => clerkUsers.id, { onDelete: 'cascade' }),
+  waiverId: uuid('waiver_id').notNull().references(() => waivers.id, { onDelete: 'cascade' }),
+  waiverVersion: integer('waiver_version').notNull(),
+  agreedAt: timestamp('agreed_at', { withTimezone: true }).defaultNow().notNull(),
+  agreementType: text('agreement_type').notNull(), // 'checkbox' | 'signature'
+  signatureData: text('signature_data'), // Base64 PNG for signature type
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type Organization = typeof organizations.$inferSelect;
 export type ClerkUser = typeof clerkUsers.$inferSelect;
 export type Sauna = typeof saunas.$inferSelect;
@@ -239,4 +270,10 @@ export type NewSessionMembershipPrice = typeof sessionMembershipPrices.$inferIns
 // Role type for convenience
 export type UserRole = 'guest' | 'user' | 'admin' | 'superadmin';
 export type MembershipStatus = 'none' | 'active' | 'expired' | 'cancelled';
-export type SessionVisibility = 'open' | 'hidden' | 'closed'; 
+export type SessionVisibility = 'open' | 'hidden' | 'closed';
+
+// Waiver types
+export type Waiver = typeof waivers.$inferSelect;
+export type NewWaiver = typeof waivers.$inferInsert;
+export type WaiverAgreement = typeof waiverAgreements.$inferSelect;
+export type NewWaiverAgreement = typeof waiverAgreements.$inferInsert; 

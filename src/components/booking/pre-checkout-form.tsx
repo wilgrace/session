@@ -270,6 +270,7 @@ export function PreCheckoutForm({
       // Open signup overlay - when complete, the useEffect will trigger checkout
       openSignUp({
         initialEmail: email,
+        organizationId,
         onComplete: () => {
           // Auth flow complete (sync + profile done) - clear the flag to trigger useEffect
           setAwaitingAuthComplete(false)

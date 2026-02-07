@@ -42,6 +42,7 @@ interface BookingPanelProps {
   slug: string
   sessionId?: string
   isConfirmation?: boolean
+  organizationId?: string
 }
 
 export function BookingPanel({
@@ -54,6 +55,7 @@ export function BookingPanel({
   slug,
   sessionId,
   isConfirmation = false,
+  organizationId,
 }: BookingPanelProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -136,7 +138,7 @@ export function BookingPanel({
 
       {/* User Details or Guest Callout */}
       {isGuest ? (
-        <GuestAccountCallout email={guestEmail} />
+        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
       ) : userDetails ? (
         <div className="bg-muted/30 rounded-xl p-4 space-y-2">
           <h4 className="font-medium text-sm text-muted-foreground">Booking Details</h4>

@@ -164,6 +164,7 @@ export function MembershipSignupForm({
       setAwaitingAuthComplete(true)
       openSignUp({
         initialEmail: email,
+        organizationId,
         onComplete: () => setAwaitingAuthComplete(false),
       })
       return

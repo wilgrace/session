@@ -12,6 +12,7 @@ import { getBookingDetails, getPublicSessionById, checkUserExistingBooking } fro
 import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
 interface SessionPageClientProps {
   sessionId: string
@@ -49,6 +50,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
   const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
+  const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
   const initialFetchDoneRef = useRef(false)
   // Track the user ID that was used for the last booking check
@@ -272,25 +274,29 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
   } : null
 
   return (
-    <div className="md:grid md:grid-cols-2 min-h-screen">
-      {/* Left Column - Beige background */}
-      <div className="flex justify-center">
-        <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px]">
-          {/* Mobile header row */}
-          <div className="flex items-center justify-between py-4 md:hidden">
-            <Link
-              href={`/${slug}`}
-              className="flex items-center gap-1 hover:opacity-80"
-              style={{ color: "var(--button-color, #6c47ff)" }}
-            >
-              <ChevronLeft className="h-5 w-5" />
-              <span>Calendar</span>
-            </Link>
-            <span className="font-medium text-sm truncate max-w-[40%]">{organizationName}</span>
-            <SessionAuthControls isAdmin={isAdmin} slug={slug} />
-          </div>
+    <>
+      {/* Mobile header - always visible on mobile */}
+      <div className="flex items-center justify-between px-4 py-4 md:hidden">
+        <Link
+          href={`/${slug}`}
+          className="flex items-center gap-1 hover:opacity-80"
+          style={{ color: "var(--button-color, #6c47ff)" }}
+        >
+          <ChevronLeft className="h-5 w-5" />
+          <span>Calendar</span>
+        </Link>
+        <span className="font-medium text-sm truncate max-w-[40%]">{organizationName}</span>
+        <SessionAuthControls isAdmin={isAdmin} slug={slug} />
+      </div>
 
-          {/* Desktop-only nav row */}
+      <div className="md:grid md:grid-cols-2 min-h-screen">
+        {/* Left Column - Beige background (hidden on mobile when past pricing step) */}
+        <div className={cn(
+          "flex justify-center",
+          (checkoutStep === "checkout" || mode !== "new") && "hidden md:flex"
+        )}>
+          <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px]">
+            {/* Desktop-only nav row */}
           <div className="hidden md:flex items-center justify-between h-20">
             <Link
               href={`/${slug}`}
@@ -336,9 +342,11 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
             userDetails={userDetails}
             isGuest={isGuest}
             guestEmail={guestEmail}
+            onStepChange={setCheckoutStep}
           />
         </div>
       </div>
     </div>
+    </>
   )
 }

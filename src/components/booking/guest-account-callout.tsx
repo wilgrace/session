@@ -7,14 +7,16 @@ import { UserPlus } from "lucide-react"
 
 interface GuestAccountCalloutProps {
   email?: string
+  organizationId?: string
 }
 
-export function GuestAccountCallout({ email }: GuestAccountCalloutProps) {
+export function GuestAccountCallout({ email, organizationId }: GuestAccountCalloutProps) {
   const { openSignUp } = useAuthOverlay()
 
   const handleCreateAccount = () => {
     openSignUp({
       initialEmail: email,
+      organizationId,
       onComplete: () => {
         // Full page reload to show the upgraded user's booking
         // The webhook upgrades the guest account, so we need fresh data

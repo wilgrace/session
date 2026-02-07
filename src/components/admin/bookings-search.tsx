@@ -9,9 +9,10 @@ interface BookingsSearchProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  className?: string
 }
 
-export function BookingsSearch({ value, onChange, placeholder = "Search by name or email..." }: BookingsSearchProps) {
+export function BookingsSearch({ value, onChange, placeholder = "Search by name or email...", className }: BookingsSearchProps) {
   const [localValue, setLocalValue] = useState(value)
 
   // Sync local value with external value
@@ -36,14 +37,14 @@ export function BookingsSearch({ value, onChange, placeholder = "Search by name 
   }, [onChange])
 
   return (
-    <div className="relative flex items-center">
+    <div className={`relative flex items-center ${className || ""}`}>
       <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
       <Input
         type="text"
         placeholder={placeholder}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
-        className="pl-9 pr-9 w-64"
+        className="pl-9 pr-9 w-full md:w-64"
       />
       {localValue && (
         <Button

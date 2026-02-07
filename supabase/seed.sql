@@ -207,10 +207,17 @@ VALUES
     '#ffffff',
     'discount'
   ),
-    (
+  (
     'org_bristol_sauna_001',
     'Bristol Sawna',
-    'bristol'
+    'bristol',
+    NULL,  -- description
+    NULL,  -- logo_url
+    NULL,  -- favicon_url
+    NULL,  -- header_image_url
+    NULL,  -- button_color
+    NULL,  -- button_text_color
+    NULL   -- member_price_type
   );
 
 -- ============================================================================

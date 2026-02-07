@@ -13,9 +13,13 @@ import {
   checkSlugAvailability,
   OrganizationSettings,
 } from "@/app/actions/organization"
+import { getWaivers } from "@/app/actions/waivers"
 import { Loader2, Upload, X, Check, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { WaiversList } from "@/components/admin/waivers-list"
+import { WaiverForm } from "@/components/admin/waiver-form"
+import type { Waiver } from "@/lib/db/schema"
 
 export default function SettingsPage() {
   return (
@@ -56,6 +60,11 @@ function SettingsPageContent() {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
   const [checkingSlug, setCheckingSlug] = useState(false)
 
+  // Waivers state
+  const [waivers, setWaivers] = useState<Waiver[]>([])
+  const [waiverFormOpen, setWaiverFormOpen] = useState(false)
+  const [editingWaiver, setEditingWaiver] = useState<Waiver | null>(null)
+
   useEffect(() => {
     loadSettings()
   }, [])
@@ -79,11 +88,35 @@ function SettingsPageContent() {
       setDefaultSessionImageUrl(result.data.defaultSessionImageUrl || "")
       setButtonColor(result.data.buttonColor || "#6c47ff")
       setButtonTextColor(result.data.buttonTextColor || "#ffffff")
+
+      // Load waivers
+      const waiversResult = await getWaivers()
+      if (waiversResult.success && waiversResult.data) {
+        setWaivers(waiversResult.data)
+      }
     } else {
       setError(result.error || "Failed to load settings")
     }
 
     setLoading(false)
+  }
+
+  // Waiver handlers
+  async function handleWaiverRefresh() {
+    const result = await getWaivers()
+    if (result.success && result.data) {
+      setWaivers(result.data)
+    }
+  }
+
+  function handleEditWaiver(waiver: Waiver) {
+    setEditingWaiver(waiver)
+    setWaiverFormOpen(true)
+  }
+
+  function handleCreateWaiver() {
+    setEditingWaiver(null)
+    setWaiverFormOpen(true)
   }
 
   // Check slug availability when it changes
@@ -248,6 +281,30 @@ function SettingsPageContent() {
           </div>
         </div>
       </div>
+
+      {/* Waivers */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Waivers</h3>
+        </div>
+        <WaiversList
+          waivers={waivers}
+          onEdit={handleEditWaiver}
+          onCreate={handleCreateWaiver}
+          onRefresh={handleWaiverRefresh}
+        />
+      </div>
+
+      {/* Waiver Form Sheet */}
+      <WaiverForm
+        open={waiverFormOpen}
+        onClose={() => {
+          setWaiverFormOpen(false)
+          setEditingWaiver(null)
+        }}
+        waiver={editingWaiver}
+        onSuccess={handleWaiverRefresh}
+      />
 
       {/* Brand & Design */}
       <div className="border-b border-gray-200 bg-white p-6 space-y-6">

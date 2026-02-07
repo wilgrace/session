@@ -6,11 +6,13 @@ import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { checkClerkUserSynced } from "@/app/actions/session"
 import { ensureClerkUser } from "@/app/actions/clerk"
+import { checkWaiverAgreement } from "@/app/actions/waivers"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CommunityProfileOverlay } from "./community-profile-overlay"
+import { WaiverAgreementOverlay } from "./waiver-agreement-overlay"
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
 
 // Clerk appearance - no card styling since we're in a dialog/sheet
@@ -35,6 +37,10 @@ export function AuthOverlay() {
     close,
     showProfileOverlay,
     setShowProfileOverlay,
+    showWaiverOverlay,
+    setShowWaiverOverlay,
+    pendingWaiver,
+    organizationId,
     triggerOnComplete
   } = useAuthOverlay()
   const isMobile = useIsMobile()
@@ -112,9 +118,19 @@ export function AuthOverlay() {
             setIsSyncing(false)
             setAuthCompleted(true)
 
-            // For sign-up, show community profile overlay
+            // For sign-up, check for waiver then show community profile
             // For sign-in, complete immediately
             if (mode === 'sign-up') {
+              // Check if there's an active waiver that needs agreement
+              if (organizationId) {
+                const waiverResult = await checkWaiverAgreement(organizationId)
+                if (waiverResult.success && waiverResult.data?.waiver && !waiverResult.data.hasAgreed) {
+                  // Show waiver overlay first
+                  setShowWaiverOverlay(true, waiverResult.data.waiver)
+                  return
+                }
+              }
+              // No waiver needed, proceed to community profile
               setShowProfileOverlay(true)
             } else {
               triggerOnComplete()
@@ -147,7 +163,13 @@ export function AuthOverlay() {
     return () => {
       cancelled = true
     }
-  }, [isOpen, isClerkLoaded, clerkUser, authCompleted, mode, setShowProfileOverlay, triggerOnComplete])
+  }, [isOpen, isClerkLoaded, clerkUser, authCompleted, mode, organizationId, setShowProfileOverlay, setShowWaiverOverlay, triggerOnComplete])
+
+  // Handle waiver completion
+  const handleWaiverComplete = useCallback(() => {
+    setShowWaiverOverlay(false, null)
+    setShowProfileOverlay(true) // Proceed to community profile
+  }, [setShowWaiverOverlay, setShowProfileOverlay])
 
   // Handle profile completion or skip
   const handleProfileComplete = useCallback(() => {
@@ -164,7 +186,18 @@ export function AuthOverlay() {
     }
   }
 
-  // If showing community profile overlay, render that instead
+  // If showing waiver overlay, render that first
+  if (showWaiverOverlay && pendingWaiver) {
+    return (
+      <WaiverAgreementOverlay
+        isOpen={true}
+        waiver={pendingWaiver}
+        onComplete={handleWaiverComplete}
+      />
+    )
+  }
+
+  // If showing community profile overlay, render that
   if (showProfileOverlay) {
     return (
       <CommunityProfileOverlay

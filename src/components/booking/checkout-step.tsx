@@ -13,7 +13,7 @@ interface CheckoutStepProps {
 
 export function CheckoutStep({ clientSecret, connectedAccountId, onBack }: CheckoutStepProps) {
   return (
-    <Card className="border-0 shadow-none md:border md:shadow">
+    <Card className="border-0 shadow-none p-0">
       <CardContent className="p-6">
         {/* Header with back button */}
         <div className="flex items-center justify-between mb-6">

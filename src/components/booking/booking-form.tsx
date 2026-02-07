@@ -56,6 +56,8 @@ interface BookingFormProps {
   defaultToMembership?: boolean
   // Mode for rendering different views
   mode?: BookingMode
+  // Callback when checkout step changes (for mobile layout adjustments)
+  onStepChange?: (step: "form" | "checkout") => void
   // User details for edit/confirmation modes
   userDetails?: {
     name: string
@@ -82,6 +84,7 @@ export function BookingForm({
   isActiveMember = false,
   defaultToMembership = false,
   mode = 'new',
+  onStepChange,
   userDetails,
   isGuest = false,
   guestEmail,
@@ -118,6 +121,11 @@ export function BookingForm({
       setIsEditMode(true)
     }
   }, [bookingDetails])
+
+  // Notify parent when checkout step changes (for mobile layout adjustments)
+  useEffect(() => {
+    onStepChange?.(checkoutStep)
+  }, [checkoutStep, onStepChange])
 
   // For edit or confirmation modes, use the BookingPanel
   // This return is placed AFTER all hooks to comply with React's rules of hooks
@@ -411,7 +419,7 @@ export function BookingForm({
     // Error state
     if (checkoutError) {
       return (
-        <Card className="border-0 shadow-none md:border md:shadow">
+        <Card className="border-0 shadow-none p-0">
           <CardContent className="p-6">
             <div className="text-center space-y-4">
               <p className="text-destructive">{checkoutError}</p>
@@ -427,7 +435,7 @@ export function BookingForm({
     // Loading state (shouldn't normally be visible, handled by PreCheckoutForm)
     if (checkoutLoading) {
       return (
-        <Card className="border-0 shadow-none md:border md:shadow">
+        <Card className="border-0 shadow-none p-0">
           <CardContent className="p-6 flex items-center justify-center min-h-[300px]">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
@@ -444,7 +452,7 @@ export function BookingForm({
 
   // Free sessions or edit mode: render standard form
   return (
-    <Card className="border-0 shadow-none md:border md:shadow">
+    <Card className="border-0 shadow-none p-0">
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
