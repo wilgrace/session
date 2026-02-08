@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,9 +13,12 @@ import { createBooking, updateBooking, deleteBooking } from "@/app/actions/sessi
 import { getClerkUser } from "@/app/actions/clerk"
 import { createClerkUser } from "@/app/actions/clerk"
 import { createEmbeddedCheckoutSession } from "@/app/actions/checkout"
+import { getActiveWaiver, checkWaiverAgreement } from "@/app/actions/waivers"
 import { PreCheckoutForm, CheckoutFormData, MembershipPricingOption } from "./pre-checkout-form"
 import { CheckoutStep } from "./checkout-step"
 import { BookingPanel } from "./booking-panel"
+import { WaiverAgreementOverlay } from "@/components/auth/waiver-agreement-overlay"
+import type { Waiver } from "@/lib/db/schema"
 import { Loader2 } from "lucide-react"
 import {
   AlertDialog,
@@ -108,6 +111,13 @@ export function BookingForm({
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
+  // Waiver state
+  const [activeWaiver, setActiveWaiver] = useState<Waiver | null>(null)
+  const [waiverNeeded, setWaiverNeeded] = useState(false)
+  const [showWaiverOverlay, setShowWaiverOverlay] = useState(false)
+  const [pendingCheckoutData, setPendingCheckoutData] = useState<CheckoutFormData | null>(null)
+  const [pendingFreeSubmit, setPendingFreeSubmit] = useState(false)
+
   // Determine if this is a paid session (not in edit mode)
   const isPaidSession = session.pricing_type === "paid" && session.drop_in_price && !isEditMode
 
@@ -126,6 +136,32 @@ export function BookingForm({
   useEffect(() => {
     onStepChange?.(checkoutStep)
   }, [checkoutStep, onStepChange])
+
+  // Fetch active waiver and check if user has already agreed
+  useEffect(() => {
+    if (mode !== 'new') return
+
+    // Reset immediately so stale `true` from a previous run (e.g. guest state)
+    // doesn't trigger the waiver overlay while the async check is in flight
+    setWaiverNeeded(false)
+
+    async function checkWaiver() {
+      const result = await getActiveWaiver(session.organization_id)
+      if (!result.success || !result.data) return
+      setActiveWaiver(result.data)
+
+      if (user) {
+        // Logged-in user: check if they've already agreed to the current version
+        const agreementResult = await checkWaiverAgreement(session.organization_id)
+        if (agreementResult.success && agreementResult.data?.hasAgreed) {
+          return // waiverNeeded stays false
+        }
+      }
+      // Guest users always need waiver; logged-in users who haven't agreed need it
+      setWaiverNeeded(true)
+    }
+    checkWaiver()
+  }, [session.organization_id, mode, user])
 
   // For edit or confirmation modes, use the BookingPanel
   // This return is placed AFTER all hooks to comply with React's rules of hooks
@@ -222,23 +258,15 @@ export function BookingForm({
     // Keep formData preserved so user doesn't lose their input
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!startTime) {
-      toast({
-        title: "Error",
-        description: "Please select a session time",
-        variant: "destructive",
-      })
-      return
-    }
+  // Perform free session booking (extracted so waiver completion can call it)
+  const performFreeBooking = useCallback(async () => {
+    if (!startTime) return
 
     setLoading(true)
     try {
       let clerkUserId: string
 
       if (!user) {
-        // For non-logged in users, create a new clerk user
         const nameParts = name.trim().split(" ")
         const firstName = nameParts[0] || ""
         const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined
@@ -255,7 +283,6 @@ export function BookingForm({
 
         clerkUserId = result.id
       } else {
-        // For logged in users, get or create their clerk user record
         const clerkUserResult = await getClerkUser(user.id)
 
         if (!clerkUserResult.success) {
@@ -263,7 +290,6 @@ export function BookingForm({
         }
 
         if (!clerkUserResult.id) {
-          // Create the user using the server action
           const result = await createClerkUser({
             email: user.emailAddresses[0].emailAddress,
             first_name: user.firstName || undefined,
@@ -280,8 +306,80 @@ export function BookingForm({
         }
       }
 
-      if (isEditMode && bookingId) {
-        // Update existing booking
+      const result = await createBooking({
+        session_template_id: session.id,
+        user_id: clerkUserId,
+        start_time: startTime.toISOString(),
+        notes: notes || undefined,
+        number_of_spots: numberOfSpots,
+      })
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create booking")
+      }
+
+      router.push(`/${slug}/confirmation?bookingId=${result.id}`)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to manage booking. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [startTime, user, name, email, session.id, notes, numberOfSpots, slug, router, toast])
+
+  // Waiver interception for paid checkout flow
+  const handleProceedToCheckoutWithWaiver = useCallback((formData: CheckoutFormData) => {
+    if (waiverNeeded && activeWaiver) {
+      setPendingCheckoutData(formData)
+      setShowWaiverOverlay(true)
+      return
+    }
+    handleProceedToCheckout(formData)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiverNeeded, activeWaiver])
+
+  // Handle waiver overlay completion
+  const handleWaiverComplete = useCallback(() => {
+    setShowWaiverOverlay(false)
+    setWaiverNeeded(false)
+
+    if (pendingCheckoutData) {
+      // Paid session flow - proceed to Stripe checkout
+      handleProceedToCheckout(pendingCheckoutData)
+      setPendingCheckoutData(null)
+    } else if (pendingFreeSubmit) {
+      // Free session flow - proceed to booking
+      setPendingFreeSubmit(false)
+      performFreeBooking()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCheckoutData, pendingFreeSubmit, performFreeBooking])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!startTime) {
+      toast({
+        title: "Error",
+        description: "Please select a session time",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // If waiver is needed and this is a new booking (not edit), show waiver first
+    if (waiverNeeded && activeWaiver && !isEditMode) {
+      setPendingFreeSubmit(true)
+      setShowWaiverOverlay(true)
+      return
+    }
+
+    if (isEditMode && bookingId) {
+      // Update existing booking
+      setLoading(true)
+      try {
         const result = await updateBooking({
           booking_id: bookingId,
           notes: notes || undefined,
@@ -292,7 +390,6 @@ export function BookingForm({
           throw new Error(result.error || "Failed to update booking")
         }
 
-        // Save update details to localStorage for toast on /booking
         if (user) {
           const updateDetails = {
             type: "update",
@@ -311,32 +408,18 @@ export function BookingForm({
           title: "Success",
           description: "Booking updated successfully",
         })
-      } else {
-        // Create new booking (for free sessions)
-        const result = await createBooking({
-          session_template_id: session.id,
-          user_id: clerkUserId,
-          start_time: startTime.toISOString(),
-          notes: notes || undefined,
-          number_of_spots: numberOfSpots,
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to manage booking. Please try again.",
+          variant: "destructive",
         })
-
-        if (!result.success) {
-          throw new Error(result.error || "Failed to create booking")
-        }
-
-        // After successful booking, redirect to confirmation page with bookingId
-        router.push(`/${slug}/confirmation?bookingId=${result.id}`)
-        return
+      } finally {
+        setLoading(false)
       }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to manage booking. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+    } else {
+      // New free booking
+      performFreeBooking()
     }
   }
 
@@ -380,6 +463,22 @@ export function BookingForm({
     }
   }
 
+  // Determine guest email for waiver overlay
+  const guestEmailForWaiver = !user ? (pendingCheckoutData?.email || email) : undefined
+
+  // Render waiver overlay if needed
+  if (showWaiverOverlay && activeWaiver) {
+    return (
+      <WaiverAgreementOverlay
+        isOpen={showWaiverOverlay}
+        waiver={activeWaiver}
+        onComplete={handleWaiverComplete}
+        guestEmail={guestEmailForWaiver}
+        organizationId={!user ? session.organization_id : undefined}
+      />
+    )
+  }
+
   // For paid sessions: 2-step checkout flow
   if (isPaidSession) {
     // Step 1: Pre-checkout form
@@ -393,7 +492,7 @@ export function BookingForm({
           isLoggedIn={!!user}
           slug={slug}
           organizationId={session.organization_id}
-          onProceedToCheckout={handleProceedToCheckout}
+          onProceedToCheckout={handleProceedToCheckoutWithWaiver}
           isLoading={checkoutLoading}
           memberships={memberships}
           userMembershipId={userMembershipId}

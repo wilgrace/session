@@ -16,10 +16,11 @@ const NUM_DAYS = 14;
 export default function AdminHomePage() {
   const [today] = useState(() => startOfDay(new Date()));
   const [dayOffset, setDayOffset] = useState(0);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
+  const [hasSetInitialSession, setHasSetInitialSession] = useState(false);
   const isMobile = useIsMobile();
   const { view, searchQuery, setView, setSearchQuery } = useBookingsView();
 
@@ -82,12 +83,55 @@ export default function AdminHomePage() {
     return sessionsForDay[index] || null;
   }, [sessionsForDay, selectedSessionIndex]);
 
+  // Find the session closest to the current time
+  const findClosestSessionIndex = useCallback((sessions: any[]) => {
+    if (sessions.length === 0) return 0;
+    const now = new Date();
+    const nowTime = now.getTime();
+
+    let closestIndex = 0;
+    let closestDiff = Infinity;
+
+    sessions.forEach((session, index) => {
+      const startTime = new Date(session.start_time).getTime();
+      const endTime = session.end_time ? new Date(session.end_time).getTime() : startTime;
+
+      // If current time is during the session, select it
+      if (nowTime >= startTime && nowTime <= endTime) {
+        closestIndex = index;
+        closestDiff = 0;
+        return;
+      }
+
+      const diff = Math.abs(startTime - nowTime);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestIndex = index;
+      }
+    });
+
+    return closestIndex;
+  }, []);
+
+  // Set initial session index based on current time (runs once when sessions first load)
+  useEffect(() => {
+    if (!hasSetInitialSession && sessionsForDay.length > 0) {
+      setSelectedSessionIndex(findClosestSessionIndex(sessionsForDay));
+      setHasSetInitialSession(true);
+    }
+  }, [sessionsForDay, hasSetInitialSession, findClosestSessionIndex]);
+
   // Reset session index when day changes
   const handleSelectDay = useCallback((date: Date) => {
     setSelectedDay(date);
-    setSelectedSessionIndex(0);
+    const key = format(date, 'yyyy-MM-dd');
+    const daySessions = sessionsByDay[key] || [];
+    const sorted = [...daySessions].sort((a, b) =>
+      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    );
+    setSelectedSessionIndex(findClosestSessionIndex(sorted));
     setSelectedBooking(null);
-  }, []);
+  }, [sessionsByDay, findClosestSessionIndex]);
 
   // Handle session selection from calendar
   const handleSelectSession = useCallback((session: any) => {

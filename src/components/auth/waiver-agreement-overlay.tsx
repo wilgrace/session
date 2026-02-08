@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { createWaiverAgreement } from "@/app/actions/waivers"
+import { createWaiverAgreement, createGuestWaiverAgreement } from "@/app/actions/waivers"
 import {
   Dialog,
   DialogContent,
@@ -29,12 +29,16 @@ interface WaiverAgreementOverlayProps {
   isOpen: boolean
   waiver: Waiver
   onComplete: () => void
+  guestEmail?: string
+  organizationId?: string
 }
 
 export function WaiverAgreementOverlay({
   isOpen,
   waiver,
   onComplete,
+  guestEmail,
+  organizationId,
 }: WaiverAgreementOverlayProps) {
   const isMobile = useIsMobile()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -52,11 +56,25 @@ export function WaiverAgreementOverlay({
     setError(null)
 
     try {
-      const result = await createWaiverAgreement({
-        waiverId: waiver.id,
-        agreementType: waiver.agreementType as "checkbox" | "signature",
-        signatureData: signatureData || undefined,
-      })
+      let result
+
+      if (guestEmail && organizationId) {
+        // Guest flow - no Clerk auth required
+        result = await createGuestWaiverAgreement({
+          email: guestEmail,
+          organizationId,
+          waiverId: waiver.id,
+          agreementType: waiver.agreementType as "checkbox" | "signature",
+          signatureData: signatureData || undefined,
+        })
+      } else {
+        // Authenticated flow
+        result = await createWaiverAgreement({
+          waiverId: waiver.id,
+          agreementType: waiver.agreementType as "checkbox" | "signature",
+          signatureData: signatureData || undefined,
+        })
+      }
 
       if (result.success) {
         onComplete()

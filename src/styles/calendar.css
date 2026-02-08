@@ -187,15 +187,11 @@
   background-color: #EFF6FF !important;
 }
 
-/* Booked session styling */
+/* Booked session styling (legacy class, kept for compatibility) */
 .rbc-event.booked-session {
-  background-color: #dcfce7 !important;
-  color: #166534 !important;
-  border-color: #86efac !important;
-}
-
-.rbc-event.booked-session:hover {
-  background-color: #bbf7d0 !important;
+  background-color: var(--session-booked-bg) !important;
+  color: var(--session-booked-text) !important;
+  border-color: var(--session-booked-border) !important;
 }
 
 /* Toolbar styling */
@@ -327,10 +323,10 @@
   --session-closed-bg: #ffffff;
   --session-closed-text: #6B7280;
 
-  /* Booked by current user (green) */
-  --session-booked-border: #86efac;
-  --session-booked-bg: #dcfce7;
-  --session-booked-text: #166534;
+  /* Booked by current user (uses brand colour via --button-color) */
+  --session-booked-border: var(--button-color, #6c47ff);
+  --session-booked-bg: color-mix(in srgb, var(--button-color, #6c47ff) 10%, white);
+  --session-booked-text: color-mix(in srgb, var(--button-color, #6c47ff) 80%, black);
 }
 
 /* Base session event styling */

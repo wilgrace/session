@@ -226,7 +226,7 @@ function BillingPageContent() {
   const hasIssue = status?.connected && status?.onboardingComplete && (!status?.chargesEnabled || !status?.payoutsEnabled)
 
   return (
-    <div className="flex-1 space-y-6 p-8 pt-6">
+    <div className="flex-1 space-y-6 pt-6">
 
       {/* Success message from Stripe return */}
       {success && (
@@ -330,7 +330,7 @@ function BillingPageContent() {
       {status?.chargesEnabled && (
         <>
           {/* Memberships */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+          <div className="border-b border-gray-200 bg-white p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-gray-400" />
               <h3 className="text-base font-medium text-gray-900">
@@ -355,7 +355,7 @@ function BillingPageContent() {
           />
 
           {/* Coupons & Promotion Codes */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+          <div className="border-b border-gray-200 bg-white p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Tag className="h-5 w-5 text-gray-400" />
               <h3 className="text-base font-medium text-gray-900">
@@ -423,7 +423,7 @@ function BillingPageContent() {
           </div>
 
           {/* Stripe Section (at bottom when connected) */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+          <div className="border-b border-gray-200 bg-white p-6 space-y-4">
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-gray-400" />
               <h3 className="text-base font-medium text-gray-900">Stripe</h3>

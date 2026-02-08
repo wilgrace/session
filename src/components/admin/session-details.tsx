@@ -3,9 +3,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Session {
   id: string;
-  name: string;
   start_time: string;
-  bookings?: any[];
+  end_time?: string;
+  bookings?: { number_of_spots?: number }[];
+  template?: { name?: string; capacity?: number };
 }
 
 interface SessionDetailsProps {
@@ -25,8 +26,11 @@ export function SessionDetails({
 }: SessionDetailsProps) {
   const date = new Date(session.start_time);
   const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-  const dayMonth = date.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
+
+  const spotsTaken = (session.bookings || []).reduce(
+    (sum, b) => sum + (b.number_of_spots || 1), 0
+  );
+  const capacity = session.template?.capacity || 0;
 
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < totalSessions - 1;
@@ -34,12 +38,16 @@ export function SessionDetails({
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl">
-          <span className="font-bold">{time}</span> • {dayName} {dayMonth}
-        </h2>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h2 className="text-xl">
+            <span className="font-bold">{time}</span>
+            <span className="text-muted-foreground ml-2">{spotsTaken}/{capacity}</span>
+          </h2>
+          <p className="text-sm text-muted-foreground">{session.template?.name}</p>
+        </div>
         {showNavigation && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-center" style={{ minWidth: '120px' }}>
             <Button
               variant="outline"
               size="icon"
@@ -63,13 +71,6 @@ export function SessionDetails({
             </Button>
           </div>
         )}
-      </div>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <p>{session.name}</p>
-          <span className="text-muted-foreground">•</span>
-          <p className="text-muted-foreground">{session.bookings?.length || 0} bookings</p>
-        </div>
       </div>
     </div>
   );

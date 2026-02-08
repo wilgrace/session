@@ -356,8 +356,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
   // For mobile view
   if (isMobile) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex-none">
+      <div className="flex flex-col">
+        <div className="px-4">
           <MobileCalendarView
             currentDate={currentDate}
             selectedDate={selectedDate}
@@ -365,7 +365,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
             sessions={sessions}
           />
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div>
           <MobileSessionList
             sessions={sessions}
             selectedDate={selectedDate}
@@ -379,7 +379,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
 
   // For desktop view
   return (
-    <div className="border border-gray-200 rounded-lg">
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
       {/* Sticky toolbar */}
       <div className="sticky top-0 z-40 bg-white border-b h-[75px] flex items-center px-4">
         <div className="flex items-center justify-between w-full">

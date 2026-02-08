@@ -537,7 +537,7 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
           <TableHeader>
             <TableRow>
               <SortableHeader column="name">Name</SortableHeader>
-              <TableHead>Schedule</TableHead>
+              <TableHead className="min-w-[200px]">Schedule</TableHead>
               <SortableHeader column="duration">Duration</SortableHeader>
               <SortableHeader column="capacity">Capacity</SortableHeader>
               <SortableHeader column="status">Status</SortableHeader>

@@ -52,7 +52,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
     <>
       {/* Fixed header image - z-0, sits behind content */}
       {hasHeaderImage && (
-        <div className="fixed top-0 left-0 right-0 h-[200px] z-0">
+        <div className="fixed top-0 left-0 right-0 h-[150px] md:h-[200px] z-0">
           <Image
             src={organization.headerImageUrl!}
             alt=""
@@ -67,7 +67,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
       {/* Main content - z-10, scrolls over header image */}
       <div className="relative z-10">
         {/* Transparent spacer so logo overlaps header image */}
-        {hasHeaderImage && <div className="h-[200px]" />}
+        {hasHeaderImage && <div className="h-[150px] md:h-[200px]" />}
 
         <BookingHeader
           isAdmin={isAdmin}

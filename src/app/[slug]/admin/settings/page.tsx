@@ -212,10 +212,9 @@ function SettingsPageContent() {
   }
 
   return (
-    <div className="flex-1 space-y-6 pt-6 pb-6">
+    <div className="flex-1 space-y-6 pb-6">
       {/* Basic Information */}
       <div className="border-b border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
 
         <div className="space-y-4">
           {/* Name */}

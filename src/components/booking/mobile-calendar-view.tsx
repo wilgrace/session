@@ -112,7 +112,7 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
         </Button>
         <h2 className="text-2xl font-bold">
           <span>
-            {format(viewDate, "MMMM")} <span className="text-primary">{format(viewDate, "yyyy")}</span>
+            {format(viewDate, "MMMM")} <span style={{ color: 'var(--button-color, #6c47ff)' }}>{format(viewDate, "yyyy")}</span>
           </span>
         </h2>
         <Button
@@ -155,10 +155,11 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
               <button
                 type="button"
                 className={`aspect-square w-full flex flex-col items-center justify-center rounded-full ${
-                  isSelected ? "bg-primary text-white" : 
-                  isPastDay ? "text-gray-400" : 
+                  isSelected ? "text-white" :
+                  isPastDay ? "text-gray-400" :
                   "hover:bg-gray-100"
                 }`}
+                style={isSelected ? { backgroundColor: 'var(--button-color, #6c47ff)' } : undefined}
                 onClick={() => !isPastDay && handleDayClick(day)}
                 disabled={isPastDay}
               >
@@ -166,7 +167,7 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
                 {displaySessions.length > 0 && (
                   <div className="flex justify-center space-x-0.5">
                     {displaySessions.map((_, index) => (
-                      <div key={index} className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      <div key={index} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isSelected ? 'white' : 'var(--button-color, #6c47ff)' }} />
                     ))}
                   </div>
                 )}

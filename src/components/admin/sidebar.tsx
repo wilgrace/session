@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, X, Building2, ChevronDown, Shield } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, Building2, ChevronDown, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -182,13 +183,13 @@ export function Sidebar({ slug }: SidebarProps) {
 
       {/* Bottom section with Booking Page link and User Avatar */}
       <div className="border-t border-gray-200">
-        <div className="p-4 pb-2">
+        <div className="p-4 pb-2 border-b border-gray-200">
           <Link
             href={`/${slug}`}
             onClick={onNavigate}
-            className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-primary hover:bg-primary/10"
           >
-            <ExternalLink className="mr-3 h-5 w-5 opacity-50" />
+            <ExternalLink className="mr-3 h-5 w-5" />
             Booking Page
           </Link>
         </div>
@@ -221,14 +222,10 @@ export function Sidebar({ slug }: SidebarProps) {
 
       {/* Mobile Sidebar */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-        <SheetContent side="left" className="p-0 w-64">
-          <SheetHeader>
+        <SheetContent side="left" className="p-0 w-64 [&>button:last-child]:hidden">
+          <VisuallyHidden.Root>
             <SheetTitle>Navigation</SheetTitle>
-          </SheetHeader>
-          <Button variant="ghost" size="icon" className="absolute top-3 right-3" onClick={() => setIsMobileOpen(false)}>
-            <X className="h-6 w-6" />
-            <span className="sr-only">Close sidebar</span>
-          </Button>
+          </VisuallyHidden.Root>
           <SidebarContent onNavigate={() => setIsMobileOpen(false)} />
         </SheetContent>
       </Sheet>

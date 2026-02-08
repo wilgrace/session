@@ -28,9 +28,10 @@ export function UpcomingBookings({ bookings, className, slug }: UpcomingBookings
 
   return (
     <div className={cn("mb-6 rounded-lg border border-gray-200 overflow-hidden md:mb-0 mx-4 md:mx-0 mt-4 md:mt-0", className)}>
-      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-200">
-        <h2 className="text-base font-medium">Upcoming Bookings</h2>
-        <FAQDialog />
+      <div className="bg-white px-6 py-3 flex items-center justify-between border-b border-gray-200">
+        <h2 className="text-left text-xs uppercase tracking-wider font-medium text-muted-foreground">
+          YOUR UPCOMING BOOKINGS
+          </h2>
       </div>
 
       <div className="divide-y bg-white">
@@ -56,12 +57,11 @@ export function UpcomingBookings({ bookings, className, slug }: UpcomingBookings
               <div className="flex items-center space-x-2">
                 <Link
                   href={`/${slug}/${booking.session_instance.session_templates.id}?edit=true&bookingId=${booking.id}&start=${new Date(booking.session_instance.start_time).toISOString()}`}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-500"
+                  className="flex items-center px-3 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Edit className="mr-1.5 h-4 w-4" />
                   Edit
                 </Link>
-                <ChevronRight className="h-4 w-4 text-gray-400" />
               </div>
             </div>
           </div>
@@ -71,57 +71,3 @@ export function UpcomingBookings({ bookings, className, slug }: UpcomingBookings
     </div>
   )
 }
-
-function FAQDialog() {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-sm">
-          <HelpCircle className="mr-1.5 h-3.5 w-3.5" />
-          First time visiting?
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Frequently Asked Questions</DialogTitle>
-          <DialogDescription>Everything you need to know about your booking experience.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 mt-4">
-          <div>
-            <h3 className="font-medium text-gray-900">How do I book a session?</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Browse the calendar below, select your desired session, and click "Book Now". Follow the prompts to
-              complete your booking.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900">Can I modify my booking?</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Yes, you can edit or cancel your booking up to 24 hours before the scheduled session time. Click the
-              "Edit" button next to your booking to make changes.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900">What's your cancellation policy?</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Cancellations made at least 24 hours before the session start time will receive a full refund.
-              Cancellations made less than 24 hours in advance are non-refundable.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900">How many spots can I book?</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              You can book multiple spots for a single session if you're bringing friends or family. The maximum number
-              of spots you can book depends on the session's availability.
-            </p>
-          </div>
-        </div>
-        <div className="mt-6 flex justify-end">
-          <DialogClose asChild>
-            <Button>Got it, thanks!</Button>
-          </DialogClose>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-} 

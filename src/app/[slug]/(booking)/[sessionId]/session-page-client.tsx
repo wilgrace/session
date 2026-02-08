@@ -279,13 +279,11 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
       <div className="flex items-center justify-between px-4 py-4 md:hidden">
         <Link
           href={`/${slug}`}
-          className="flex items-center gap-1 hover:opacity-80"
-          style={{ color: "var(--button-color, #6c47ff)" }}
+          className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
         >
-          <ChevronLeft className="h-5 w-5" />
-          <span>Calendar</span>
+          <ChevronLeft className="h-6 w-6" />
         </Link>
-        <span className="font-medium text-sm truncate max-w-[40%]">{organizationName}</span>
+        <span className="font-medium text-sm">{organizationName}</span>
         <SessionAuthControls isAdmin={isAdmin} slug={slug} />
       </div>
 
@@ -300,11 +298,9 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
           <div className="hidden md:flex items-center justify-between h-20">
             <Link
               href={`/${slug}`}
-              className="flex items-center gap-1 hover:opacity-80"
-              style={{ color: "var(--button-color, #6c47ff)" }}
+              className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
             >
-              <ChevronLeft className="h-5 w-5" />
-              <span>Calendar</span>
+              <ChevronLeft className="h-6 w-6" />
             </Link>
             <span className="font-medium">{organizationName}</span>
             <div className="w-16" />

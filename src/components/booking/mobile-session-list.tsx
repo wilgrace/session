@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { format, isSameDay } from "date-fns"
-import { SessionTemplate } from "@/types/session"
+import { SessionTemplate, SessionInstance } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { Lock } from "lucide-react"
+import { Lock, Users, EyeOff } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { LockedSessionDialog } from "./locked-session-tooltip"
+import { useUser } from "@clerk/nextjs"
 
 interface MobileSessionListProps {
   sessions: SessionTemplate[]
@@ -19,27 +20,30 @@ interface MobileSessionListProps {
 
 export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = false }: MobileSessionListProps) {
   const router = useRouter()
+  const { user } = useUser()
   const [lockedDialog, setLockedDialog] = useState<{ open: boolean; sessionName: string }>({
     open: false,
     sessionName: ''
   })
 
-  // isAdmin is now passed as a prop from the server component
-
   // Build a flat list of all sessions for the selected day directly from sessions
-  // This avoids filtering issues and handles all cases properly
   const sessionsForDay = sessions.flatMap((template) => {
-    const results: { template: SessionTemplate; startTime: Date; key: string }[] = []
+    const results: { template: SessionTemplate; startTime: Date; endTime: Date; key: string; instance?: SessionInstance; isBooked: boolean; bookingId?: string }[] = []
 
     // Check instances for this day
     if (template.instances && template.instances.length > 0) {
       template.instances.forEach(instance => {
         const instanceDate = new Date(instance.start_time)
         if (isSameDay(instanceDate, selectedDate)) {
+          const userBooking = instance.bookings?.find(b => b.user?.clerk_user_id === user?.id)
           results.push({
             template,
             startTime: instanceDate,
-            key: instance.id
+            endTime: new Date(instance.end_time),
+            key: instance.id,
+            instance,
+            isBooked: !!userBooking,
+            bookingId: userBooking?.id,
           })
         }
       })
@@ -54,6 +58,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
 
       if (schedule) {
         const [hours, minutes] = schedule.time.split(':').map(Number)
+        const effectiveDuration = schedule.duration_minutes || template.duration_minutes
         const startTime = new Date(
           selectedDate.getFullYear(),
           selectedDate.getMonth(),
@@ -63,11 +68,14 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
           0,
           0
         )
+        const endTime = new Date(startTime.getTime() + effectiveDuration * 60000)
 
         results.push({
           template,
           startTime,
-          key: `${template.id}-${startTime.toISOString()}`
+          endTime,
+          key: `${template.id}-${startTime.toISOString()}`,
+          isBooked: false,
         })
       }
     }
@@ -78,10 +86,14 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
   // Sort by start time
   sessionsForDay.sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 
-  const handleSessionClick = (template: SessionTemplate, startTime: Date) => {
+  const handleSessionClick = (template: SessionTemplate, startTime: Date, isBooked: boolean, bookingId?: string) => {
     // For free sessions, only admins can book - others see dialog
     if (template.pricing_type === 'free' && !isAdmin) {
       setLockedDialog({ open: true, sessionName: template.name })
+      return
+    }
+    if (isBooked && bookingId) {
+      router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}`)
       return
     }
     router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}`)
@@ -97,23 +109,42 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
 
   return (
     <div className="space-y-4 p-4">
-      {sessionsForDay.map(({ template, startTime, key }) => {
+      {sessionsForDay.map(({ template, startTime, endTime, key, instance, isBooked, bookingId }) => {
         const isFreeSession = template.pricing_type === 'free'
+        const isHidden = template.visibility === 'hidden'
+        const totalCapacity = template.capacity || 10
+        const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+        const availableSpots = totalCapacity - totalSpotsBooked
+        const isFull = availableSpots === 0
+
         return (
           <Card
             key={key}
-            className={isFreeSession && !isAdmin ? 'border-amber-300 bg-amber-50' : ''}
+            className={
+              isBooked ? 'border-[var(--button-color)]' :
+              isFreeSession && !isAdmin ? 'border-amber-300 bg-amber-50' : ''
+            }
+            style={isBooked ? {
+              backgroundColor: 'color-mix(in srgb, var(--button-color, #6c47ff) 8%, white)',
+              borderColor: 'var(--button-color, #6c47ff)',
+            } : undefined}
           >
             <CardContent className="p-4">
               <div className="flex justify-between items-center">
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-medium flex items-center gap-1">
                     {isFreeSession && <Lock className="h-3 w-3 text-amber-600" />}
+                    {isHidden && <EyeOff className="h-3 w-3 text-gray-400" />}
                     {template.name}
                   </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {format(startTime, "h:mm a")}
-                  </p>
+                  <div className="mt-1 flex items-center text-sm text-muted-foreground gap-x-3">
+                    <span>{format(startTime, "HH:mm")} - {format(endTime, "HH:mm")}</span>
+                    <span className="text-gray-300">·</span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      {isFull ? 'Waiting List' : availableSpots}
+                    </span>
+                  </div>
                   {isFreeSession && !isAdmin && (
                     <Badge variant="secondary" className="mt-1 bg-amber-100 text-amber-800 text-xs">
                       Contact for details
@@ -122,9 +153,9 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
                 </div>
                 <Button
                   variant={isFreeSession && !isAdmin ? "secondary" : "outline"}
-                  onClick={() => handleSessionClick(template, startTime)}
+                  onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
                 >
-                  {isFreeSession && !isAdmin ? 'Info' : 'Book'}
+                  {isFreeSession && !isAdmin ? 'Info' : isBooked ? 'View' : 'Book'}
                 </Button>
               </div>
             </CardContent>
