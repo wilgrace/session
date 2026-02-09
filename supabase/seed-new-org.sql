@@ -200,44 +200,18 @@ TRUNCATE TABLE public.clerk_users CASCADE;
 TRUNCATE TABLE public.organizations CASCADE;
 
 -- ============================================================================
--- ORGANIZATIONS
+-- ORGANIZATION (blank slate - no branding)
 -- ============================================================================
 INSERT INTO public.organizations (
   id,
   name,
-  slug,
-  description,
-  logo_url,
-  favicon_url,
-  header_image_url,
-  button_color,
-  button_text_color,
-  member_price_type
+  slug
 )
 VALUES
   (
     'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'Cardiff Community Sawna',
-    'cardiff',
-    'Cardiff''s community-run mobile sauna bringing warmth and wellness to the city.',
-    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377969192.png',
-    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377972513.png',
-    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377978474.jpg',
-    '#C9501C',
-    '#ffffff',
-    'discount'
-  ),
-  (
-    'org_bristol_sauna_001',
-    'Bristol Sawna',
-    'bristol',
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    'New Org',
+    'new'
   );
 
 -- ============================================================================
@@ -282,7 +256,7 @@ VALUES
   );
 
 -- ============================================================================
--- WAIVERS
+-- WAIVER
 -- ============================================================================
 INSERT INTO public.waivers (
   id,
@@ -335,93 +309,6 @@ If you are making this booking on behalf of a group, you confirm that all member
     true
   );
 
--- ============================================================================
--- STRIPE CONNECT ACCOUNTS
--- ============================================================================
-INSERT INTO public.stripe_connect_accounts (
-  id,
-  organization_id,
-  stripe_account_id,
-  account_type,
-  details_submitted,
-  charges_enabled,
-  payouts_enabled,
-  country,
-  default_currency
-)
-VALUES
-  (
-    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'acct_1Ss2rZ8sdPMiIqvN',
-    'standard',
-    true,
-    true,
-    true,
-    'GB',
-    'gbp'
-  );
-
--- ============================================================================
--- MEMBERSHIPS
--- ============================================================================
-INSERT INTO public.memberships (
-  id,
-  organization_id,
-  name,
-  description,
-  image_url,
-  price,
-  billing_period,
-  member_price_type,
-  member_discount_percent,
-  display_to_non_members,
-  show_on_booking_page,
-  show_on_membership_page,
-  stripe_product_id,
-  stripe_price_id,
-  is_active,
-  sort_order
-)
-VALUES
-  -- Regular membership: £15/month, 50% discount
-  (
-    '8798523d-e737-4a82-ae92-c7da93286f91',
-    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'Regular',
-    'For people who come once a week',
-    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770383229478.jpg',
-    1500, -- £15.00 in pence
-    'monthly',
-    'discount',
-    50,
-    true,
-    true,
-    true,
-    'prod_TvebqcXpOZ0pVD',
-    'price_1SxnIA8sdPMiIqvNap3MKHiH',
-    true,
-    0
-  ),
-  -- Free membership: £0/month, 100% discount (for outreach)
-  (
-    '8990819e-aacb-494b-abf2-a54b0dd61d10',
-    'org_2wzj16iQknhJygxeSYnYoOX2MO4',
-    'Free',
-    'For use during social outreach',
-    'http://127.0.0.1:54321/storage/v1/object/public/session-images/sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770383208336.jpg',
-    0, -- Free
-    'monthly',
-    'discount',
-    100,
-    true,
-    true,
-    true,
-    NULL,
-    NULL,
-    true,
-    1
-  );
 
 -- ============================================================================
 -- SESSION TEMPLATES

@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Loader2, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import type { Waiver, AgreementType } from "@/lib/db/schema"
 import { createWaiver, updateWaiver } from "@/app/actions/waivers"
 
@@ -41,6 +42,14 @@ export function WaiverForm({
   const [agreementType, setAgreementType] = useState<AgreementType>("checkbox")
   const [isActive, setIsActive] = useState(false)
 
+  // Inline validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const clearError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next })
+    }
+  }
+
   // Reset form when waiver changes
   useEffect(() => {
     if (waiver) {
@@ -49,27 +58,31 @@ export function WaiverForm({
       setContent(waiver.content)
       setAgreementType(waiver.agreementType as AgreementType)
       setIsActive(waiver.isActive)
+      setFieldErrors({})
     } else {
       setTitle("")
       setSummary("")
       setContent("")
       setAgreementType("checkbox")
       setIsActive(false)
+      setFieldErrors({})
     }
   }, [waiver, open])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (!title.trim()) {
-      toast.error("Please enter a waiver title")
-      return
-    }
+    const errors: Record<string, string> = {}
+    if (!title.trim()) errors.title = "Title is required"
+    if (!content.trim()) errors.content = "Content is required"
 
-    if (!content.trim()) {
-      toast.error("Please enter the waiver content")
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      const firstKey = Object.keys(errors)[0]
+      document.getElementById(firstKey)?.scrollIntoView({ behavior: "smooth", block: "center" })
       return
     }
+    setFieldErrors({})
 
     setLoading(true)
 
@@ -118,10 +131,12 @@ export function WaiverForm({
             <Input
               id="title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); clearError("title") }}
               placeholder="e.g., Terms & Conditions"
               disabled={loading}
+              className={cn(fieldErrors.title && "border-red-500 focus-visible:ring-red-500")}
             />
+            {fieldErrors.title && <p className="text-sm text-red-500">{fieldErrors.title}</p>}
           </div>
 
           {/* Summary */}
@@ -146,15 +161,19 @@ export function WaiverForm({
             <Textarea
               id="content"
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => { setContent(e.target.value); clearError("content") }}
               placeholder="Enter the full terms and conditions..."
               disabled={loading}
               rows={10}
-              className="font-mono text-sm"
+              className={cn("font-mono text-sm", fieldErrors.content && "border-red-500 focus-visible:ring-red-500")}
             />
-            <p className="text-xs text-gray-500">
-              The full waiver text that users will need to read and agree to.
-            </p>
+            {fieldErrors.content ? (
+              <p className="text-sm text-red-500">{fieldErrors.content}</p>
+            ) : (
+              <p className="text-xs text-gray-500">
+                The full waiver text that users will need to read and agree to.
+              </p>
+            )}
           </div>
 
           {/* Agreement Type */}

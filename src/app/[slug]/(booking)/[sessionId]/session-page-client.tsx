@@ -82,6 +82,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
 
   useEffect(() => {
     const fetchSession = async () => {
+      let isRedirecting = false
       try {
         // Validate sessionId
         if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
@@ -112,7 +113,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
         // 2. User is logged in
         // 3. We have a start time
         // 4. We haven't already checked for this user (prevent duplicate checks when user reference changes)
-        if (!edit && user && startParam && lastBookingCheckUserIdRef.current !== user.id) {
+        if (!edit && !bookingId && user && startParam && lastBookingCheckUserIdRef.current !== user.id) {
           lastBookingCheckUserIdRef.current = user.id
           // Check if user already has a booking for this session instance
           const bookingCheck = await checkUserExistingBooking(
@@ -122,6 +123,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
           )
 
           if (bookingCheck.success && bookingCheck.booking) {
+            isRedirecting = true
             // Redirect to edit mode
             const params = new URLSearchParams({
               edit: 'true',
@@ -221,7 +223,9 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
           searchParams
         }))
       } finally {
-        setLoading(false)
+        if (!isRedirecting) {
+          setLoading(false)
+        }
       }
     }
 

@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useUser } from "@clerk/nextjs";
 import { ROLES, DB_ROLES } from "@/lib/auth-utils";
 import { Protect } from "@clerk/nextjs";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface UserFormProps {
   open: boolean;
@@ -28,6 +30,14 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
   const [loading, setLoading] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { user: currentUser } = useUser();
+
+  // Inline validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const clearError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next });
+    }
+  };
 
   // Define available roles based on current user's role
   const isSuperAdmin = currentUser?.organizationMemberships?.[0]?.role === ROLES.SUPER_ADMIN;
@@ -45,6 +55,7 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
   useEffect(() => {
     if (user) {
       setForm({ ...user });
+      setFieldErrors({});
     } else {
       setForm({
         email: "",
@@ -57,19 +68,30 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
         home_postal_code: "",
         role: DB_ROLES.USER
       });
+      setFieldErrors({});
     }
   }, [user]);
 
   const handleChange = (field: keyof Profile, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }));
+    clearError(field);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user && !form.clerk_user_id) {
-      alert("Clerk User ID is required to create a new user.");
+
+    const errors: Record<string, string> = {};
+    if (!form.email?.trim()) errors.email = "Email is required";
+    if (!user && !form.clerk_user_id?.trim()) errors.clerk_user_id = "Clerk User ID is required";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstKey = Object.keys(errors)[0];
+      document.getElementById(firstKey)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    setFieldErrors({});
+
     setLoading(true);
     let result;
     if (user && user.id) {
@@ -108,7 +130,7 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
       onSuccess();
       onClose();
     } else {
-      alert("Error saving user: " + result.error);
+      toast.error(result.error || "Failed to save user");
     }
   };
 
@@ -122,7 +144,7 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
       onSuccess();
       onClose();
     } else {
-      alert("Error deleting user: " + error);
+      toast.error(error || "Failed to delete user");
     }
   };
 
@@ -155,14 +177,15 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Email *</Label>
             <Input
               id="email"
               type="email"
               value={form.email || ""}
               onChange={(e) => handleChange("email", e.target.value)}
-              required
+              className={cn(fieldErrors.email && "border-red-500 focus-visible:ring-red-500")}
             />
+            {fieldErrors.email && <p className="text-sm text-red-500">{fieldErrors.email}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="organization_id">Organization ID</Label>
@@ -206,14 +229,15 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="clerk_user_id">Clerk User ID</Label>
+            <Label htmlFor="clerk_user_id">Clerk User ID {!user && "*"}</Label>
             <Input
               id="clerk_user_id"
               value={form.clerk_user_id || ""}
               onChange={(e) => handleChange("clerk_user_id", e.target.value)}
               disabled={!!user}
-              required={!user}
+              className={cn(fieldErrors.clerk_user_id && "border-red-500 focus-visible:ring-red-500")}
             />
+            {fieldErrors.clerk_user_id && <p className="text-sm text-red-500">{fieldErrors.clerk_user_id}</p>}
           </div>
           <Protect
             role={ROLES.SUPER_ADMIN}

@@ -259,7 +259,7 @@ function BillingPageContent() {
       {/* NOT CONNECTED: Show Stripe Connect prompt first */}
       {!status?.connected && (
         <>
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <div className="border-b border-gray-200 bg-white p-6">
             <div className="text-center py-6">
               <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                 <CreditCard className="h-6 w-6 text-gray-400" />
@@ -283,7 +283,7 @@ function BillingPageContent() {
           </div>
 
           {/* How Payments Work - only show when not connected */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <div className="border-b border-gray-200 bg-white p-6">
             <h3 className="text-base font-medium text-gray-900 mb-2">
               How Payments Work
             </h3>
@@ -298,7 +298,7 @@ function BillingPageContent() {
 
       {/* ONBOARDING INCOMPLETE */}
       {status?.connected && !status.onboardingComplete && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
+        <div className="border-b border-gray-200 bg-white p-6">
           <h3 className="text-base font-medium text-gray-900 mb-4">
             Complete Stripe Setup
           </h3>

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Trash2, Pencil, Users, Lock, ArrowUp, ArrowDown, EyeOff } from "lucide-react"
+import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Pencil, Users, Lock, ArrowUp, ArrowDown, EyeOff } from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek as dateFnsStartOfWeek, endOfWeek as dateFnsEndOfWeek, startOfDay, endOfDay, getDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { cn } from "@/lib/utils"
@@ -615,21 +615,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive/90 hover:bg-transparent"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // We'll need to add a delete handler prop to the component
-                          if (onDeleteSession) {
-                            onDeleteSession(template);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
                       <Button
                         variant="outline"
                         size="sm"

@@ -131,7 +131,7 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
-            onClick={() => clerk.signOut()}
+            onClick={() => clerk.signOut({ redirectUrl: `/${slug}` })}
             className="cursor-pointer"
           >
             <LogOut className="mr-2 h-4 w-4" />

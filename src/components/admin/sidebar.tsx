@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, Building2, ChevronDown, Shield } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
@@ -76,23 +76,9 @@ export function Sidebar({ slug }: SidebarProps) {
     if (!currentOrg) {
       return (
         <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-500">
-          <Building2 className="mr-3 h-5 w-5 opacity-50" />
           <span className="truncate">Unknown Organization</span>
         </div>
       )
-    }
-
-    // Show role badge for superadmins
-    const RoleBadge = () => {
-      if (currentOrg.role === 'superadmin') {
-        return (
-          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-            <Shield className="h-3 w-3 mr-0.5" />
-            Super
-          </span>
-        )
-      }
-      return null
     }
 
     if (hasMultipleOrgs) {
@@ -101,9 +87,7 @@ export function Sidebar({ slug }: SidebarProps) {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md text-gray-900 hover:bg-gray-50 transition-colors">
               <div className="flex items-center min-w-0">
-                <Building2 className="mr-3 h-5 w-5 opacity-50 flex-shrink-0 text-gray-500" />
                 <span className="truncate">{currentOrg.organization.name}</span>
-                <RoleBadge />
               </div>
               <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />
             </button>
@@ -114,12 +98,11 @@ export function Sidebar({ slug }: SidebarProps) {
                 key={assignment.organizationId}
                 onClick={() => handleOrgSwitch(assignment.organization.slug)}
                 className={cn(
-                  "cursor-pointer flex items-center justify-between",
+                  "cursor-pointer flex items-center justify-between pt-4 pb-4",
                   assignment.organization.slug === slug && "bg-gray-100"
                 )}
               >
                 <div className="flex items-center">
-                  <Building2 className="mr-2 h-4 w-4" />
                   <span>{assignment.organization.name}</span>
                 </div>
                 {assignment.role === 'superadmin' && (
@@ -140,10 +123,7 @@ export function Sidebar({ slug }: SidebarProps) {
     }
 
     return (
-      <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-900">
-        <Building2 className="mr-3 h-5 w-5 opacity-50 text-gray-500" />
-        <span className="truncate">{currentOrg.organization.name}</span>
-        <RoleBadge />
+      <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-900">        <span className="truncate">{currentOrg.organization.name}</span>
       </div>
     )
   }

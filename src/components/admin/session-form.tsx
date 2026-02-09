@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, isValid, parseISO, startOfDay } from "date-fns"
-import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock } from "lucide-react"
+import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
@@ -86,6 +86,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   const { user } = useUser()
   const { getToken } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [date, setDate] = useState<Date | undefined>(undefined)
   const [visibility, setVisibility] = useState<'open' | 'hidden' | 'closed'>(template?.visibility ?? 'open')
   const [scheduleType, setScheduleType] = useState(template?.is_recurring ? "repeat" : "once")
@@ -119,6 +120,14 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   // Event color state
   const [eventColor, setEventColor] = useState<EventColorKey>(DEFAULT_EVENT_COLOR)
+
+  // Inline validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const clearError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next })
+    }
+  }
 
   // Get the day of week in lowercase (e.g., "mon", "tue")
   const getDayOfWeek = (date: Date) => {
@@ -266,6 +275,37 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Inline validation
+    const errors: Record<string, string> = {}
+    if (!name.trim()) errors.name = "Session name is required"
+    if (!capacity || parseInt(capacity) < 1) errors.capacity = "Capacity is required"
+    if (scheduleType === "once" && !date) errors.date = "Date is required"
+    if (!durationMinutes || durationMinutes <= 0) errors.duration = "Duration is required"
+    if (pricingType === "paid" && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
+    if (scheduleType === "repeat") {
+      schedules.forEach((schedule) => {
+        if (!schedule.days || schedule.days.length === 0) {
+          errors[`schedule-days-${schedule.id}`] = "Select at least one day"
+        }
+      })
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      // Auto-expand sections containing errors
+      if (errors.name || errors.capacity) setGeneralExpanded(true)
+      if (errors.date || errors.duration || Object.keys(errors).some(k => k.startsWith("schedule-days-"))) setScheduleExpanded(true)
+      if (errors.dropInPrice) setPaymentExpanded(true)
+      // Scroll to first error after a tick (to allow sections to expand)
+      setTimeout(() => {
+        const firstKey = Object.keys(errors)[0]
+        document.getElementById(firstKey)?.scrollIntoView({ behavior: "smooth", block: "center" })
+      }, 50)
+      return
+    }
+    setFieldErrors({})
+
     setLoading(true);
 
     try {
@@ -622,12 +662,20 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="name" className="text-sm font-medium">
-                      Session Name
+                      Session Name <span className="text-red-500">*</span>
                     </Label>
-                    <span className="text-sm text-gray-500">0</span>
                   </div>
-                  <Input id="name" defaultValue={name} onChange={(e) => setName(e.target.value)} />
-                  <p className="text-sm text-gray-500">Give your session a short and clear name.</p>
+                  <Input
+                    id="name"
+                    defaultValue={name}
+                    onChange={(e) => { setName(e.target.value); clearError("name") }}
+                    className={cn(fieldErrors.name && "border-red-500 focus-visible:ring-red-500")}
+                  />
+                  {fieldErrors.name ? (
+                    <p className="text-sm text-red-500">{fieldErrors.name}</p>
+                  ) : (
+                    <p className="text-sm text-gray-500">Give your session a short and clear name.</p>
+                  )}
                 </div>
 
                 {/* Capacity */}
@@ -635,8 +683,19 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                   <Label htmlFor="capacity" className="text-sm font-medium">
                     Capacity <span className="text-red-500">*</span>
                   </Label>
-                  <Input id="capacity" type="number" min="1" defaultValue={capacity} onChange={(e) => setCapacity(e.target.value)} />
-                  <p className="text-sm text-gray-500">Maximum number of participants allowed.</p>
+                  <Input
+                    id="capacity"
+                    type="number"
+                    min="1"
+                    defaultValue={capacity}
+                    onChange={(e) => { setCapacity(e.target.value); clearError("capacity") }}
+                    className={cn(fieldErrors.capacity && "border-red-500 focus-visible:ring-red-500")}
+                  />
+                  {fieldErrors.capacity ? (
+                    <p className="text-sm text-red-500">{fieldErrors.capacity}</p>
+                  ) : (
+                    <p className="text-sm text-gray-500">Maximum number of participants allowed.</p>
+                  )}
                 </div>
 
 
@@ -797,10 +856,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
+                            id="date"
                             variant="outline"
                             className={cn(
                               "w-full justify-start text-left font-normal",
-                              !date && "text-muted-foreground"
+                              !date && "text-muted-foreground",
+                              fieldErrors.date && "border-red-500"
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
@@ -808,14 +869,15 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
-                          <Calendar 
-                            mode="single" 
-                            selected={date} 
-                            onSelect={(newDate) => newDate && setDate(startOfDay(newDate))} 
-                            initialFocus 
+                          <Calendar
+                            mode="single"
+                            selected={date}
+                            onSelect={(newDate) => { if (newDate) { setDate(startOfDay(newDate)); clearError("date") } }}
+                            initialFocus
                           />
                         </PopoverContent>
                       </Popover>
+                      {fieldErrors.date && <p className="text-sm text-red-500">{fieldErrors.date}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="time" className="text-sm font-medium">
@@ -844,8 +906,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                         type="number"
                         min="1"
                         value={durationMinutes}
-                        onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 0)}
+                        onChange={(e) => { setDurationMinutes(parseInt(e.target.value) || 0); clearError("duration") }}
+                        className={cn(fieldErrors.duration && "border-red-500 focus-visible:ring-red-500")}
                       />
+                      {fieldErrors.duration && <p className="text-sm text-red-500">{fieldErrors.duration}</p>}
                     </div>
                   </div>
                 ) : (
@@ -946,16 +1010,19 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                               />
                             </div>
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-2" id={`schedule-days-${schedule.id}`}>
                             <Label className="text-sm font-medium">
                               Days <span className="text-red-500">*</span>
                             </Label>
-                            <div className="flex flex-wrap gap-2">
+                            <div className={cn(
+                              "flex flex-wrap gap-2 rounded-md p-1",
+                              fieldErrors[`schedule-days-${schedule.id}`] && "ring-1 ring-red-500"
+                            )}>
                               {daysOfWeek.map((day) => (
                                 <button
                                   key={day.value}
                                   type="button"
-                                  onClick={() => toggleDay(schedule.id, day.value)}
+                                  onClick={() => { toggleDay(schedule.id, day.value); clearError(`schedule-days-${schedule.id}`) }}
                                   className={cn(
                                     "px-3 py-1 rounded-md text-sm",
                                     schedule.days.includes(day.value)
@@ -967,6 +1034,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                                 </button>
                               ))}
                             </div>
+                            {fieldErrors[`schedule-days-${schedule.id}`] && (
+                              <p className="text-sm text-red-500">{fieldErrors[`schedule-days-${schedule.id}`]}</p>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1079,11 +1149,15 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                           step="0.01"
                           placeholder="0.00"
                           value={dropInPrice}
-                          onChange={(e) => setDropInPrice(e.target.value)}
-                          className="pl-7"
+                          onChange={(e) => { setDropInPrice(e.target.value); clearError("dropInPrice") }}
+                          className={cn("pl-7", fieldErrors.dropInPrice && "border-red-500 focus-visible:ring-red-500")}
                         />
                       </div>
-                      <p className="text-sm text-gray-500">Price per person for non-members.</p>
+                      {fieldErrors.dropInPrice ? (
+                        <p className="text-sm text-red-500">{fieldErrors.dropInPrice}</p>
+                      ) : (
+                        <p className="text-sm text-gray-500">Price per person for non-members.</p>
+                      )}
                     </div>
 
                     {/* Per-Membership Price Overrides */}
@@ -1194,38 +1268,58 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
             </div>
           </div>
 
+          {/* Delete Session */}
+          {template && (
+            <div className="space-y-3">
+              <Label className="text-base font-medium text-destructive">
+                Delete Session
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                This will permanently delete the session template, all scheduled
+                instances, and any associated bookings. This action cannot be
+                undone.
+              </p>
+              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="text-destructive border-destructive hover:bg-destructive/10"
+                    disabled={loading || deleting}
+                  >
+                    {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Delete Session
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete session?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete &ldquo;{name}&rdquo; and all
+                      its scheduled instances and bookings. This action cannot be
+                      undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+
           {/* Sticky Footer */}
           <div className="sticky bottom-0 bg-white border-t px-6 py-4 -mx-6 -mb-4">
             <div className="flex justify-between w-full">
-              {template && (
-                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" type="button">
-                      Delete
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the session
-                        and all associated schedules and instances.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-              <div className="ml-auto">
-                <Button type="submit" className="bg-primary" disabled={loading}>
-                  {loading ? "Saving..." : template ? "Save Changes" : "Create Session"}
-                </Button>
-              </div>
+              <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-primary" disabled={loading}>
+                {loading ? "Saving..." : template ? "Save Changes" : "Create Session"}
+              </Button>
             </div>
           </div>
         </form>

@@ -21,10 +21,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Loader2, Copy, Check } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import type { Membership, BillingPeriod } from "@/lib/db/schema"
-import { createMembership, updateMembership } from "@/app/actions/memberships"
+import { createMembership, updateMembership, deleteMembership } from "@/app/actions/memberships"
 import { ImageUpload } from "@/components/admin/image-upload"
 import { useSlugOptional } from "@/lib/slug-context"
 
@@ -46,6 +58,7 @@ export function MembershipForm({
   const contextSlug = useSlugOptional()
   const slug = propSlug || contextSlug
   const [loading, setLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Form state
@@ -61,6 +74,14 @@ export function MembershipForm({
   const [showOnBookingPage, setShowOnBookingPage] = useState(true)
   const [showOnMembershipPage, setShowOnMembershipPage] = useState(true)
   const [isActive, setIsActive] = useState(true)
+
+  // Inline validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const clearError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => { const next = { ...prev }; delete next[field]; return next })
+    }
+  }
 
   // Reset form when membership changes
   useEffect(() => {
@@ -81,6 +102,7 @@ export function MembershipForm({
       setShowOnBookingPage(membership.showOnBookingPage ?? membership.displayToNonMembers)
       setShowOnMembershipPage(membership.showOnMembershipPage ?? true)
       setIsActive(membership.isActive)
+      setFieldErrors({})
     } else {
       // Reset for new membership
       setName("")
@@ -95,35 +117,34 @@ export function MembershipForm({
       setShowOnBookingPage(true)
       setShowOnMembershipPage(true)
       setIsActive(true)
+      setFieldErrors({})
     }
   }, [membership, open])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    // Validation
-    if (!name.trim()) {
-      toast.error("Please enter a membership name")
-      return
-    }
-
-    if (!isFree && (!price || parseFloat(price) <= 0)) {
-      toast.error("Please enter a valid price or mark as free")
-      return
-    }
-
+    // Inline validation
+    const errors: Record<string, string> = {}
+    if (!name.trim()) errors.name = "Name is required"
+    if (!isFree && (!price || parseFloat(price) <= 0)) errors.price = "Price is required"
     if (
       memberPriceType === "discount" &&
       (!discountPercent || parseInt(discountPercent) <= 0 || parseInt(discountPercent) > 100)
     ) {
-      toast.error("Please enter a valid discount percentage (1-100)")
-      return
+      errors.discountPercent = "Enter a percentage between 1 and 100"
+    }
+    if (memberPriceType === "fixed" && (!fixedPrice || parseFloat(fixedPrice) < 0)) {
+      errors.fixedPrice = "Enter a valid fixed price"
     }
 
-    if (memberPriceType === "fixed" && (!fixedPrice || parseFloat(fixedPrice) < 0)) {
-      toast.error("Please enter a valid fixed price")
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      const firstKey = Object.keys(errors)[0]
+      document.getElementById(firstKey)?.scrollIntoView({ behavior: "smooth", block: "center" })
       return
     }
+    setFieldErrors({})
 
     setLoading(true)
 
@@ -164,21 +185,40 @@ export function MembershipForm({
     setLoading(false)
   }
 
+  async function handleDelete() {
+    if (!membership) return
+    setDeleting(true)
+
+    const result = await deleteMembership(membership.id)
+
+    if (result.success) {
+      toast.success("Membership deleted")
+      onSuccess()
+      onClose()
+    } else {
+      toast.error(result.error || "Failed to delete membership")
+    }
+
+    setDeleting(false)
+  }
+
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>
-            {membership ? "Edit Membership" : "Create Membership"}
-          </SheetTitle>
-          <SheetDescription>
-            {membership
-              ? "Update the membership details below."
-              : "Create a new membership tier for your organization."}
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent className="sm:max-w-[625px] overflow-y-auto p-0">
+        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
+          <SheetHeader>
+            <SheetTitle className="text-xl">
+              {membership ? "Edit Membership" : "Create Membership"}
+            </SheetTitle>
+            <SheetDescription>
+              {membership
+                ? "Update the membership details below."
+                : "Create a new membership tier for your organization."}
+            </SheetDescription>
+          </SheetHeader>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
           {/* Basic Info */}
           <div className="space-y-4">
             <div className="space-y-2">
@@ -186,10 +226,12 @@ export function MembershipForm({
               <Input
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); clearError("name") }}
                 placeholder="e.g., Monthly Membership"
                 disabled={loading}
+                className={cn(fieldErrors.name && "border-red-500 focus-visible:ring-red-500")}
               />
+              {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
             </div>
 
             <div className="space-y-2">
@@ -219,7 +261,7 @@ export function MembershipForm({
               <Switch
                 id="isFree"
                 checked={isFree}
-                onCheckedChange={setIsFree}
+                onCheckedChange={(v) => { setIsFree(v); if (v) clearError("price") }}
                 disabled={loading}
               />
               <Label htmlFor="isFree" className="font-normal cursor-pointer">
@@ -242,12 +284,12 @@ export function MembershipForm({
                         min="0"
                         step="0.01"
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        className="pl-7"
-                        placeholder="15.00"
+                        onChange={(e) => { setPrice(e.target.value); clearError("price") }}
+                        className={cn("pl-7", fieldErrors.price && "border-red-500 focus-visible:ring-red-500")}
                         disabled={loading}
                       />
                     </div>
+                    {fieldErrors.price && <p className="text-sm text-red-500 mt-1">{fieldErrors.price}</p>}
                   </div>
                   <div className="w-40">
                     <Label>Billing Period</Label>
@@ -284,7 +326,7 @@ export function MembershipForm({
 
             <RadioGroup
               value={memberPriceType}
-              onValueChange={(v) => setMemberPriceType(v as "discount" | "fixed")}
+              onValueChange={(v) => { setMemberPriceType(v as "discount" | "fixed"); clearError("discountPercent"); clearError("fixedPrice") }}
               className="space-y-3"
               disabled={loading}
             >
@@ -303,39 +345,45 @@ export function MembershipForm({
             </RadioGroup>
 
             {memberPriceType === "discount" && (
-              <div className="flex items-center gap-2 ml-6">
-                <Input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={discountPercent}
-                  onChange={(e) => setDiscountPercent(e.target.value)}
-                  className="w-24"
-                  placeholder="20"
-                  disabled={loading}
-                />
-                <span className="text-sm text-gray-600">% off drop-in price</span>
+              <div className="ml-6">
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="discountPercent"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={discountPercent}
+                    onChange={(e) => { setDiscountPercent(e.target.value); clearError("discountPercent") }}
+                    className={cn("w-24", fieldErrors.discountPercent && "border-red-500 focus-visible:ring-red-500")}
+                    disabled={loading}
+                  />
+                  <span className="text-sm text-gray-600">% off drop-in price</span>
+                </div>
+                {fieldErrors.discountPercent && <p className="text-sm text-red-500 mt-1">{fieldErrors.discountPercent}</p>}
               </div>
             )}
 
             {memberPriceType === "fixed" && (
-              <div className="flex items-center gap-2 ml-6">
-                <div className="relative w-32">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                    £
-                  </span>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={fixedPrice}
-                    onChange={(e) => setFixedPrice(e.target.value)}
-                    className="pl-7"
-                    placeholder="5.00"
-                    disabled={loading}
-                  />
+              <div className="ml-6">
+                <div className="flex items-center gap-2">
+                  <div className="relative w-32">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                      £
+                    </span>
+                    <Input
+                      id="fixedPrice"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={fixedPrice}
+                      onChange={(e) => { setFixedPrice(e.target.value); clearError("fixedPrice") }}
+                      className={cn("pl-7", fieldErrors.fixedPrice && "border-red-500 focus-visible:ring-red-500")}
+                      disabled={loading}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-600">per session</span>
                 </div>
-                <span className="text-sm text-gray-600">per session</span>
+                {fieldErrors.fixedPrice && <p className="text-sm text-red-500 mt-1">{fieldErrors.fixedPrice}</p>}
               </div>
             )}
           </div>
@@ -437,7 +485,7 @@ export function MembershipForm({
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="isActive" className="text-base font-medium">
-                    Active
+                    Status
                   </Label>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Inactive memberships cannot be purchased
@@ -453,21 +501,69 @@ export function MembershipForm({
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading} className="flex-1">
-              {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {membership ? "Save Changes" : "Create Membership"}
-            </Button>
+          {/* Delete */}
+          {membership && (
+            <div className="space-y-3 border-t pt-4">
+              <Label className="text-base font-medium text-destructive">
+                Delete Membership
+              </Label>
+              <p className="text-sm text-gray-500">
+                Existing subscribers will keep their membership until it expires
+                or is cancelled. New sign-ups will no longer be available.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="text-destructive border-destructive hover:bg-destructive/10"
+                    disabled={loading || deleting}
+                  >
+                    {deleting && (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    )}
+                    Delete Membership
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete membership?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete &ldquo;{name}&rdquo;.
+                      Existing subscribers will keep their membership until it
+                      expires. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+
+          {/* Sticky Footer */}
+          <div className="sticky bottom-0 bg-white border-t px-6 py-4 -mx-6 -mb-4">
+            <div className="flex justify-between w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading} className="bg-primary">
+                {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {membership ? "Save Changes" : "Create Membership"}
+              </Button>
+            </div>
           </div>
         </form>
       </SheetContent>
