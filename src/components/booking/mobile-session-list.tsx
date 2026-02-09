@@ -1,14 +1,11 @@
 "use client"
 
-import { useState } from "react"
 import { format, isSameDay } from "date-fns"
 import { SessionTemplate, SessionInstance } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { Lock, Users, EyeOff } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { LockedSessionDialog } from "./locked-session-tooltip"
+import { Users, EyeOff } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 
 interface MobileSessionListProps {
@@ -21,11 +18,6 @@ interface MobileSessionListProps {
 export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = false }: MobileSessionListProps) {
   const router = useRouter()
   const { user } = useUser()
-  const [lockedDialog, setLockedDialog] = useState<{ open: boolean; sessionName: string }>({
-    open: false,
-    sessionName: ''
-  })
-
   // Build a flat list of all sessions for the selected day directly from sessions
   const sessionsForDay = sessions.flatMap((template) => {
     const results: { template: SessionTemplate; startTime: Date; endTime: Date; key: string; instance?: SessionInstance; isBooked: boolean; bookingId?: string }[] = []
@@ -87,11 +79,6 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
   sessionsForDay.sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 
   const handleSessionClick = (template: SessionTemplate, startTime: Date, isBooked: boolean, bookingId?: string) => {
-    // For free sessions, only admins can book - others see dialog
-    if (template.pricing_type === 'free' && !isAdmin) {
-      setLockedDialog({ open: true, sessionName: template.name })
-      return
-    }
     if (isBooked && bookingId) {
       router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}`)
       return
@@ -121,19 +108,14 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
           <Card
             key={key}
             className={
-              isBooked ? 'border-[var(--button-color)]' :
-              isFreeSession && !isAdmin ? 'border-amber-300 bg-amber-50' : ''
+              isBooked ? 'border-primary bg-primary/5' : ''
             }
-            style={isBooked ? {
-              backgroundColor: 'color-mix(in srgb, var(--button-color, #6c47ff) 8%, white)',
-              borderColor: 'var(--button-color, #6c47ff)',
-            } : undefined}
           >
             <CardContent className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium flex items-center gap-1">
-                    {isFreeSession && <Lock className="h-3 w-3 text-amber-600" />}
+                    {isFreeSession && <span className="text-[10px] font-semibold uppercase text-muted-foreground">Free</span>}
                     {isHidden && <EyeOff className="h-3 w-3 text-gray-400" />}
                     {template.name}
                   </h3>
@@ -145,17 +127,12 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
                       {isFull ? 'Waiting List' : availableSpots}
                     </span>
                   </div>
-                  {isFreeSession && !isAdmin && (
-                    <Badge variant="secondary" className="mt-1 bg-amber-100 text-amber-800 text-xs">
-                      Contact for details
-                    </Badge>
-                  )}
                 </div>
                 <Button
-                  variant={isFreeSession && !isAdmin ? "secondary" : "outline"}
+                  variant="outline"
                   onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
                 >
-                  {isFreeSession && !isAdmin ? 'Info' : isBooked ? 'View' : 'Book'}
+                  {isBooked ? 'View' : 'Book'}
                 </Button>
               </div>
             </CardContent>
@@ -163,12 +140,6 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
         )
       })}
 
-      {/* Locked Session Dialog */}
-      <LockedSessionDialog
-        open={lockedDialog.open}
-        sessionName={lockedDialog.sessionName}
-        onOpenChange={(open) => setLockedDialog(prev => ({ ...prev, open }))}
-      />
     </div>
   )
 } 

@@ -6,7 +6,7 @@ import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Lock, Users, EyeOff } from "lucide-react"
+import { ChevronLeft, ChevronRight, Users, EyeOff } from "lucide-react"
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { useRouter } from "next/navigation"
@@ -15,7 +15,6 @@ import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
 import { useUser } from "@clerk/nextjs"
 import { getInternalUserId } from "@/app/actions/session"
-import { LockedSessionDialog } from "./locked-session-tooltip"
 import { getEventColorValues } from "@/lib/event-colors"
 
 // Add custom styles to hide rbc-event-label
@@ -97,7 +96,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
           {isFull ? 'Waiting List' : availableSpots}
         </span>
         <span className="flex items-center gap-1">
-          {isFreeSession && <Lock className="h-3 w-3" />}
+          {isFreeSession && <span className="text-[10px] font-semibold uppercase">Free</span>}
           {isHidden && <EyeOff className="h-3 w-3" />}
         </span>
       </div>
@@ -119,12 +118,6 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [internalUserId, setInternalUserId] = useState<string | null>(null)
-  const [lockedSessionPopover, setLockedSessionPopover] = useState<{
-    open: boolean
-    sessionName: string
-    anchorEl: HTMLElement | null
-  }>({ open: false, sessionName: '', anchorEl: null })
-
   // isAdmin is now passed as a prop from the server component
 
   useEffect(() => {
@@ -274,20 +267,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
 
   const timeRange = calculateTimeRange()
 
-  const handleSelectEvent = (event: CalendarEvent, e?: React.SyntheticEvent) => {
-    // Check if this is a free (locked) session
-    const isFreeSession = event.resource.pricing_type === 'free'
-
-    // For free sessions, only admins can book - others see tooltip
-    if (isFreeSession && !isAdmin) {
-      setLockedSessionPopover({
-        open: true,
-        sessionName: event.resource.name,
-        anchorEl: e?.currentTarget as HTMLElement || null
-      })
-      return
-    }
-
+  const handleSelectEvent = (event: CalendarEvent) => {
     if (event.isBooked && event.bookingId) {
       // Only allow editing
       const queryParams = new URLSearchParams({
@@ -429,7 +409,6 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
           min={timeRange.min}
           max={timeRange.max}
           eventPropGetter={(event: CalendarEvent) => {
-            const isFreeSession = event.resource.pricing_type === 'free'
             const customColor = event.resource.event_color
             const isHidden = event.resource.visibility === 'hidden'
 
@@ -449,15 +428,13 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
               typeClass = 'session-booked'
             } else if (isHidden) {
               typeClass = 'session-hidden'
-            } else if (isFreeSession && !isAdmin) {
-              typeClass = 'session-free'
             } else if (isFull) {
               typeClass = 'session-full'
             }
 
             // Build style object with custom color if provided (and not overridden by special states)
             const style: React.CSSProperties = {}
-            if (customColor && !event.isBooked && !isHidden && !(isFreeSession && !isAdmin) && !isFull) {
+            if (customColor && !event.isBooked && !isHidden && !isFull) {
               const colors = getEventColorValues(customColor)
               style.borderLeftColor = colors.color500
               style.backgroundColor = `${colors.color500}1A` // 10% opacity
@@ -472,12 +449,6 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
           components={components}
         />
 
-      {/* Locked Session Dialog for free sessions */}
-      <LockedSessionDialog
-        open={lockedSessionPopover.open}
-        sessionName={lockedSessionPopover.sessionName}
-        onOpenChange={(open) => setLockedSessionPopover(prev => ({ ...prev, open }))}
-      />
     </div>
   )
 }

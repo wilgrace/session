@@ -21,6 +21,10 @@ export const organizations = pgTable('organizations', {
   defaultSessionImageUrl: text('default_session_image_url'),
   buttonColor: text('button_color').default('#6c47ff'),
   buttonTextColor: text('button_text_color').default('#ffffff'),
+  // External links
+  homepageUrl: text('homepage_url'),
+  instagramUrl: text('instagram_url'),
+  facebookUrl: text('facebook_url'),
   // Member pricing (org-level defaults)
   memberPriceType: text('member_price_type').default('discount'), // 'discount' | 'fixed'
   memberDiscountPercent: integer('member_discount_percent'), // e.g., 20 for 20% off

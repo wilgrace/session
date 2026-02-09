@@ -2,19 +2,12 @@
 
 import { format } from "date-fns"
 import Image from "next/image"
-import { SessionTemplate, SessionVisibility } from "@/types/session"
+import { SessionTemplate } from "@/types/session"
 
 interface SessionDetailsProps {
   session: SessionTemplate
   startTime?: Date
   currentUserSpots?: number
-}
-
-function getStatusLabel(visibility: SessionVisibility, spotsRemaining: number): string {
-  if (visibility === 'closed') return 'Closed'
-  if (visibility === 'hidden') return 'Hidden'
-  if (spotsRemaining <= 0) return 'Waiting List'
-  return 'Open'
 }
 
 export function SessionDetails({
@@ -30,9 +23,6 @@ export function SessionDetails({
 
   // Calculate spots remaining
   const spotsRemaining = session.capacity - totalSpotsBooked
-
-  // Get status label
-  const statusLabel = getStatusLabel(session.visibility, spotsRemaining)
 
   return (
     <div>
@@ -68,10 +58,6 @@ export function SessionDetails({
             <p className="font-medium">
               {spotsRemaining > 0 ? `${spotsRemaining} of ${session.capacity}` : 'Full'}
             </p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
-            <p className="font-medium">{statusLabel}</p>
           </div>
         </div>
 

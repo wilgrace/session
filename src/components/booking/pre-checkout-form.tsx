@@ -316,17 +316,11 @@ export function PreCheckoutForm({
               setPricingType("membership")
               setSelectedMembershipId(userMembership.membership.id)
             }}
-            className="w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all bg-black/5"
-            style={{ borderColor: "var(--button-color, #6c47ff)" }}
+            className="w-full flex items-start justify-between rounded-xl border-2 border-primary p-4 text-left transition-all bg-black/5"
           >
             <div className="flex items-start gap-3">
               <div
-                className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2"
-                style={{
-                  borderColor: "var(--button-color, #6c47ff)",
-                  backgroundColor: "var(--button-color, #6c47ff)",
-                  color: "var(--button-text-color, #ffffff)"
-                }}
+                className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-primary text-primary-foreground"
               >
                 <Check className="h-3 w-3" />
               </div>
@@ -342,6 +336,38 @@ export function PreCheckoutForm({
               </div>
             </div>
             <div className="text-xl font-bold">{formatPrice(userMembership.sessionPrice)}</div>
+          </button>
+        )}
+
+                {/* Drop-in Option - always show at bottom unless user already has membership */}
+                {!isActiveMember && (
+          <button
+            type="button"
+            onClick={() => setPricingType("drop_in")}
+            className={cn(
+              "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
+              pricingType === "drop_in"
+                ? "bg-black/5 border-primary"
+                : "border-muted hover:border-muted-foreground/30"
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
+                  pricingType === "drop_in"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-muted-foreground/30"
+                )}
+              >
+                {pricingType === "drop_in" && <Check className="h-3 w-3" />}
+              </div>
+              <div>
+                <div className="font-medium">Drop-in</div>
+                <div className="text-sm text-muted-foreground">Single session access</div>
+              </div>
+            </div>
+            <div className="text-xl font-bold">{formatPrice(dropInPrice)}</div>
           </button>
         )}
 
@@ -366,24 +392,18 @@ export function PreCheckoutForm({
               className={cn(
                 "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
                 isSelected
-                  ? "bg-black/5"
+                  ? "bg-black/5 border-primary"
                   : "border-muted hover:border-muted-foreground/30"
               )}
-              style={isSelected ? {
-                borderColor: "var(--button-color, #6c47ff)"
-              } : undefined}
             >
               <div className="flex items-start gap-3">
                 <div
                   className={cn(
                     "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
-                    !isSelected && "border-muted-foreground/30"
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground/30"
                   )}
-                  style={isSelected ? {
-                    borderColor: "var(--button-color, #6c47ff)",
-                    backgroundColor: "var(--button-color, #6c47ff)",
-                    color: "var(--button-text-color, #ffffff)"
-                  } : undefined}
                 >
                   {isSelected && <Check className="h-3 w-3" />}
                 </div>
@@ -408,44 +428,6 @@ export function PreCheckoutForm({
             </button>
           )
         })}
-
-        {/* Drop-in Option - always show at bottom unless user already has membership */}
-        {!isActiveMember && (
-          <button
-            type="button"
-            onClick={() => setPricingType("drop_in")}
-            className={cn(
-              "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
-              pricingType === "drop_in"
-                ? "bg-black/5"
-                : "border-muted hover:border-muted-foreground/30"
-            )}
-            style={pricingType === "drop_in" ? {
-              borderColor: "var(--button-color, #6c47ff)"
-            } : undefined}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
-                  pricingType !== "drop_in" && "border-muted-foreground/30"
-                )}
-                style={pricingType === "drop_in" ? {
-                  borderColor: "var(--button-color, #6c47ff)",
-                  backgroundColor: "var(--button-color, #6c47ff)",
-                  color: "var(--button-text-color, #ffffff)"
-                } : undefined}
-              >
-                {pricingType === "drop_in" && <Check className="h-3 w-3" />}
-              </div>
-              <div>
-                <div className="font-medium">Drop-in</div>
-                <div className="text-sm text-muted-foreground">Single session access</div>
-              </div>
-            </div>
-            <div className="text-xl font-bold">{formatPrice(dropInPrice)}</div>
-          </button>
-        )}
       </div>
 
         {/* Number of People */}
@@ -524,8 +506,7 @@ export function PreCheckoutForm({
               <button
                 type="button"
                 onClick={() => openSignIn()}
-                className="font-medium underline whitespace-nowrap hover:opacity-80"
-                style={{ color: "var(--button-color, #6c47ff)" }}
+                className="font-medium underline whitespace-nowrap hover:opacity-80 text-primary"
               >
                 Sign in
               </button>
@@ -624,7 +605,7 @@ export function PreCheckoutForm({
           )}
           <div className="flex justify-between pt-3 border-t border-muted">
             <span className="text-lg font-semibold">Total</span>
-            <span className="text-xl font-bold" style={{ color: "var(--button-color, #6c47ff)" }}>{formatPrice(total)}</span>
+            <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
           </div>
         </div>
 
@@ -634,10 +615,6 @@ export function PreCheckoutForm({
           onClick={handleSubmit}
           disabled={!canProceed}
           className="w-full h-14 text-lg rounded-xl hover:opacity-90"
-          style={{
-            backgroundColor: "var(--button-color, #6c47ff)",
-            color: "var(--button-text-color, #ffffff)",
-          }}
         >
           {isLoading ? (
             <>

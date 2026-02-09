@@ -39,8 +39,7 @@ export function MembershipConfirmationPanel({
       {/* Success icon */}
       <div className="flex justify-center">
         <div
-          className="w-16 h-16 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: "var(--button-color, #6c47ff)" }}
+          className="w-16 h-16 rounded-full flex items-center justify-center bg-primary"
         >
           <Check className="h-8 w-8 text-white" />
         </div>
@@ -92,10 +91,6 @@ export function MembershipConfirmationPanel({
       <Link href={`/${slug}`}>
         <Button
           className="w-full h-14 text-lg rounded-xl hover:opacity-90"
-          style={{
-            backgroundColor: "var(--button-color, #6c47ff)",
-            color: "var(--button-text-color, #ffffff)",
-          }}
         >
           Book Your First Session
         </Button>

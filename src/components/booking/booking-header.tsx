@@ -17,6 +17,9 @@ interface BookingHeaderProps {
   organizationName?: string | null
   logoUrl?: string | null
   hasHeaderImage?: boolean
+  homepageUrl?: string | null
+  instagramUrl?: string | null
+  facebookUrl?: string | null
 }
 
 export function BookingHeader({
@@ -24,7 +27,10 @@ export function BookingHeader({
   slug,
   organizationName,
   logoUrl,
-  hasHeaderImage = false
+  hasHeaderImage = false,
+  homepageUrl,
+  instagramUrl,
+  facebookUrl
 }: BookingHeaderProps) {
   const pathname = usePathname()
   const { openSignIn } = useAuthOverlay()
@@ -37,10 +43,32 @@ export function BookingHeader({
     <header className="relative" style={{ backgroundColor: "#F6F2EF" }}>
       {/* Navigation row */}
       <div className="lg:container md:mx-auto flex h-16 items-center justify-between px-4 md:px-4">
-        {/* Left - Home nav or back button */}
-        <div className="flex items-center">
+        {/* Left - Home nav, social links, or back button */}
+        <div className="flex items-center gap-1">
           {isCalendarPage ? (
-            <span className="font-medium py-2 flex gap-2"><HouseIcon className="h-5 w-5 w- opacity-50" /> Home</span>
+            <>
+              {homepageUrl && (
+                <a href={homepageUrl} target="_blank" rel="noopener noreferrer" className="font-medium py-2 flex gap-2 hover:opacity-70 transition-opacity">
+                  <HouseIcon className="h-5 w-5 opacity-50" /> Home
+                </a>
+              )}
+              {instagramUrl && (
+                <a href={instagramUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:opacity-70 transition-opacity">
+                  <svg className="h-5 w-5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+                  </svg>
+                </a>
+              )}
+              {facebookUrl && (
+                <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:opacity-70 transition-opacity">
+                  <svg className="h-5 w-5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                  </svg>
+                </a>
+              )}
+            </>
           ) : (
             <Link href={`/${slug}`}>
               <Button variant="ghost" size="icon" className="-ml-2 h-11 w-11">
@@ -62,10 +90,6 @@ export function BookingHeader({
                   onClick={() => openSignIn()}
                   size="default"
                   className="rounded-md hover:opacity-90 text-base py-2 px-4"
-                  style={{
-                    backgroundColor: "var(--button-color, #6c47ff)",
-                    color: "var(--button-text-color, #ffffff)",
-                  }}
                 >
                   Sign In
                 </Button>

@@ -603,6 +603,14 @@ export function BookingForm({
             </div>
           </div>
 
+          {/* Total for free sessions */}
+          {!isEditMode && (
+            <div className="flex items-center justify-between pt-2 border-t">
+              <span className="text-lg font-semibold">Total</span>
+              <span className="text-xl font-bold text-primary">£0.00</span>
+            </div>
+          )}
+
           <div className="flex flex-col space-y-2">
             <Button
               type="submit"

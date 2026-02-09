@@ -179,7 +179,7 @@ export function BookingPanel({
 
         {/* Discount */}
         {discountAmount > 0 && (
-          <div className="flex justify-between text-sm" style={{ color: "var(--button-color, #6c47ff)" }}>
+          <div className="flex justify-between text-sm text-primary">
             <span>Discount</span>
             <span>−{formatPrice(discountAmount)}</span>
           </div>
@@ -199,9 +199,8 @@ export function BookingPanel({
             type="button"
             variant="outline"
             size="sm"
-            className="w-full"
+            className="w-full text-primary"
             disabled={loading}
-            style={{ color: "var(--button-color, #6c47ff)" }}
           >
             Cancel Booking
           </Button>

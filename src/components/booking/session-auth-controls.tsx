@@ -26,10 +26,6 @@ export function SessionAuthControls({ isAdmin, slug }: SessionAuthControlsProps)
           onClick={() => openSignIn()}
           size="sm"
           className="rounded-md hover:opacity-90"
-          style={{
-            backgroundColor: "var(--button-color, #6c47ff)",
-            color: "var(--button-text-color, #ffffff)",
-          }}
         >
           Sign In
         </Button>

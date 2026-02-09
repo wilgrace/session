@@ -14,7 +14,7 @@ import {
   OrganizationSettings,
 } from "@/app/actions/organization"
 import { getWaivers } from "@/app/actions/waivers"
-import { Loader2, Upload, X, Check, AlertCircle } from "lucide-react"
+import { Loader2, Upload, X, Check, AlertCircle, Copy } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { WaiversList } from "@/components/admin/waivers-list"
@@ -53,8 +53,11 @@ function SettingsPageContent() {
   const [faviconUrl, setFaviconUrl] = useState("")
   const [headerImageUrl, setHeaderImageUrl] = useState("")
   const [defaultSessionImageUrl, setDefaultSessionImageUrl] = useState("")
-  const [buttonColor, setButtonColor] = useState("#6c47ff")
-  const [buttonTextColor, setButtonTextColor] = useState("#ffffff")
+  const [brandColor, setBrandColor] = useState("#6c47ff")
+  const [brandTextColor, setBrandTextColor] = useState("#ffffff")
+  const [homepageUrl, setHomepageUrl] = useState("")
+  const [instagramUrl, setInstagramUrl] = useState("")
+  const [facebookUrl, setFacebookUrl] = useState("")
 
   // Slug validation state
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
@@ -86,8 +89,11 @@ function SettingsPageContent() {
       setFaviconUrl(result.data.faviconUrl || "")
       setHeaderImageUrl(result.data.headerImageUrl || "")
       setDefaultSessionImageUrl(result.data.defaultSessionImageUrl || "")
-      setButtonColor(result.data.buttonColor || "#6c47ff")
-      setButtonTextColor(result.data.buttonTextColor || "#ffffff")
+      setBrandColor(result.data.brandColor || "#6c47ff")
+      setBrandTextColor(result.data.brandTextColor || "#ffffff")
+      setHomepageUrl(result.data.homepageUrl || "")
+      setInstagramUrl(result.data.instagramUrl || "")
+      setFacebookUrl(result.data.facebookUrl || "")
 
       // Load waivers
       const waiversResult = await getWaivers()
@@ -172,8 +178,11 @@ function SettingsPageContent() {
       faviconUrl: faviconUrl || null,
       headerImageUrl: headerImageUrl || null,
       defaultSessionImageUrl: defaultSessionImageUrl || null,
-      buttonColor: buttonColor || null,
-      buttonTextColor: buttonTextColor || null,
+      brandColor: brandColor || null,
+      brandTextColor: brandTextColor || null,
+      homepageUrl: homepageUrl.trim() || null,
+      instagramUrl: instagramUrl.trim() || null,
+      facebookUrl: facebookUrl.trim() || null,
     })
 
     if (result.success) {
@@ -248,15 +257,18 @@ function SettingsPageContent() {
 
           {/* Slug */}
           <div className="space-y-2">
-            <Label htmlFor="slug">URL Path (Slug)</Label>
-            <div className="flex items-center gap-2">
+            <Label htmlFor="slug">Booking URL (Slug)</Label>
+            <div className="flex items-center gap-0">
+              <span className="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 h-10 whitespace-nowrap">
+                https://www.bookasession.org/
+              </span>
               <div className="flex-1 relative">
                 <Input
                   id="slug"
                   value={formSlug}
                   onChange={(e) => setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                   placeholder="my-organization"
-                  className="pr-10"
+                  className="rounded-l-none rounded-r-none pr-10"
                 />
                 {checkingSlug && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />
@@ -268,15 +280,82 @@ function SettingsPageContent() {
                   <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
                 )}
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="rounded-l-none h-10 w-10 border-l-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(`https://www.bookasession.org/${formSlug}`)
+                  toast.success("URL copied to clipboard")
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
             </div>
             <p className="text-sm text-gray-500">
-              Your booking page URL: <span className="font-mono">{`/${formSlug || "your-slug"}`}</span>
+              This is the link to share with your visitors
             </p>
             {slugAvailable === false && formSlug !== settings?.slug && (
               <p className="text-sm text-red-600">
                 This URL path is already taken or invalid.
               </p>
             )}
+          </div>
+
+          {/* Homepage */}
+          <div className="space-y-2">
+            <Label htmlFor="homepageUrl">Homepage (optional)</Label>
+            <Input
+              id="homepageUrl"
+              type="url"
+              value={homepageUrl}
+              onChange={(e) => setHomepageUrl(e.target.value)}
+              placeholder="https://www.example.com"
+            />
+            <p className="text-sm text-gray-500">
+              Enter your main website URL. If provided, a Home link will appear on your booking page.
+            </p>
+          </div>
+
+          {/* Social Links */}
+          <div className="space-y-2">
+            <Label>Social Links (optional)</Label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <svg className="h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+                  </svg>
+                  <Input
+                    id="instagramUrl"
+                    type="url"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    placeholder="https://instagram.com/yourpage"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <svg className="h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                  </svg>
+                  <Input
+                    id="facebookUrl"
+                    type="url"
+                    value={facebookUrl}
+                    onChange={(e) => setFacebookUrl(e.target.value)}
+                    placeholder="https://facebook.com/yourpage"
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              Social media links will be displayed as icons on your booking page header.
+            </p>
           </div>
         </div>
       </div>
@@ -351,51 +430,51 @@ function SettingsPageContent() {
           />
         </div>
 
-      {/* Button Colors */}
+      {/* Brand Colors */}
         <div className="grid gap-6 md:grid-cols-3">
           {/* Button Color */}
           <div className="space-y-2">
-            <Label htmlFor="buttonColor">Button Colour</Label>
+            <Label htmlFor="brandColor">Brand Colour</Label>
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                id="buttonColor"
-                value={buttonColor}
-                onChange={(e) => setButtonColor(e.target.value)}
+                id="brandColor"
+                value={brandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
                 className="h-10 w-14 rounded border border-gray-200 cursor-pointer"
               />
               <Input
-                value={buttonColor}
-                onChange={(e) => setButtonColor(e.target.value)}
+                value={brandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
                 placeholder="#6c47ff"
                 className="flex-1 font-mono"
               />
             </div>
             <p className="text-sm text-gray-500">
-              Primary button background color. Default: #6c47ff
+              Brand color used for buttons, links, and accents. Default: #6c47ff
             </p>
           </div>
 
           {/* Button Text Color */}
           <div className="space-y-2">
-            <Label htmlFor="buttonTextColor">Button Text Colour</Label>
+            <Label htmlFor="brandTextColor">Brand Text Colour</Label>
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                id="buttonTextColor"
-                value={buttonTextColor}
-                onChange={(e) => setButtonTextColor(e.target.value)}
+                id="brandTextColor"
+                value={brandTextColor}
+                onChange={(e) => setBrandTextColor(e.target.value)}
                 className="h-10 w-14 rounded border border-gray-200 cursor-pointer"
               />
               <Input
-                value={buttonTextColor}
-                onChange={(e) => setButtonTextColor(e.target.value)}
+                value={brandTextColor}
+                onChange={(e) => setBrandTextColor(e.target.value)}
                 placeholder="#ffffff"
                 className="flex-1 font-mono"
               />
             </div>
             <p className="text-sm text-gray-500">
-              Primary button text color. Default: #ffffff (white)
+              Text color on brand-colored elements. Default: #ffffff (white)
             </p>
           </div>
 
@@ -404,9 +483,9 @@ function SettingsPageContent() {
           <Label className="mb-3 block">Preview</Label>
           <Button
             style={{
-              backgroundColor: buttonColor,
-              color: buttonTextColor,
-              borderColor: buttonColor,
+              backgroundColor: brandColor,
+              color: brandTextColor,
+              borderColor: brandColor,
             }}
             className="hover:opacity-90"
           >

@@ -298,11 +298,6 @@
 
 /* Session type color variables - easy to customize per type */
 :root {
-  /* Free session (yellow) */
-  --session-free-border: #FDD34E;
-  --session-free-bg: rgba(253, 211, 78, 0.1);
-  --session-free-text: #92400D;
-
   /* Default/paid session (blue) */
   --session-default-border: #0EA5E9;
   --session-default-bg: rgba(14, 165, 233, 0.1);
@@ -323,10 +318,10 @@
   --session-closed-bg: #ffffff;
   --session-closed-text: #6B7280;
 
-  /* Booked by current user (uses brand colour via --button-color) */
-  --session-booked-border: var(--button-color, #6c47ff);
-  --session-booked-bg: color-mix(in srgb, var(--button-color, #6c47ff) 10%, white);
-  --session-booked-text: color-mix(in srgb, var(--button-color, #6c47ff) 80%, black);
+  /* Booked by current user (uses brand colour via --primary) */
+  --session-booked-border: hsl(var(--primary));
+  --session-booked-bg: color-mix(in srgb, hsl(var(--primary)) 10%, white);
+  --session-booked-text: color-mix(in srgb, hsl(var(--primary)) 80%, black);
 }
 
 /* Base session event styling */
@@ -340,13 +335,6 @@
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   padding: 0 !important;
   cursor: pointer;
-}
-
-/* Session type: Free (yellow) */
-.rbc-event.session-free {
-  background-color: var(--session-free-bg);
-  border-left-color: var(--session-free-border);
-  color: var(--session-free-text);
 }
 
 /* Session type: Default/paid (blue) */

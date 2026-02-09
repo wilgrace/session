@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
-import { getTenantFromHeaders } from "@/lib/tenant-utils"
+import { getTenantFromHeaders, getOrganizationBySlug } from "@/lib/tenant-utils"
 import { SlugProvider } from "@/lib/slug-context"
+import { hexToHSL, getForegroundHSL } from "@/lib/color-utils"
 
 interface SlugLayoutProps {
   children: React.ReactNode
@@ -19,9 +20,25 @@ export default async function SlugLayout({
     notFound()
   }
 
+  // Fetch org branding for CSS variable overrides
+  const organization = await getOrganizationBySlug(slug)
+  const brandColor = organization?.brandColor
+  const brandTextColor = organization?.brandTextColor
+  const brandStyle = brandColor
+    ? {
+        "--primary": hexToHSL(brandColor),
+        "--primary-foreground": brandTextColor
+          ? hexToHSL(brandTextColor)
+          : getForegroundHSL(brandColor),
+        "--ring": hexToHSL(brandColor),
+      } as React.CSSProperties
+    : undefined
+
   return (
     <SlugProvider slug={slug}>
-      {children}
+      <div style={brandStyle}>
+        {children}
+      </div>
     </SlugProvider>
   )
 }

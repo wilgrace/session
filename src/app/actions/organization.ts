@@ -16,8 +16,12 @@ export interface OrganizationSettings {
   faviconUrl: string | null;
   headerImageUrl: string | null;
   defaultSessionImageUrl: string | null;
-  buttonColor: string | null;
-  buttonTextColor: string | null;
+  brandColor: string | null;
+  brandTextColor: string | null;
+  // External links
+  homepageUrl: string | null;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
   // Member pricing fields
   memberPriceType: string | null;
   memberDiscountPercent: number | null;
@@ -71,6 +75,9 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         default_session_image_url,
         button_color,
         button_text_color,
+        homepage_url,
+        instagram_url,
+        facebook_url,
         member_price_type,
         member_discount_percent,
         member_fixed_price
@@ -94,8 +101,11 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         faviconUrl: data.favicon_url,
         headerImageUrl: data.header_image_url,
         defaultSessionImageUrl: data.default_session_image_url,
-        buttonColor: data.button_color,
-        buttonTextColor: data.button_text_color,
+        brandColor: data.button_color,
+        brandTextColor: data.button_text_color,
+        homepageUrl: data.homepage_url,
+        instagramUrl: data.instagram_url,
+        facebookUrl: data.facebook_url,
         memberPriceType: data.member_price_type,
         memberDiscountPercent: data.member_discount_percent,
         memberFixedPrice: data.member_fixed_price,
@@ -120,8 +130,11 @@ export async function updateOrganizationSettings(params: {
   faviconUrl?: string | null;
   headerImageUrl?: string | null;
   defaultSessionImageUrl?: string | null;
-  buttonColor?: string | null;
-  buttonTextColor?: string | null;
+  brandColor?: string | null;
+  brandTextColor?: string | null;
+  homepageUrl?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const { userId } = await auth();
@@ -161,16 +174,16 @@ export async function updateOrganizationSettings(params: {
       }
     }
 
-    // Validate button colors if provided
-    if (params.buttonColor !== undefined && params.buttonColor !== null) {
-      if (!isValidHexColor(params.buttonColor)) {
-        return { success: false, error: 'Invalid button color format. Use hex format (e.g., #6c47ff)' };
+    // Validate brand colors if provided
+    if (params.brandColor !== undefined && params.brandColor !== null) {
+      if (!isValidHexColor(params.brandColor)) {
+        return { success: false, error: 'Invalid brand color format. Use hex format (e.g., #6c47ff)' };
       }
     }
 
-    if (params.buttonTextColor !== undefined && params.buttonTextColor !== null) {
-      if (!isValidHexColor(params.buttonTextColor)) {
-        return { success: false, error: 'Invalid button text color format. Use hex format (e.g., #ffffff)' };
+    if (params.brandTextColor !== undefined && params.brandTextColor !== null) {
+      if (!isValidHexColor(params.brandTextColor)) {
+        return { success: false, error: 'Invalid brand text color format. Use hex format (e.g., #ffffff)' };
       }
     }
 
@@ -186,8 +199,11 @@ export async function updateOrganizationSettings(params: {
     if (params.faviconUrl !== undefined) updateData.favicon_url = params.faviconUrl;
     if (params.headerImageUrl !== undefined) updateData.header_image_url = params.headerImageUrl;
     if (params.defaultSessionImageUrl !== undefined) updateData.default_session_image_url = params.defaultSessionImageUrl;
-    if (params.buttonColor !== undefined) updateData.button_color = params.buttonColor;
-    if (params.buttonTextColor !== undefined) updateData.button_text_color = params.buttonTextColor;
+    if (params.brandColor !== undefined) updateData.button_color = params.brandColor;
+    if (params.brandTextColor !== undefined) updateData.button_text_color = params.brandTextColor;
+    if (params.homepageUrl !== undefined) updateData.homepage_url = params.homepageUrl;
+    if (params.instagramUrl !== undefined) updateData.instagram_url = params.instagramUrl;
+    if (params.facebookUrl !== undefined) updateData.facebook_url = params.facebookUrl;
 
     const { error } = await supabase
       .from('organizations')

@@ -116,8 +116,7 @@ export function MembershipPageClient({
           </p>
           <Link
             href={`/${slug}`}
-            className="inline-flex items-center gap-1 hover:opacity-80"
-            style={{ color: "var(--button-color, #6c47ff)" }}
+            className="inline-flex items-center gap-1 hover:opacity-80 text-primary"
           >
             <ChevronLeft className="h-4 w-4" />
             Back to booking
@@ -136,8 +135,7 @@ export function MembershipPageClient({
           <div className="flex items-center justify-between h-20">
             <Link
               href={`/${slug}`}
-              className="flex items-center gap-1 hover:opacity-80"
-              style={{ color: "var(--button-color, #6c47ff)" }}
+              className="flex items-center gap-1 hover:opacity-80 text-primary"
             >
               <ChevronLeft className="h-5 w-5" />
               <span>Back</span>

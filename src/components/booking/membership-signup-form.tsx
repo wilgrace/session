@@ -193,8 +193,7 @@ export function MembershipSignupForm({
       {/* Price display */}
       <div className="text-center py-4">
         <p
-          className="text-3xl font-bold"
-          style={{ color: "var(--button-color, #6c47ff)" }}
+          className="text-3xl font-bold text-primary"
         >
           {isFree ? "Free" : formatPrice(membership.price)}
           {!isFree && (
@@ -281,8 +280,7 @@ export function MembershipSignupForm({
         <div className="flex justify-between">
           <span className="text-lg font-semibold">Total</span>
           <span
-            className="text-xl font-bold"
-            style={{ color: "var(--button-color, #6c47ff)" }}
+            className="text-xl font-bold text-primary"
           >
             {isFree ? "Free" : formatPrice(membership.price)}
           </span>
@@ -300,10 +298,6 @@ export function MembershipSignupForm({
         onClick={handleSubmit}
         disabled={!canSubmit || loading || emailValidation?.requiresSignIn}
         className="w-full h-14 text-lg rounded-xl hover:opacity-90"
-        style={{
-          backgroundColor: "var(--button-color, #6c47ff)",
-          color: "var(--button-text-color, #ffffff)",
-        }}
       >
         {loading ? (
           <>
