@@ -4,6 +4,7 @@ import type React from "react"
 import { useParams } from "next/navigation"
 import { Sidebar } from "@/components/admin/sidebar"
 import { Header } from "@/components/admin/header"
+import { FeaturebaseMessenger } from "@/components/admin/featurebase-messenger"
 
 export default function AdminLayout({
   children,
@@ -20,6 +21,7 @@ export default function AdminLayout({
         <Header slug={slug} />
         {children}
       </div>
+      <FeaturebaseMessenger />
     </div>
   )
 }
