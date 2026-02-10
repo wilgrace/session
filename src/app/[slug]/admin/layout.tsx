@@ -21,7 +21,7 @@ export default function AdminLayout({
         <Header slug={slug} />
         {children}
       </div>
-      <FeaturebaseMessenger />
+      <FeaturebaseMessenger slug={slug} />
     </div>
   )
 }

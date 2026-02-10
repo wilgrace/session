@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Script from "next/script"
-import { useUser, useOrganization } from "@clerk/nextjs"
+import { useUser } from "@clerk/nextjs"
+import { getCurrentUserOrganizations } from "@/app/actions/user"
 
 declare global {
   interface Window {
@@ -10,9 +11,20 @@ declare global {
   }
 }
 
-export function FeaturebaseMessenger() {
+export function FeaturebaseMessenger({ slug }: { slug: string }) {
   const { user } = useUser()
-  const { organization } = useOrganization()
+  const [orgName, setOrgName] = useState<string>()
+
+  useEffect(() => {
+    async function fetchOrg() {
+      const result = await getCurrentUserOrganizations()
+      if (result.success && result.data) {
+        const match = result.data.find((a) => a.organization.slug === slug)
+        if (match) setOrgName(match.organization.name)
+      }
+    }
+    fetchOrg()
+  }, [slug])
 
   useEffect(() => {
     if (!user) return
@@ -31,12 +43,12 @@ export function FeaturebaseMessenger() {
       email: user.primaryEmailAddress?.emailAddress,
       name: user.fullName,
       userId: user.id,
-      organization: organization?.name,
+      organization: orgName,
       createdAt: user.createdAt?.toISOString(),
       theme: "light",
       language: "en",
     })
-  }, [user, organization])
+  }, [user, orgName])
 
   return (
     <Script
