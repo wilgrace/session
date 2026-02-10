@@ -17,6 +17,7 @@ import { SessionTemplate } from "@/types/session"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getEventColorValues } from "@/lib/event-colors"
 
 interface MobileCalendarViewProps {
   currentDate: Date
@@ -166,8 +167,16 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
                 <span className="text-lg mb-1">{format(day, "d")}</span>
                 {displaySessions.length > 0 && (
                   <div className="flex justify-center space-x-0.5">
-                    {displaySessions.map((_, index) => (
-                      <div key={index} className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-primary'}`} />
+                    {displaySessions.map((session, index) => (
+                      <div
+                        key={index}
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{
+                          backgroundColor: isSelected
+                            ? 'white'
+                            : getEventColorValues(session.event_color).color500,
+                        }}
+                      />
                     ))}
                   </div>
                 )}

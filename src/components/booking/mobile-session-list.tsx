@@ -3,10 +3,10 @@
 import { format, isSameDay } from "date-fns"
 import { SessionTemplate, SessionInstance } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Users, EyeOff } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
+import { getEventColorValues } from "@/lib/event-colors"
 
 interface MobileSessionListProps {
   sessions: SessionTemplate[]
@@ -104,15 +104,22 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
         const availableSpots = totalCapacity - totalSpotsBooked
         const isFull = availableSpots === 0
 
+        const eventColor = getEventColorValues(template.event_color)
+
         return (
           <Card
             key={key}
-            className={
+            className={`cursor-pointer active:scale-[0.98] transition-transform ${
               isBooked ? 'border-primary bg-primary/5' : ''
-            }
+            }`}
+            onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
           >
             <CardContent className="p-4">
-              <div className="flex justify-between items-center">
+              <div className="flex items-start gap-3">
+                <div
+                  className="mt-1.5 h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: eventColor.color500 }}
+                />
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium flex items-center gap-1">
                     {isFreeSession && <span className="text-[10px] font-semibold uppercase text-muted-foreground">Free</span>}
@@ -128,12 +135,6 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
                     </span>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
-                >
-                  {isBooked ? 'View' : 'Book'}
-                </Button>
               </div>
             </CardContent>
           </Card>
