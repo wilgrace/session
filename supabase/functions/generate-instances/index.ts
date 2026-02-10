@@ -31,17 +31,6 @@ if (!SERVICE_ROLE_KEY) {
   throw new Error("SERVICE_ROLE_KEY environment variable is required");
 }
 
-// Import day utilities
-const intToShortDay: Record<number, string> = {
-  0: 'sun',
-  1: 'mon',
-  2: 'tue',
-  3: 'wed',
-  4: 'thu',
-  5: 'fri',
-  6: 'sat'
-};
-
 // Add UUID validation function
 function isValidUUID(uuid: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -303,72 +292,75 @@ serveWithoutAuth(async (req) => {
           currentDate = addDays(currentDate, 1);
         }
 
-        let instancesCreated = 0;
+        // Fetch all existing instances for this template in one query
+        const { data: existingInstances, error: fetchError } = await supabaseClient
+          .from("session_instances")
+          .select("start_time")
+          .eq("template_id", template.id);
+
+        if (fetchError) {
+          console.error(`Error fetching existing instances: ${fetchError.message}`);
+          continue;
+        }
+
+        const existingStartTimes = new Set(
+          (existingInstances || []).map((i: { start_time: string }) => i.start_time)
+        );
+
+        // Collect all instances to create
+        const instancesToInsert: Array<{
+          template_id: string;
+          start_time: string;
+          end_time: string;
+          status: string;
+          organization_id: string;
+        }> = [];
 
         while (currentDate <= generationEndDate) {
           const currentDayOfWeekInteger = getDay(currentDate);
-          const currentDayName = intToShortDay[currentDayOfWeekInteger];
-          
+
           for (const schedule of template.session_schedules) {
-            const matchesDay = schedule.day_of_week === currentDayOfWeekInteger;
-            
-            if (matchesDay) {
-              // Parse the local time from the schedule
+            if (schedule.day_of_week === currentDayOfWeekInteger) {
               const [hours, minutes] = schedule.time.split(':').map(Number);
-              
-              // Create local date with time
-              let localDateWithTime = set(currentDate, {
+
+              const localDateWithTime = set(currentDate, {
                 hours,
                 minutes,
                 seconds: 0,
                 milliseconds: 0
               });
 
-              // Convert to UTC using the timezone
               const instanceStartTimeUTC = localToUTC(localDateWithTime, SAUNA_TIMEZONE);
-              // Use schedule-specific duration if available, otherwise fall back to template default
               const effectiveDuration = schedule.duration_minutes || template.duration_minutes;
               const instanceEndTimeUTC = addMinutes(instanceStartTimeUTC, effectiveDuration);
+              const startTimeISO = formatISO(instanceStartTimeUTC);
 
-              // Check if an instance already exists for this time
-              const { data: existingInstance, error: checkError } = await supabaseClient
-                .from("session_instances")
-                .select("id, start_time, end_time")
-                .eq("template_id", template.id)
-                .eq("start_time", formatISO(instanceStartTimeUTC))
-                .single();
-
-              if (checkError && checkError.code !== 'PGRST116') {
-                console.error(`Error checking for existing instance: ${checkError.message}`);
-                continue;
-              }
-
-              if (existingInstance) {
-                console.log(`Instance already exists for ${template.id} at ${formatISO(instanceStartTimeUTC)}`);
-                continue;
-              }
-
-              // Create new instance
-              const { error: insertError } = await supabaseClient
-                .from("session_instances")
-                .insert({
+              if (!existingStartTimes.has(startTimeISO)) {
+                instancesToInsert.push({
                   template_id: template.id,
-                  start_time: formatISO(instanceStartTimeUTC),
+                  start_time: startTimeISO,
                   end_time: formatISO(instanceEndTimeUTC),
                   status: "scheduled",
                   organization_id: template.organization_id
                 });
-
-              if (insertError) {
-                console.error(`Error creating instance for template ${template.id}:`, insertError);
-                continue;
               }
-
-              console.log(`Created instance for ${template.id} at ${formatISO(instanceStartTimeUTC)}`);
-              instancesCreated++;
             }
           }
           currentDate = addDays(currentDate, 1);
+        }
+
+        // Bulk insert all new instances
+        let instancesCreated = 0;
+        if (instancesToInsert.length > 0) {
+          const { error: insertError } = await supabaseClient
+            .from("session_instances")
+            .insert(instancesToInsert);
+
+          if (insertError) {
+            console.error(`Error bulk inserting instances for template ${template.id}:`, insertError);
+          } else {
+            instancesCreated = instancesToInsert.length;
+          }
         }
         console.log(`Finished processing template ${template.id}. Created ${instancesCreated} instances.`);
       }
