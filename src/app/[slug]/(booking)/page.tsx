@@ -80,7 +80,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
           facebookUrl={organization?.facebookUrl}
         />
 
-        <main className="flex-1 md:pl-6 md:pr-6 md:pb-6" style={{ backgroundColor: "#F6F2EF" }}>
+        <main className="flex-1 md:pb-6" style={{ backgroundColor: "#F6F2EF" }}>
           <div className="lg:container md:mx-auto md:px-4">
             <BookingConfirmationToast />
 

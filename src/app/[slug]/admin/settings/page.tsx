@@ -394,8 +394,8 @@ function SettingsPageContent() {
             label="Logo"
             value={logoUrl}
             onChange={setLogoUrl}
-            description="Displayed in the header. Recommended: 200x60px"
-            aspectRatio="wide"
+            description="Displayed in the booking calendar header. Recommended: 200x200px"
+            aspectRatio="square"
           />
 
           {/* Favicon */}
