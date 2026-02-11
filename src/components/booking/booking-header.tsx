@@ -64,7 +64,7 @@ export function BookingHeader({
                 </a>
               )}
               {facebookUrl && (
-                <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:opacity-70 transition-opacity">
+                <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="font-medium py-2 flex gap-1 over:opacity-70 transition-opacity">
                   <svg className="h-7 w-7 md:h-5 md:opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
                   </svg>
