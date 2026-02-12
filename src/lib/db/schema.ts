@@ -36,7 +36,7 @@ export const organizations = pgTable('organizations', {
 export const clerkUsers = pgTable('clerk_users', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
-  role: userRoleEnum('role').notNull().default('user'),
+  role: userRoleEnum('role').notNull().default('admin'),
   email: text('email').notNull().unique(),
   firstName: text('first_name'),
   lastName: text('last_name'),
