@@ -2127,7 +2127,7 @@ export async function getBookingDetails(bookingId: string) {
   }
 }
 
-export async function getUserUpcomingBookings(userId: string): Promise<{ data: Booking[] | null; error: string | null }> {
+export async function getUserUpcomingBookings(userId: string, organizationId?: string): Promise<{ data: Booking[] | null; error: string | null }> {
   try {
     const supabase = createSupabaseServerClient()
     const now = new Date().toISOString()
@@ -2148,7 +2148,7 @@ export async function getUserUpcomingBookings(userId: string): Promise<{ data: B
     }
 
     // Get the bookings with their session instances
-    const { data: bookings, error } = await supabase
+    let query = supabase
       .from('bookings')
       .select(`
         id,
@@ -2160,13 +2160,20 @@ export async function getUserUpcomingBookings(userId: string): Promise<{ data: B
           session_templates!inner (
             id,
             name,
-            duration_minutes
+            duration_minutes,
+            organization_id
           )
         )
       `)
       .eq('user_id', userData.id)
       .eq('status', 'confirmed')
       .gte('session_instance.end_time', now)
+
+    if (organizationId) {
+      query = query.eq('session_instance.session_templates.organization_id', organizationId)
+    }
+
+    const { data: bookings, error } = await query
 
     if (error) {
       return { data: null, error: error.message }

@@ -27,7 +27,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
   const [organization, sessionsResult, bookingsResult] = await Promise.all([
     getTenantOrganization(),
     getPublicSessionsByOrg(tenant.organizationId),
-    userId ? getUserUpcomingBookings(userId) : Promise.resolve({ data: [], error: null }),
+    userId ? getUserUpcomingBookings(userId, tenant.organizationId) : Promise.resolve({ data: [], error: null }),
   ])
 
   const { data: sessions, error: sessionsError } = sessionsResult

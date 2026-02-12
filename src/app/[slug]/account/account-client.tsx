@@ -122,15 +122,15 @@ export function AccountPageClient({ slug, organizationId }: AccountPageClientPro
             </div>
           ) : membership.isActive ? (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+              <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
                 <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                 <div className="flex-1">
-                  <p className="font-medium text-green-800 dark:text-green-200">
+                  <p className="font-medium text-green-800 ">
                     {membership.status === "cancelled"
                       ? `${membership.membershipName || "Membership"} (Cancelling)`
                       : membership.membershipName || "Active Membership"}
                   </p>
-                  <p className="text-sm text-green-700 dark:text-green-300">
+                  <p className="text-sm text-green-700">
                     {membership.membershipDescription || (
                       membership.membershipDiscountPercent
                         ? `${membership.membershipDiscountPercent}% off all sessions`

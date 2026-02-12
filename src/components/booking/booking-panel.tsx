@@ -136,9 +136,21 @@ export function BookingPanel({
       {/* Important Information */}
       <ImportantInfo instructions={session.booking_instructions} />
 
-      {/* User Details or Guest Callout */}
+      {/* Booking Details */}
       {isGuest ? (
-        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
+        <div className="bg-muted/30 rounded-xl p-4 space-y-2">
+          <h4 className="font-medium text-sm text-muted-foreground">Booking Details</h4>
+          <div className="space-y-1">
+            <p className="text-sm">
+              <span className="text-muted-foreground">Email:</span>{" "}
+              <span className="font-medium">{guestEmail}</span>
+            </p>
+            <p className="text-sm">
+              <span className="text-muted-foreground">Number of people:</span>{" "}
+              <span className="font-medium">{booking.number_of_spots}</span>
+            </p>
+          </div>
+        </div>
       ) : userDetails ? (
         <div className="bg-muted/30 rounded-xl p-4 space-y-2">
           <h4 className="font-medium text-sm text-muted-foreground">Booking Details</h4>
@@ -158,6 +170,11 @@ export function BookingPanel({
           </div>
         </div>
       ) : null}
+
+      {/* Guest Account Callout */}
+      {isGuest && (
+        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
+      )}
 
       {/* Price Summary */}
       <div className="space-y-3">
