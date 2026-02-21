@@ -115,8 +115,10 @@ export function BookingHeader({
               <Image
                 src={logoUrl}
                 alt={organizationName || "Organization logo"}
-                width={200}
-                height={200}
+                width={400}
+                height={400}
+                sizes="(min-width: 768px) 200px, 150px"
+                quality={90}
                 className="h-[150px] w-[150px] md:h-[200px] md:w-[200px] rounded-full object-cover"
                 priority
               />
