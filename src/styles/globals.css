@@ -69,6 +69,22 @@
   }
 }
 
+/* Mobile slide-in from right animation */
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 767px) {
+  .mobile-slide-in {
+    animation: slideInFromRight 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+}
+
 /* Force Radix Toast viewport to always be top right */
 [data-radix-toast-viewport] {
   position: fixed !important;

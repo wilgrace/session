@@ -9,7 +9,7 @@ import { SessionTemplate } from "@/types/session"
 import { formatPrice } from "./price-display"
 import { checkEmailExists, validateCoupon } from "@/app/actions/checkout"
 import { useAuthOverlay } from "@/hooks/use-auth-overlay"
-import { Loader2, Check, AlertCircle, BadgeCheck } from "lucide-react"
+import { Loader2, Check, AlertCircle, BadgeCheck, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Membership } from "@/lib/db/schema"
 
@@ -106,6 +106,7 @@ export function PreCheckoutForm({
   const [numberOfSpots, setNumberOfSpots] = useState(1)
   const [email, setEmail] = useState(userEmail || "")
   const [couponCode, setCouponCode] = useState("")
+  const [showCoupon, setShowCoupon] = useState(false)
 
   // Validation state
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null)
@@ -519,59 +520,70 @@ export function PreCheckoutForm({
 
         {/* Coupon Code */}
         <div className="space-y-2">
-          <Label htmlFor="coupon" className="text-base font-semibold">Coupon code (optional)</Label>
-          <div className="flex gap-2">
-            <Input
-              id="coupon"
-              value={couponCode}
-              onChange={(e) => {
-                setCouponCode(e.target.value.toUpperCase())
-                setCouponError(null)
-              }}
-              placeholder="Enter code"
-              disabled={!!appliedCoupon}
-              className="h-12 rounded-xl bg-muted/50 flex-1"
-            />
-            {appliedCoupon ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleRemoveCoupon}
-                className="h-12 rounded-xl px-6"
-              >
-                Remove
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleApplyCoupon}
-                disabled={!couponCode.trim() || isValidatingCoupon}
-                className="h-12 rounded-xl px-6"
-              >
-                {isValidatingCoupon ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+          <button
+            type="button"
+            className="flex items-center gap-1 text-base font-semibold hover:opacity-70 transition-opacity"
+            onClick={() => setShowCoupon(v => !v)}
+          >
+            Coupon code
+            <ChevronDown className={cn("h-4 w-4 transition-transform", showCoupon && "rotate-180")} />
+          </button>
+          {showCoupon && (
+            <>
+              <div className="flex gap-2">
+                <Input
+                  id="coupon"
+                  value={couponCode}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value.toUpperCase())
+                    setCouponError(null)
+                  }}
+                  placeholder="Enter code"
+                  disabled={!!appliedCoupon}
+                  className="h-12 rounded-xl bg-muted/50 flex-1"
+                />
+                {appliedCoupon ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRemoveCoupon}
+                    className="h-12 rounded-xl px-6"
+                  >
+                    Remove
+                  </Button>
                 ) : (
-                  "Apply"
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleApplyCoupon}
+                    disabled={!couponCode.trim() || isValidatingCoupon}
+                    className="h-12 rounded-xl px-6"
+                  >
+                    {isValidatingCoupon ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Apply"
+                    )}
+                  </Button>
                 )}
-              </Button>
-            )}
-          </div>
-          {couponError && (
-            <p className="text-sm text-destructive">{couponError}</p>
-          )}
-          {appliedCoupon && (
-            <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
-              <Check className="h-4 w-4 flex-shrink-0" />
-              <span>
-                {appliedCoupon.name || "Coupon applied"}
-                {appliedCoupon.percentOff
-                  ? `: ${appliedCoupon.percentOff}% off`
-                  : appliedCoupon.amountOff
-                  ? `: ${formatPrice(appliedCoupon.amountOff)} off`
-                  : ""}
-              </span>
-            </div>
+              </div>
+              {couponError && (
+                <p className="text-sm text-destructive">{couponError}</p>
+              )}
+              {appliedCoupon && (
+                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
+                  <Check className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    {appliedCoupon.name || "Coupon applied"}
+                    {appliedCoupon.percentOff
+                      ? `: ${appliedCoupon.percentOff}% off`
+                      : appliedCoupon.amountOff
+                      ? `: ${formatPrice(appliedCoupon.amountOff)} off`
+                      : ""}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
 

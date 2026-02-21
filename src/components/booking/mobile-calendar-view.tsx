@@ -99,7 +99,7 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm sticky top-0 z-10">
+    <div className="bg-white rounded-lg shadow-sm">
       {/* Month title */}
       <div className="flex items-center justify-between p-4 border-b">
         <Button
