@@ -9,9 +9,38 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { auth } from "@clerk/nextjs/server"
 import { BookingConfirmationToast } from "@/components/booking/booking-confirmation-toast"
 import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
+import type { SessionTemplate } from "@/types/session"
 
 interface BookingPageProps {
   params: Promise<{ slug: string }>
+}
+
+// Async server component — streams in calendar once sessions load
+async function CalendarSection({
+  organizationId,
+  slug,
+  isAdmin,
+}: {
+  organizationId: string
+  slug: string
+  isAdmin: boolean
+}) {
+  const { data: sessions } = await getPublicSessionsByOrg(organizationId)
+  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} />
+}
+
+// Async server component — streams in upcoming bookings
+async function UpcomingBookingsSection({
+  userId,
+  organizationId,
+  slug,
+}: {
+  userId: string
+  organizationId: string
+  slug: string
+}) {
+  const { data: bookings } = await getUserUpcomingBookings(userId, organizationId)
+  return <UpcomingBookings bookings={bookings || []} slug={slug} />
 }
 
 export default async function BookingPage({ params }: BookingPageProps) {
@@ -24,29 +53,16 @@ export default async function BookingPage({ params }: BookingPageProps) {
   }
 
   const { userId } = await auth()
-  const [organization, sessionsResult, bookingsResult] = await Promise.all([
+
+  // Only fast fetches block the initial render
+  const [organization, isAdmin] = await Promise.all([
     getTenantOrganization(),
-    getPublicSessionsByOrg(tenant.organizationId),
-    userId ? getUserUpcomingBookings(userId, tenant.organizationId) : Promise.resolve({ data: [], error: null }),
+    userId
+      ? canAccessAdminForOrg(userId, tenant.organizationId)
+      : Promise.resolve(false),
   ])
 
-  const { data: sessions, error: sessionsError } = sessionsResult
-  const { data: bookings } = bookingsResult
-
-  // Check if user has admin access for this org
-  const isAdmin = userId && organization
-    ? await canAccessAdminForOrg(userId, organization.id)
-    : false
-
   const hasHeaderImage = !!organization?.headerImageUrl
-
-  if (sessionsError) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-red-500">Error loading sessions: {sessionsError}</div>
-      </div>
-    )
-  }
 
   return (
     <>
@@ -80,16 +96,31 @@ export default async function BookingPage({ params }: BookingPageProps) {
           facebookUrl={organization?.facebookUrl}
         />
 
-        <main className="flex-1 md:pb-6" style={{ backgroundColor: "#F6F2EF" }}>
+        <main
+          className="flex-1 md:pb-6 pb-[env(safe-area-inset-bottom)]"
+          style={{ backgroundColor: "#F6F2EF" }}
+        >
           <div className="lg:container md:mx-auto md:px-4">
             <BookingConfirmationToast />
 
             <div className="flex flex-col md:grid md:gap-8">
-              {userId && <UpcomingBookings bookings={bookings || []} slug={slug} />}
+              {userId && (
+                <Suspense fallback={null}>
+                  <UpcomingBookingsSection
+                    userId={userId}
+                    organizationId={tenant.organizationId}
+                    slug={slug}
+                  />
+                </Suspense>
+              )}
 
               <div className="md:block">
                 <Suspense fallback={<Skeleton className="min-h-[60vh] w-full" />}>
-                  <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} />
+                  <CalendarSection
+                    organizationId={tenant.organizationId}
+                    slug={slug}
+                    isAdmin={isAdmin}
+                  />
                 </Suspense>
               </div>
             </div>

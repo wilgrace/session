@@ -4,8 +4,7 @@ import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { ChevronLeft } from "lucide-react"
-import { HouseIcon } from "lucide-react" 
+import { ChevronLeft, HouseIcon, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { cn } from "@/lib/utils"
@@ -86,6 +85,18 @@ export function BookingHeader({
           {isLoaded ? (
             <>
               <SignedIn>
+                {isAdmin && (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="hidden md:inline-flex gap-1.5 rounded-full mr-3"
+                  >
+                    <Link href={`/${slug}/admin`}>
+                      <Shield className="h-4 w-4" />
+                      Staff
+                    </Link>
+                  </Button>
+                )}
                 <UserDropdown isAdmin={isAdmin} slug={slug} />
               </SignedIn>
               <SignedOut>

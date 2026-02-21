@@ -333,13 +333,30 @@ export function BookingForm({
   // Waiver interception for paid checkout flow
   const handleProceedToCheckoutWithWaiver = useCallback((formData: CheckoutFormData) => {
     if (waiverNeeded && activeWaiver) {
+      if (user) {
+        // The user may have just agreed to the waiver inside the auth overlay during
+        // the sign-up flow. The booking-form's own waiver check runs when the user
+        // first appears (before they've agreed), so waiverNeeded can be stale by the
+        // time onComplete fires. Do a fresh check here before showing the overlay again.
+        checkWaiverAgreement(session.organization_id).then(result => {
+          if (result.success && result.data?.hasAgreed) {
+            // Already agreed — proceed directly without a second waiver prompt
+            handleProceedToCheckout(formData)
+          } else {
+            setPendingCheckoutData(formData)
+            setShowWaiverOverlay(true)
+          }
+        })
+        return
+      }
+      // Guest user — show waiver directly
       setPendingCheckoutData(formData)
       setShowWaiverOverlay(true)
       return
     }
     handleProceedToCheckout(formData)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiverNeeded, activeWaiver])
+  }, [waiverNeeded, activeWaiver, user, session.organization_id])
 
   // Handle waiver overlay completion
   const handleWaiverComplete = useCallback(() => {

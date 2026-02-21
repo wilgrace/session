@@ -26,6 +26,10 @@ interface SessionPageClientProps {
   slug: string
   organizationName: string | null
   isAdmin: boolean
+  // Server-prefetched initial data (eliminates client-side spinner)
+  initialSession?: SessionTemplate | null
+  initialBookingDetails?: any
+  initialStartTimeStr?: string
 }
 
 // Calculate spots remaining for a session
@@ -38,21 +42,51 @@ function calculateSpotsRemaining(session: SessionTemplate, currentUserSpots: num
   return session.capacity - totalSpotsBooked
 }
 
-export function SessionPageClient({ sessionId, searchParams, slug, organizationName, isAdmin }: SessionPageClientProps) {
+export function SessionPageClient({
+  sessionId,
+  searchParams,
+  slug,
+  organizationName,
+  isAdmin,
+  initialSession,
+  initialBookingDetails,
+  initialStartTimeStr,
+}: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
   const { toast } = useToast()
-  const [session, setSession] = useState<SessionTemplate | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [session, setSession] = useState<SessionTemplate | null>(initialSession ?? null)
+  // Start loading=false if we have server-provided session data
+  const [loading, setLoading] = useState(!initialSession)
   const [error, setError] = useState<string | null>(null)
-  const [startTime, setStartTime] = useState<Date | null>(null)
-  const [bookingDetails, setBookingDetails] = useState<any>(null)
+  const [startTime, setStartTime] = useState<Date | null>(() => {
+    // Prefer start time from server-side booking details
+    if (initialStartTimeStr) return new Date(initialStartTimeStr)
+    // Fall back to URL param
+    if (searchParams.start) {
+      try {
+        const parsed = new Date(decodeURIComponent(searchParams.start))
+        if (!isNaN(parsed.getTime())) return parsed
+      } catch {}
+    }
+    return null
+  })
+  const [bookingDetails, setBookingDetails] = useState<any>(initialBookingDetails ?? null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
   const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
+  const [isNavigatingBack, setIsNavigatingBack] = useState(false)
+
+  const handleBack = () => {
+    setIsNavigatingBack(true)
+    setTimeout(() => router.push(`/${slug}`), 260)
+  }
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
-  const initialFetchDoneRef = useRef(false)
+  // Pre-set to true when we have server-provided data
+  const initialFetchDoneRef = useRef(!!initialSession)
+  // Ref to prevent fetching pricing more than once
+  const pricingFetchedRef = useRef(false)
   // Track the user ID that was used for the last booking check
   const lastBookingCheckUserIdRef = useRef<string | null>(null)
 
@@ -91,18 +125,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
           return
         }
 
-        // Get start time from URL if present
         const startParam = searchParams.start
-        if (startParam) {
-          try {
-            const parsedDate = new Date(decodeURIComponent(startParam))
-            if (!isNaN(parsedDate.getTime())) {
-              setStartTime(parsedDate)
-            }
-          } catch (err) {
-            // Invalid date, ignore
-          }
-        }
 
         // Check if we're in edit mode
         const edit = searchParams.edit
@@ -135,7 +158,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
           }
         }
 
-        // Skip session fetch if we've already done it (only refetch if URL params change)
+        // Skip session fetch if we've already done it (server data or previous fetch)
         if (initialFetchDoneRef.current) {
           setLoading(false)
           return
@@ -202,18 +225,6 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
 
         setSession(result.data)
         initialFetchDoneRef.current = true
-
-        // Fetch pricing data for paid sessions
-        if (result.data.pricing_type === "paid" && result.data.drop_in_price) {
-          const pricingResult = await getBookingMembershipPricingData({
-            organizationId: result.data.organization_id,
-            dropInPrice: result.data.drop_in_price,
-            sessionTemplateId: sessionId,
-          })
-          if (pricingResult.success && pricingResult.data) {
-            setPricingData(pricingResult.data)
-          }
-        }
       } catch (err: any) {
         setError(err.message)
         setDebugInfo((prev: any) => ({
@@ -232,6 +243,24 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
     fetchSession()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, searchParams.start, searchParams.edit, searchParams.bookingId, user?.id, router, slug])
+
+  // Fetch pricing data whenever session is available (handles both server-prefetched and client-fetched sessions)
+  useEffect(() => {
+    if (!session || pricingFetchedRef.current) return
+    if (session.pricing_type !== "paid" || !session.drop_in_price) return
+
+    pricingFetchedRef.current = true
+    getBookingMembershipPricingData({
+      organizationId: session.organization_id,
+      dropInPrice: session.drop_in_price,
+      sessionTemplateId: sessionId,
+    }).then(result => {
+      if (result.success && result.data) {
+        setPricingData(result.data)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, sessionId])
 
   if (loading) {
     return (
@@ -278,15 +307,15 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
   } : null
 
   return (
-    <>
+    <div className={isNavigatingBack ? "mobile-slide-out" : "mobile-slide-in"}>
       {/* Mobile header - always visible on mobile */}
       <div className="flex items-center justify-between px-4 py-4 md:hidden">
-        <Link
-          href={`/${slug}`}
+        <button
+          onClick={handleBack}
           className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
         >
           <ChevronLeft className="h-6 w-6" />
-        </Link>
+        </button>
         <span className="font-medium text-sm">{organizationName}</span>
         <SessionAuthControls isAdmin={isAdmin} slug={slug} />
       </div>
@@ -319,7 +348,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
       </div>
 
       {/* Right Column - White background */}
-      <div className="bg-white flex justify-center">
+      <div className="bg-white flex justify-center pb-[env(safe-area-inset-bottom)]">
         <div className="w-full max-w-[550px] px-4 md:px-8 pt-6 md:pt-[60px] pb-6">
           {/* Desktop-only auth row */}
           <div className="hidden md:flex justify-end h-20">
@@ -347,6 +376,6 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
         </div>
       </div>
     </div>
-    </>
+    </div>
   )
 }
