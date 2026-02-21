@@ -21,7 +21,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@clerk/nextjs"
 import { useAuth } from "@clerk/nextjs"
 import { createClerkUser, getClerkUser } from "@/app/actions/clerk"
-import { createSessionTemplate, createSessionInstance, createSessionSchedule, updateSessionTemplate, deleteSessionSchedules, deleteSessionInstances, deleteSessionTemplate, deleteSchedule } from "@/app/actions/session"
+import { createSessionTemplate, createSessionInstance, createSessionSchedule, updateSessionTemplate, updateSessionWithSchedules, deleteSessionSchedules, deleteSessionInstances, deleteSessionTemplate, deleteSchedule } from "@/app/actions/session"
 import { mapDayStringToInt, mapIntToDayString, convertDayFormat, isValidDayString } from "@/lib/day-utils"
 import { formatInTimeZone } from 'date-fns-tz'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -316,41 +316,41 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       let templateId: string;
 
       if (template) {
-        // Update existing template
-        const result = await updateSessionTemplate({
-          id: template.id,
-          name,
-          description,
-          capacity: parseInt(capacity),
-          duration_minutes: durationMinutes,
-          visibility: visibility,
-          is_recurring: scheduleType === "repeat",
-          one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
-          one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
-          recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
-          recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
-          // Pricing fields
-          pricing_type: pricingType,
-          drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
-          member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
-          booking_instructions: bookingInstructions || null,
-          // Image field
-          image_url: imageUrl || null,
-          // Calendar display color
-          event_color: eventColor,
+        // Update existing template (single action: auth once, ownership check once,
+        // update + delete + batch insert schedules + fire-and-forget generation)
+        const result = await updateSessionWithSchedules({
+          templateId: template.id,
+          template: {
+            name,
+            description,
+            capacity: parseInt(capacity),
+            duration_minutes: durationMinutes,
+            visibility: visibility,
+            is_recurring: scheduleType === "repeat",
+            one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
+            one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
+            recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
+            recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
+            pricing_type: pricingType,
+            drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+            member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
+            booking_instructions: bookingInstructions || null,
+            image_url: imageUrl || null,
+            event_color: eventColor,
+          },
+          schedules: scheduleType === "repeat" ? schedules.map((s: any) => ({
+            time: s.time,
+            days: (s.days || []).map((d: string) => d.toLowerCase()),
+            duration_minutes: s.durationMinutes || null,
+          })) : [],
+          isRecurring: scheduleType === "repeat",
         });
 
         if (!result.success) {
-          throw new Error(`Failed to update template: ${result.error}`);
+          throw new Error(`Failed to update session: ${result.error}`);
         }
 
         templateId = template.id;
-
-        // Delete existing schedules and instances
-        await Promise.all([
-          deleteSessionSchedules(templateId),
-          deleteSessionInstances(templateId)
-        ]);
       } else {
         // Create new template using server action
         const result = await createSessionTemplate({
@@ -424,7 +424,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         if (!instanceResult.success) {
           throw new Error(`Failed to create instance: ${instanceResult.error}`);
         }
-      } else if (scheduleType === "repeat") {
+      } else if (!template && scheduleType === "repeat") {
+        // Schedule creation for new templates only — updates are handled by updateSessionWithSchedules
 
         // Validate schedules before creating
         if (!schedules || schedules.length === 0) {
