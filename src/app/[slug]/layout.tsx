@@ -50,7 +50,11 @@ export async function generateMetadata({
     title,
     description,
     icons,
-    appleWebApp: { title: org.name },
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: org.name,
+    },
     openGraph: {
       title,
       description,
