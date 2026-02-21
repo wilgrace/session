@@ -86,13 +86,16 @@ export function BookingHeader({
             <>
               <SignedIn>
                 {isAdmin && (
-                  <Link
-                    href={`/${slug}/admin`}
-                    className="hidden md:flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  <Button
+                    asChild
+                    size="sm"
+                    className="hidden md:inline-flex gap-1.5 rounded-full mr-3"
                   >
-                    <Shield className="h-4 w-4" />
-                    Admin Area
-                  </Link>
+                    <Link href={`/${slug}/admin`}>
+                      <Shield className="h-4 w-4" />
+                      Staff
+                    </Link>
+                  </Button>
                 )}
                 <UserDropdown isAdmin={isAdmin} slug={slug} />
               </SignedIn>
