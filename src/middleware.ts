@@ -14,6 +14,10 @@ const BYPASS_PATHS = [
   '/favicon.ico',
   '/robots.txt',
   '/sitemap.xml',
+  '/offline',
+  '/icons',
+  '/sw.js',
+  '/workbox-',
 ];
 
 // Static file extensions to bypass
