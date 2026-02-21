@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useUser, useClerk } from "@clerk/nextjs"
 import Link from "next/link"
-import { Shield, CreditCard, UserCircle, Settings, LogOut, ChevronDown } from "lucide-react"
+import { CreditCard, UserCircle, Settings, LogOut, ChevronDown } from "lucide-react"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -91,18 +91,6 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-56">
-          {isAdmin && (
-            <>
-              <DropdownMenuItem asChild>
-                <Link href={`/${slug}/admin`} className="cursor-pointer">
-                  <Shield className="mr-2 h-4 w-4" />
-                  Admin Area
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
-
           <DropdownMenuItem asChild>
             <Link href={`/${slug}/account`} className="cursor-pointer">
               <CreditCard className="mr-2 h-4 w-4" />

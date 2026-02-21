@@ -278,7 +278,7 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
   } : null
 
   return (
-    <>
+    <div className="mobile-slide-in">
       {/* Mobile header - always visible on mobile */}
       <div className="flex items-center justify-between px-4 py-4 md:hidden">
         <Link
@@ -347,6 +347,6 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
         </div>
       </div>
     </div>
-    </>
+    </div>
   )
 }
