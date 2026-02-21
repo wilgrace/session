@@ -51,9 +51,21 @@
 @layer base {
   * {
     @apply border-border;
+    /* Remove grey tap flash on mobile */
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
+    /* Prevent accidental text selection on long-press */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Re-enable text selection in form inputs */
+  input,
+  textarea,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
 
