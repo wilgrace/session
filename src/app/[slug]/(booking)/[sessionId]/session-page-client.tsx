@@ -51,6 +51,12 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
   const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
+  const [isNavigatingBack, setIsNavigatingBack] = useState(false)
+
+  const handleBack = () => {
+    setIsNavigatingBack(true)
+    setTimeout(() => router.push(`/${slug}`), 260)
+  }
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
   const initialFetchDoneRef = useRef(false)
   // Track the user ID that was used for the last booking check
@@ -278,15 +284,15 @@ export function SessionPageClient({ sessionId, searchParams, slug, organizationN
   } : null
 
   return (
-    <div className="mobile-slide-in">
+    <div className={isNavigatingBack ? "mobile-slide-out" : "mobile-slide-in"}>
       {/* Mobile header - always visible on mobile */}
       <div className="flex items-center justify-between px-4 py-4 md:hidden">
-        <Link
-          href={`/${slug}`}
+        <button
+          onClick={handleBack}
           className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
         >
           <ChevronLeft className="h-6 w-6" />
-        </Link>
+        </button>
         <span className="font-medium text-sm">{organizationName}</span>
         <SessionAuthControls isAdmin={isAdmin} slug={slug} />
       </div>

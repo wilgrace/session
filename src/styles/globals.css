@@ -57,19 +57,23 @@
   }
 }
 
-/* Mobile slide-in from right animation */
+/* Mobile slide-in / slide-out animations */
 @keyframes slideInFromRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slideOutToRight {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
 }
 
 @media (max-width: 767px) {
   .mobile-slide-in {
     animation: slideInFromRight 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  .mobile-slide-out {
+    animation: slideOutToRight 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 }
 
