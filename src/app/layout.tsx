@@ -9,6 +9,11 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Community Sauna",
   description: "Book your sessions",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Sawna",
+  },
 }
 
 export const viewport: Viewport = {
@@ -16,6 +21,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#0ea5e9",
 }
 
 export default function RootLayout({
