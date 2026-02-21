@@ -30,9 +30,11 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
     notFound()
   }
 
-  // Fetch organization data and admin status
-  const organization = await getTenantOrganization()
-  const { userId } = await auth()
+  // Fetch organization data and auth in parallel (independent calls)
+  const [organization, { userId }] = await Promise.all([
+    getTenantOrganization(),
+    auth(),
+  ])
   const isAdmin = userId && organization
     ? await canAccessAdminForOrg(userId, organization.id)
     : false
