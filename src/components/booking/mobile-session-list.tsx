@@ -1,6 +1,8 @@
 "use client"
 
-import { format, isSameDay } from "date-fns"
+import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
+import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 import { SessionTemplate, SessionInstance } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
@@ -26,7 +28,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
     if (template.instances && template.instances.length > 0) {
       template.instances.forEach(instance => {
         const instanceDate = new Date(instance.start_time)
-        if (isSameDay(instanceDate, selectedDate)) {
+        if (formatLocalDate(instanceDate, SAUNA_TIMEZONE) === format(selectedDate, 'yyyy-MM-dd')) {
           const userBooking = instance.bookings?.find(b => b.user?.clerk_user_id === user?.id)
           results.push({
             template,
@@ -127,7 +129,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
                     {template.name}
                   </h3>
                   <div className="mt-1 flex items-center text-md text-muted-foreground gap-x-3">
-                    <span>{format(startTime, "HH:mm")} - {format(endTime, "HH:mm")}</span>
+                    <span>{instance ? formatInTimeZone(startTime, SAUNA_TIMEZONE, "HH:mm") : format(startTime, "HH:mm")} - {instance ? formatInTimeZone(endTime, SAUNA_TIMEZONE, "HH:mm") : format(endTime, "HH:mm")}</span>
                     <span className="text-gray-300">·</span>
                     <span className="flex items-center gap-1">
                       <Users className="h-3 w-3" />

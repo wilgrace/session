@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { SessionTemplate } from "@/types/session"
@@ -60,6 +61,15 @@ export function BookingPanel({
   const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [sessionUrl, setSessionUrl] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (sessionId && startTime) {
+      setSessionUrl(
+        `${window.location.origin}/${slug}/${sessionId}?start=${encodeURIComponent(startTime.toISOString())}`
+      )
+    }
+  }, [sessionId, slug, startTime])
 
   // Calculate the end time based on session duration
   const endTime = new Date(startTime.getTime() + (session.duration_minutes || 60) * 60 * 1000)
@@ -82,11 +92,6 @@ export function BookingPanel({
 
   // Calculate discount: use stored value, or infer from difference between subtotal and amount paid
   const discountAmount = booking.discount_amount ?? (subtotal > originalTotal ? subtotal - originalTotal : 0)
-
-  // Build session URL for sharing (without booking-specific params)
-  const sessionUrl = sessionId
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${slug}/${sessionId}?start=${encodeURIComponent(startTime.toISOString())}`
-    : undefined
 
   const handleCancel = async () => {
     setLoading(true)
@@ -123,6 +128,14 @@ export function BookingPanel({
 
   return (
     <div className="space-y-6">
+      {/* Session Header */}
+      <div>
+        <h2 className="font-semibold text-lg leading-tight">{session.name}</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {format(startTime, "HH:mm 'on' EEEE d MMMM")}
+        </p>
+      </div>
+
       {/* Share Actions */}
       <ShareActions
         sessionName={session.name}

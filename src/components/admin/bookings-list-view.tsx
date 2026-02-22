@@ -192,7 +192,8 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
       status: booking.status,
       amount_paid: booking.amount_paid,
       booked_at: booking.booked_at,
-      user: booking.user
+      user: booking.user,
+      session_instance: booking.session_instance,
     })
   }
 

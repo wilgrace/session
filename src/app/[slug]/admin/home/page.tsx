@@ -165,7 +165,7 @@ export default function AdminHomePage() {
           open={!!selectedBooking}
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
-          onEdit={() => {}}
+          onCancel={() => setSelectedBooking(null)}
           onCheckIn={handleCheckIn}
         />
       </main>
@@ -208,7 +208,14 @@ export default function AdminHomePage() {
                 <BookingsList
                   bookings={currentSession.bookings || []}
                   onCheckIn={handleCheckIn}
-                  onSelect={setSelectedBooking}
+                  onSelect={(booking) => setSelectedBooking({
+                    ...booking,
+                    session_instance: {
+                      start_time: (currentSession as any).start_time,
+                      end_time: (currentSession as any).end_time,
+                      template: { name: (currentSession as any).template?.name },
+                    },
+                  })}
                 />
               </div>
             </>
@@ -221,7 +228,7 @@ export default function AdminHomePage() {
         open={!!selectedBooking}
         booking={selectedBooking}
         onClose={() => setSelectedBooking(null)}
-        onEdit={() => {}}
+        onCancel={() => setSelectedBooking(null)}
         onCheckIn={handleCheckIn}
       />
     </main>

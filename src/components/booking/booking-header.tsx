@@ -1,6 +1,6 @@
 "use client"
 
-import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs"
+import { SignedIn, SignedOut } from "@clerk/nextjs"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
@@ -33,22 +33,23 @@ export function BookingHeader({
 }: BookingHeaderProps) {
   const pathname = usePathname()
   const { openSignIn } = useAuthOverlay()
-  const { isLoaded } = useAuth()
 
   // Determine if we should show the back button (not on calendar page)
   const isCalendarPage = pathname === `/${slug}` || pathname === `/${slug}/`
+  const hasLinks = !!(homepageUrl || instagramUrl || facebookUrl)
+  const showOrgName = !logoUrl && isCalendarPage
 
   return (
     <header className="relative bg-white md:bg-[#F6F2EF]">
       {/* Navigation row */}
-      <div className="lg:container md:mx-auto flex h-16 items-center justify-between px-4 md:px-4">
+      <div className="lg:container md:mx-auto relative flex h-16 items-center justify-between px-4 md:px-4">
         {/* Left - Home nav, social links, or back button */}
         <div className="flex items-center gap-4">
           {isCalendarPage ? (
             <>
               {homepageUrl && (
                 <a href={homepageUrl} target="_blank" rel="noopener noreferrer" className="font-medium py-2 flex gap-1 hover:opacity-70 transition-opacity">
-                  <HouseIcon className="h-7 w-7 md:h-5 md:w-5 md:opacity-50" /> 
+                  <HouseIcon className="h-7 w-7 md:h-5 md:w-5 md:opacity-50" />
                   <span className="hidden md:block">Home</span>
                 </a>
               )}
@@ -70,6 +71,10 @@ export function BookingHeader({
                   <span className="hidden md:block">Facebook</span>
                 </a>
               )}
+              {/* Left-aligned org name when no logo and no links */}
+              {showOrgName && !hasLinks && (
+                <span className="font-semibold text-lg">{organizationName}</span>
+              )}
             </>
           ) : (
             <Link href={`/${slug}`}>
@@ -80,49 +85,50 @@ export function BookingHeader({
           )}
         </div>
 
+        {/* Centered org name when no logo and has links */}
+        {showOrgName && hasLinks && (
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <span className="font-semibold text-lg">{organizationName}</span>
+          </div>
+        )}
+
         {/* Right - Auth controls */}
         <div className="flex items-center gap-3">
-          {isLoaded ? (
-            <>
-              <SignedIn>
-                {isAdmin && (
-                  <Button
-                    asChild
-                    size="default"
-                    className="hidden md:inline-flex gap-3 rounded-md hover:opacity-90 text-base py-2 px-4"
-                  >
-                    <Link href={`/${slug}/admin`}>
-                      <Shield className="h-7 w-7 md:h-7" />
-                      Staff
-                    </Link>
-                  </Button>
-                )}
-                <UserDropdown isAdmin={isAdmin} slug={slug} />
-              </SignedIn>
-              <SignedOut>
-                <Button
-                  onClick={() => openSignIn()}
-                  size="default"
-                  className="rounded-md hover:opacity-90 text-base py-2 px-4"
-                >
-                  Sign In
-                </Button>
-              </SignedOut>
-            </>
-          ) : (
-            <div className="w-10 h-10" />
-          )}
+          <SignedIn>
+            {isAdmin && (
+              <Button
+                asChild
+                size="default"
+                className="hidden md:inline-flex gap-3 rounded-md hover:opacity-90 text-base py-2 px-4"
+              >
+                <Link href={`/${slug}/admin`}>
+                  <Shield className="h-7 w-7 md:h-7" />
+                  Staff
+                </Link>
+              </Button>
+            )}
+            <UserDropdown isAdmin={isAdmin} slug={slug} />
+          </SignedIn>
+          <SignedOut>
+            <Button
+              onClick={() => openSignIn()}
+              size="default"
+              className="rounded-md hover:opacity-90 text-base py-2 px-4"
+            >
+              Sign In
+            </Button>
+          </SignedOut>
         </div>
       </div>
 
-      {/* Centered logo with ring border */}
-      <div className={cn(
-        "flex justify-center pb-2",
-        hasHeaderImage ? "-mt-[140px] md:-mt-[176px]" : "pt-2"
-      )}>
-        <Link href={`/${slug}`} className="block">
-          <div className="rounded-full bg-[#FFFFFF] md:bg-[#F6F2EF] p-1 ring-[4px] ring-[#FFFFFF] md:ring-[#F6F2EF] md:p-2 md:ring-[8px]">
-            {logoUrl ? (
+      {/* Centered logo with ring border - only shown when logoUrl exists */}
+      {logoUrl && (
+        <div className={cn(
+          "flex justify-center",
+          hasHeaderImage ? "-mt-[140px] md:-mt-[176px]" : "pt-2"
+        )}>
+          <Link href={`/${slug}`} className="block">
+            <div className="rounded-full bg-[#FFFFFF] md:bg-[#F6F2EF] p-1 ring-[4px] ring-[#FFFFFF] md:ring-[#F6F2EF] md:p-2 md:ring-[8px]">
               <Image
                 src={logoUrl}
                 alt={organizationName || "Organization logo"}
@@ -133,16 +139,10 @@ export function BookingHeader({
                 className="h-[150px] w-[150px] md:h-[200px] md:w-[200px] rounded-full object-cover"
                 priority
               />
-            ) : (
-              <div className="h-[150px] w-[150px] md:h-[200px] md:w-[200px] rounded-full bg-gray-200 flex items-center justify-center">
-                <span className="text-4xl font-bold text-gray-600">
-                  {organizationName?.charAt(0) || "S"}
-                </span>
-              </div>
-            )}
-          </div>
-        </Link>
-      </div>
+            </div>
+          </Link>
+        </div>
+      )}
 
     </header>
   )

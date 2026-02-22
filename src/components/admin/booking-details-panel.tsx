@@ -3,10 +3,12 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Check, Pencil } from 'lucide-react';
-import { checkInBooking } from '@/app/actions/session';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Check, X } from 'lucide-react';
+import { checkInBooking, cancelBookingWithRefund } from '@/app/actions/session';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 
 interface Booking {
   id: string;
@@ -14,6 +16,12 @@ interface Booking {
   number_of_spots: number;
   notes?: string;
   created_at?: string;
+  amount_paid?: number | null;
+  session_instance?: {
+    start_time?: string;
+    end_time?: string;
+    template?: { name?: string };
+  };
   user?: {
     first_name?: string;
     last_name?: string;
@@ -50,19 +58,27 @@ function getUserType(user?: Booking['user']): 'Admin' | 'User' | 'Guest' {
   return 'User';
 }
 
-export function BookingDetailsPanel({ open, booking, onClose, onEdit, onCheckIn }: {
+function formatPrice(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) return 'Free';
+  if (amount === 0) return 'Free';
+  return `£${(amount / 100).toFixed(2)}`;
+}
+
+export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckIn }: {
   open: boolean;
   booking: Booking | null;
   onClose: () => void;
-  onEdit: () => void;
+  onCancel: () => void;
   onCheckIn: (bookingId: string, newStatus: 'confirmed' | 'completed') => void;
 }) {
   const { toast } = useToast();
   const [localBooking, setLocalBooking] = useState<Booking | null>(booking);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Sync local state when booking prop changes
   useEffect(() => {
     setLocalBooking(booking);
+    setCancelLoading(false);
   }, [booking]);
 
   const handleCheckIn = async () => {
@@ -70,7 +86,6 @@ export function BookingDetailsPanel({ open, booking, onClose, onEdit, onCheckIn 
     try {
       const result = await checkInBooking(localBooking.id);
       if (result.success) {
-        setLocalBooking(prev => prev ? { ...prev, status: result.data.status } : null);
         onCheckIn(localBooking.id, result.data.status);
         toast({
           title: "Success",
@@ -78,6 +93,7 @@ export function BookingDetailsPanel({ open, booking, onClose, onEdit, onCheckIn 
             ? "Booking checked in successfully"
             : "Booking check-in reversed",
         });
+        onClose();
       } else {
         throw new Error(result.error);
       }
@@ -90,47 +106,101 @@ export function BookingDetailsPanel({ open, booking, onClose, onEdit, onCheckIn 
     }
   };
 
+  const handleCancel = async () => {
+    if (!localBooking) return;
+    setCancelLoading(true);
+    try {
+      const result = await cancelBookingWithRefund(localBooking.id);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to cancel booking');
+      }
+      const userName = getUserDisplayName(localBooking.user);
+      const spotsText = localBooking.number_of_spots === 1 ? '1 person' : `${localBooking.number_of_spots} people`;
+      toast({
+        title: 'Booking Cancelled!',
+        description: (
+          <div className="flex items-start gap-2 mt-1">
+            <X className="h-5 w-5 text-red-500 mt-0.5" />
+            <div>
+              <div className="font-medium">{userName}</div>
+              <div>For {spotsText}</div>
+              {result.refunded && <div>Refund issued</div>}
+            </div>
+          </div>
+        ),
+        duration: 4000,
+      });
+      setCancelLoading(false);
+      onCancel();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to cancel booking',
+        variant: 'destructive',
+      });
+      setCancelLoading(false);
+    }
+  };
+
   const isCheckedIn = localBooking?.status === 'completed';
   const user = localBooking?.user || {};
+  const userType = getUserType(localBooking?.user);
+  const sessionName = localBooking?.session_instance?.template?.name;
+  const sessionStartTime = localBooking?.session_instance?.start_time;
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="sm:max-w-[400px] overflow-y-auto p-0">
-        {/* Sticky header */}
-        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
-          <SheetHeader>
-            <SheetTitle className="text-xl pr-6">
-              {localBooking ? getUserDisplayName(localBooking.user) : 'Booking'}
-            </SheetTitle>
-            <SheetDescription>
-              {user.email || 'Booking details'}
-            </SheetDescription>
+      <SheetContent className="sm:max-w-[400px] flex flex-col p-0">
+        {/* Header */}
+        <div className="px-6 py-4 border-b pr-12">
+          <SheetHeader className="text-left">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10 shrink-0">
+                <AvatarImage src={user.image_url || user.avatar_url || undefined} />
+                <AvatarFallback>
+                  {user.first_name?.[0] || user.full_name?.[0] || user.name?.[0] || '?'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <SheetTitle className="text-base leading-tight">
+                    {localBooking ? getUserDisplayName(localBooking.user) : 'Booking'}
+                  </SheetTitle>
+                  <Badge variant={userType === 'Admin' ? 'default' : 'secondary'} className="text-xs shrink-0">
+                    {userType}
+                  </Badge>
+                </div>
+                <SheetDescription className="truncate">
+                  {user.email || 'Booking details'}
+                </SheetDescription>
+              </div>
+            </div>
           </SheetHeader>
         </div>
 
         {localBooking && (
           <>
             {/* Scrollable content */}
-            <div className="px-6 py-4 space-y-4">
-              {/* Avatar */}
-              <div className="flex flex-col items-center py-4">
-                <Avatar className="h-16 w-16 mb-3">
-                  <AvatarImage src={user.image_url || user.avatar_url || undefined} />
-                  <AvatarFallback>
-                    {(user.first_name?.[0] || user.full_name?.[0] || user.name?.[0] || '?')}
-                  </AvatarFallback>
-                </Avatar>
-                <Badge variant={getUserType(localBooking.user) === 'Admin' ? 'default' : 'secondary'}>
-                  {getUserType(localBooking.user)}
-                </Badge>
-              </div>
-
+            <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
               {/* Booking Details */}
               <Card className="p-4">
                 <div className="font-semibold mb-2">Booking Details</div>
+                {sessionName && (
+                  <div className="text-sm mb-1 flex items-baseline justify-between gap-2">
+                    <span className="font-medium">{sessionName}</span>
+                    {sessionStartTime && (
+                      <span className="text-muted-foreground shrink-0">
+                        {format(new Date(sessionStartTime), 'HH:mm, d MMM')}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="text-sm mb-1">Group size: {localBooking.number_of_spots || 1}</div>
                 <div className="text-sm mb-1">
                   Status: <Badge variant={isCheckedIn ? 'default' : 'outline'}>{localBooking.status}</Badge>
+                </div>
+                <div className="text-sm mb-1">
+                  Price paid: {formatPrice(localBooking.amount_paid)}
                 </div>
                 {localBooking.notes && <div className="text-sm mb-1">Notes: {localBooking.notes}</div>}
                 {localBooking.created_at && (
@@ -161,24 +231,41 @@ export function BookingDetailsPanel({ open, booking, onClose, onEdit, onCheckIn 
                   </div>
                 )}
               </Card>
+
+              {/* Cancel Booking */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full" disabled={cancelLoading}>
+                    {cancelLoading ? 'Cancelling...' : 'Cancel Booking'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cancel this booking?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. The booking will be cancelled and the user will receive a full refund if a payment was made.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep booking</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleCancel}>Yes, cancel</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
 
-            {/* Sticky footer */}
-            <div className="sticky bottom-0 bg-white border-t px-6 py-4 -mx-6 -mb-4">
-              <div className="flex gap-2 justify-end w-full">
-                <Button variant="outline" size="sm" onClick={onEdit}>
-                  <Pencil className="h-4 w-4 mr-1" /> Edit
-                </Button>
-                <Button
-                  variant={isCheckedIn ? 'default' : 'outline'}
-                  size="sm"
-                  className={isCheckedIn ? 'bg-green-500 hover:bg-green-600' : ''}
-                  onClick={handleCheckIn}
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  {isCheckedIn ? 'Checked In' : 'Check In'}
-                </Button>
-              </div>
+            {/* Footer — always pinned to bottom */}
+            <div className="border-t px-6 py-4">
+              <Button
+                variant="default"
+                size="sm"
+                className={`w-full ${isCheckedIn ? 'bg-green-500 hover:bg-green-600' : ''}`}
+                onClick={handleCheckIn}
+                disabled={cancelLoading}
+              >
+                <Check className="h-4 w-4 mr-1" />
+                {isCheckedIn ? 'Checked In' : 'Check In'}
+              </Button>
             </div>
           </>
         )}

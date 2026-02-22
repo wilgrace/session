@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getEventColorValues } from "@/lib/event-colors"
+import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 
 interface MobileCalendarViewProps {
   currentDate: Date
@@ -50,8 +51,8 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
     return sessions.filter((template) => {
       // Check if any instance matches this day
       if (template.instances) {
-        return template.instances.some(instance => 
-          isSameDay(new Date(instance.start_time), day)
+        return template.instances.some(instance =>
+          formatLocalDate(new Date(instance.start_time), SAUNA_TIMEZONE) === format(day, 'yyyy-MM-dd')
         )
       }
       
@@ -142,8 +143,9 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
           // Adjust the index to start from Monday (1) instead of Sunday (0)
           const dayOfWeek = day.getDay() === 0 ? 6 : day.getDay() - 1
 
-          // If it's the first day of the month, add appropriate spacing
-          const startSpacing = i === 0 ? `col-start-${dayOfWeek + 1}` : ""
+          // Static array required so Tailwind includes these classes in the CSS bundle
+          const colStartClasses = ['col-start-1', 'col-start-2', 'col-start-3', 'col-start-4', 'col-start-5', 'col-start-6', 'col-start-7']
+          const startSpacing = i === 0 ? colStartClasses[dayOfWeek] : ""
 
           const isSelected = isSameDay(day, selectedDate)
           const isCurrentMonth = isSameMonth(day, viewDate)
