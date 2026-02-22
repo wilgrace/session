@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { checkClerkUserSynced } from "@/app/actions/session"
 import { ensureClerkUser } from "@/app/actions/clerk"
 import { checkWaiverAgreement } from "@/app/actions/waivers"
+import { getCommunitySurveyEnabled } from "@/app/actions/organization"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Loader2, AlertCircle } from "lucide-react"
@@ -130,7 +131,12 @@ export function AuthOverlay() {
                   return
                 }
               }
-              // No waiver needed, proceed to community profile
+              // No waiver needed, check if community survey is enabled then show profile
+              const surveyResult = await getCommunitySurveyEnabled(organizationId)
+              if (!surveyResult.enabled) {
+                triggerOnComplete()
+                return
+              }
               setShowProfileOverlay(true)
             } else {
               triggerOnComplete()
@@ -166,10 +172,15 @@ export function AuthOverlay() {
   }, [isOpen, isClerkLoaded, clerkUser, authCompleted, mode, organizationId, setShowProfileOverlay, setShowWaiverOverlay, triggerOnComplete])
 
   // Handle waiver completion
-  const handleWaiverComplete = useCallback(() => {
+  const handleWaiverComplete = useCallback(async () => {
     setShowWaiverOverlay(false, null)
+    const surveyResult = await getCommunitySurveyEnabled(organizationId)
+    if (!surveyResult.enabled) {
+      triggerOnComplete()
+      return
+    }
     setShowProfileOverlay(true) // Proceed to community profile
-  }, [setShowWaiverOverlay, setShowProfileOverlay])
+  }, [setShowWaiverOverlay, setShowProfileOverlay, organizationId, triggerOnComplete])
 
   // Handle profile completion or skip
   const handleProfileComplete = useCallback(() => {

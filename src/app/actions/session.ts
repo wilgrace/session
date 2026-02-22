@@ -2730,6 +2730,7 @@ export async function getAdminBookingsForOrg(
     search?: string;
     page?: number;
     pageSize?: number;
+    timeFilter?: 'upcoming' | 'past';
   }
 ): Promise<GetAdminBookingsResult> {
   try {
@@ -2848,12 +2849,28 @@ export async function getAdminBookingsForOrg(
       });
     }
 
-    // Sort by session date then time (latest first)
-    transformedBookings.sort((a, b) => {
-      const dateA = new Date(a.session_instance?.start_time || 0);
-      const dateB = new Date(b.session_instance?.start_time || 0);
-      return dateB.getTime() - dateA.getTime();
-    });
+    // Apply time filter and sort by session date
+    const timeFilter = options?.timeFilter ?? 'upcoming';
+    const now = new Date();
+    if (timeFilter === 'upcoming') {
+      transformedBookings = transformedBookings.filter((b) =>
+        b.session_instance?.start_time ? new Date(b.session_instance.start_time) >= now : false
+      );
+      // Sort ascending: soonest first
+      transformedBookings.sort((a, b) =>
+        new Date(a.session_instance?.start_time || 0).getTime() -
+        new Date(b.session_instance?.start_time || 0).getTime()
+      );
+    } else {
+      transformedBookings = transformedBookings.filter((b) =>
+        b.session_instance?.start_time ? new Date(b.session_instance.start_time) < now : false
+      );
+      // Sort descending: most recent first
+      transformedBookings.sort((a, b) =>
+        new Date(b.session_instance?.start_time || 0).getTime() -
+        new Date(a.session_instance?.start_time || 0).getTime()
+      );
+    }
 
     // Get total before pagination
     const totalCount = transformedBookings.length;

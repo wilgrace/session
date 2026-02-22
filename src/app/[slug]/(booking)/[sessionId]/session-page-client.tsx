@@ -76,11 +76,8 @@ export function SessionPageClient({
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
   const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
-  const [isNavigatingBack, setIsNavigatingBack] = useState(false)
-
   const handleBack = () => {
-    setIsNavigatingBack(true)
-    setTimeout(() => router.push(`/${slug}`), 260)
+    router.push(`/${slug}`)
   }
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
   // Pre-set to true when we have server-provided data
@@ -307,7 +304,7 @@ export function SessionPageClient({
   } : null
 
   return (
-    <div className={isNavigatingBack ? "mobile-slide-out" : "mobile-slide-in"}>
+    <div className="mobile-slide-in">
       {/* Mobile header - always visible on mobile */}
       <div className="flex items-center justify-between px-4 py-4 md:hidden">
         <button
@@ -349,7 +346,7 @@ export function SessionPageClient({
 
       {/* Right Column - White background */}
       <div className="bg-white flex justify-center pb-[env(safe-area-inset-bottom)]">
-        <div className="w-full max-w-[550px] px-4 md:px-8 pt-6 md:pt-[60px] pb-6">
+        <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px] pb-6">
           {/* Desktop-only auth row */}
           <div className="hidden md:flex justify-end h-20">
             <SessionAuthControls isAdmin={isAdmin} slug={slug} />

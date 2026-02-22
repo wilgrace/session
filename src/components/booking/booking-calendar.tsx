@@ -337,7 +337,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
   if (isMobile) {
     return (
       <div className="flex flex-col">
-        <div className="sticky top-0 z-10 px-4">
+        <div className="sticky top-0 z-10">
           <MobileCalendarView
             currentDate={currentDate}
             selectedDate={selectedDate}

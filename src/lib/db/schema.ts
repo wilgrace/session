@@ -29,6 +29,7 @@ export const organizations = pgTable('organizations', {
   memberPriceType: text('member_price_type').default('discount'), // 'discount' | 'fixed'
   memberDiscountPercent: integer('member_discount_percent'), // e.g., 20 for 20% off
   memberFixedPrice: integer('member_fixed_price'), // fixed price in pence (if type='fixed')
+  communitySurveyEnabled: boolean('community_survey_enabled').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

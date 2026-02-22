@@ -95,7 +95,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-0 ">
       {sessionsForDay.map(({ template, startTime, endTime, key, instance, isBooked, bookingId }) => {
         const isFreeSession = template.pricing_type === 'free'
         const isHidden = template.visibility === 'hidden'
@@ -109,7 +109,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
         return (
           <Card
             key={key}
-            className={`cursor-pointer active:scale-[0.98] transition-transform ${
+            className={`cursor-pointer transition-all duration-75 active:scale-[0.96] active:opacity-60 ${
               isBooked ? 'border-primary bg-primary/5' : ''
             }`}
             onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
@@ -117,16 +117,16 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
                 <div
-                  className="mt-1.5 h-2.5 w-2.5 rounded-full shrink-0"
+                  className="mt-2 ml-2 h-2.5 w-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: eventColor.color500 }}
                 />
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium flex items-center gap-1">
+                  <h3 className="font-medium text-lg flex items-center gap-1">
                     {isFreeSession && <span className="text-[10px] font-semibold uppercase text-muted-foreground">Free</span>}
                     {isHidden && <EyeOff className="h-3 w-3 text-gray-400" />}
                     {template.name}
                   </h3>
-                  <div className="mt-1 flex items-center text-sm text-muted-foreground gap-x-3">
+                  <div className="mt-1 flex items-center text-md text-muted-foreground gap-x-3">
                     <span>{format(startTime, "HH:mm")} - {format(endTime, "HH:mm")}</span>
                     <span className="text-gray-300">·</span>
                     <span className="flex items-center gap-1">

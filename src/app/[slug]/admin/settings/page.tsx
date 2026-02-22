@@ -11,6 +11,7 @@ import {
   getOrganizationSettings,
   updateOrganizationSettings,
   checkSlugAvailability,
+  toggleCommunitySurvey,
   OrganizationSettings,
 } from "@/app/actions/organization"
 import { getWaivers } from "@/app/actions/waivers"
@@ -19,6 +20,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { WaiversList } from "@/components/admin/waivers-list"
 import { WaiverForm } from "@/components/admin/waiver-form"
+import { CommunitySurveySection } from "@/components/admin/community-survey-section"
+import { CommunityProfileOverlay } from "@/components/auth/community-profile-overlay"
 import type { Waiver } from "@/lib/db/schema"
 
 export default function SettingsPage() {
@@ -68,6 +71,10 @@ function SettingsPageContent() {
   const [waiverFormOpen, setWaiverFormOpen] = useState(false)
   const [editingWaiver, setEditingWaiver] = useState<Waiver | null>(null)
 
+  // Community survey state
+  const [communitySurveyEnabled, setCommunitySurveyEnabled] = useState(true)
+  const [surveyPreviewOpen, setSurveyPreviewOpen] = useState(false)
+
   useEffect(() => {
     loadSettings()
   }, [])
@@ -94,6 +101,7 @@ function SettingsPageContent() {
       setHomepageUrl(result.data.homepageUrl || "")
       setInstagramUrl(result.data.instagramUrl || "")
       setFacebookUrl(result.data.facebookUrl || "")
+      setCommunitySurveyEnabled(result.data.communitySurveyEnabled)
 
       // Load waivers
       const waiversResult = await getWaivers()
@@ -123,6 +131,18 @@ function SettingsPageContent() {
   function handleCreateWaiver() {
     setEditingWaiver(null)
     setWaiverFormOpen(true)
+  }
+
+  // Community survey handlers
+  async function handleToggleCommunitySurvey(enabled: boolean) {
+    if (!settings) return
+    const result = await toggleCommunitySurvey(settings.id, enabled)
+    if (result.success) {
+      setCommunitySurveyEnabled(enabled)
+      toast.success(enabled ? "Community survey enabled" : "Community survey disabled")
+    } else {
+      toast.error(result.error || "Failed to update community survey setting")
+    }
   }
 
   // Check slug availability when it changes
@@ -382,6 +402,25 @@ function SettingsPageContent() {
         }}
         waiver={editingWaiver}
         onSuccess={handleWaiverRefresh}
+      />
+
+      {/* Community Survey */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Community Survey</h3>
+        </div>
+        <CommunitySurveySection
+          enabled={communitySurveyEnabled}
+          onToggle={handleToggleCommunitySurvey}
+          onViewSurvey={() => setSurveyPreviewOpen(true)}
+        />
+      </div>
+
+      {/* Survey Preview Overlay */}
+      <CommunityProfileOverlay
+        isOpen={surveyPreviewOpen}
+        onComplete={() => setSurveyPreviewOpen(false)}
+        onSkip={() => setSurveyPreviewOpen(false)}
       />
 
       {/* Brand & Design */}

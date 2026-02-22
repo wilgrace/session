@@ -1,8 +1,9 @@
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Check, Pencil, X } from 'lucide-react';
+import { Check, Pencil } from 'lucide-react';
 import { checkInBooking } from '@/app/actions/session';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect } from 'react';
@@ -49,34 +50,32 @@ function getUserType(user?: Booking['user']): 'Admin' | 'User' | 'Guest' {
   return 'User';
 }
 
-export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
-  booking: Booking;
+export function BookingDetailsPanel({ open, booking, onClose, onEdit, onCheckIn }: {
+  open: boolean;
+  booking: Booking | null;
   onClose: () => void;
   onEdit: () => void;
   onCheckIn: (bookingId: string, newStatus: 'confirmed' | 'completed') => void;
 }) {
   const { toast } = useToast();
-  const [localBooking, setLocalBooking] = useState<Booking>(booking);
+  const [localBooking, setLocalBooking] = useState<Booking | null>(booking);
 
-  // Sync local state when booking prop changes (e.g., from list check-in)
+  // Sync local state when booking prop changes
   useEffect(() => {
     setLocalBooking(booking);
   }, [booking]);
 
   const handleCheckIn = async () => {
+    if (!localBooking) return;
     try {
       const result = await checkInBooking(localBooking.id);
       if (result.success) {
-        // Update local state
-        setLocalBooking(prev => ({
-          ...prev,
-          status: result.data.status
-        }));
-        onCheckIn(localBooking.id, result.data.status); // Notify parent
+        setLocalBooking(prev => prev ? { ...prev, status: result.data.status } : null);
+        onCheckIn(localBooking.id, result.data.status);
         toast({
           title: "Success",
-          description: result.data.status === 'completed' 
-            ? "Booking checked in successfully" 
+          description: result.data.status === 'completed'
+            ? "Booking checked in successfully"
             : "Booking check-in reversed",
         });
       } else {
@@ -91,68 +90,99 @@ export function BookingDetailsPanel({ booking, onClose, onEdit, onCheckIn }: {
     }
   };
 
-  if (!localBooking) return null;
-  const user = localBooking.user || {};
+  const isCheckedIn = localBooking?.status === 'completed';
+  const user = localBooking?.user || {};
+
   return (
-    <div className="w-full mx-auto bg-background h-full flex flex-col">
-      <div className="flex items-center justify-between p-4">
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Back">
-          <X className="h-5 w-5" />
-        </Button>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onEdit}>
-            <Pencil className="h-4 w-4 mr-1" /> Edit
-          </Button>
-          {localBooking.status === 'completed' ? (
-            <Button 
-              variant="default" 
-              size="sm" 
-              className="bg-green-500 hover:bg-green-600"
-              onClick={handleCheckIn}
-            >
-              <Check className="h-4 w-4 mr-1" /> Checked In
-            </Button>
-          ) : (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleCheckIn}
-            >
-              <Check className="h-4 w-4 mr-1" /> Check in
-            </Button>
-          )}
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="sm:max-w-[400px] overflow-y-auto p-0">
+        {/* Sticky header */}
+        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
+          <SheetHeader>
+            <SheetTitle className="text-xl pr-6">
+              {localBooking ? getUserDisplayName(localBooking.user) : 'Booking'}
+            </SheetTitle>
+            <SheetDescription>
+              {user.email || 'Booking details'}
+            </SheetDescription>
+          </SheetHeader>
         </div>
-      </div>
-      <div className="flex flex-col items-center p-6">
-        <Avatar className="h-16 w-16 mb-2">
-          <AvatarImage src={user.image_url || user.avatar_url || undefined} />
-          <AvatarFallback>
-            {(user.first_name?.[0] || user.full_name?.[0] || user.name?.[0] || '?')}
-          </AvatarFallback>
-        </Avatar>
-        <div className="text-xl font-bold">
-          {getUserDisplayName(localBooking.user)}
-        </div>
-        <div className="text-muted-foreground mb-2">{user.email}</div>
-        <Badge variant={getUserType(localBooking.user) === 'Admin' ? 'default' : 'secondary'}>
-          {getUserType(localBooking.user)}
-        </Badge>
-      </div>
-      <Card className="p-4 mx-4 mb-4">
-        <div className="font-semibold mb-2">Booking Details</div>
-        <div className="text-sm mb-1">Group size: {localBooking.number_of_spots || 1}</div>
-        <div className="text-sm mb-1">
-          Status: <Badge variant={localBooking.status === 'completed' ? 'default' : 'outline'}>{localBooking.status}</Badge>
-        </div>
-        {localBooking.notes && <div className="text-sm mb-1">Notes: {localBooking.notes}</div>}
-        {localBooking.created_at && <div className="text-xs text-muted-foreground">Booked: {new Date(localBooking.created_at).toLocaleString()}</div>}
-      </Card>
-      <Card className="p-4 mx-4">
-        <div className="font-semibold mb-2">About {user.first_name || user.full_name?.split(' ')[0] || user.name?.split(' ')[0] || 'Guest'}</div>
-        {user.visits && <div className="flex items-center gap-2 text-sm mb-1"><Check className="h-4 w-4 text-muted-foreground" /> {user.visits} visits</div>}
-        {user.survey_complete && <div className="flex items-center gap-2 text-sm mb-1"><Check className="h-4 w-4 text-muted-foreground" /> Survey complete</div>}
-        {user.joined_year && <div className="flex items-center gap-2 text-sm mb-1"><Check className="h-4 w-4 text-muted-foreground" /> Joined in {user.joined_year}</div>}
-      </Card>
-    </div>
+
+        {localBooking && (
+          <>
+            {/* Scrollable content */}
+            <div className="px-6 py-4 space-y-4">
+              {/* Avatar */}
+              <div className="flex flex-col items-center py-4">
+                <Avatar className="h-16 w-16 mb-3">
+                  <AvatarImage src={user.image_url || user.avatar_url || undefined} />
+                  <AvatarFallback>
+                    {(user.first_name?.[0] || user.full_name?.[0] || user.name?.[0] || '?')}
+                  </AvatarFallback>
+                </Avatar>
+                <Badge variant={getUserType(localBooking.user) === 'Admin' ? 'default' : 'secondary'}>
+                  {getUserType(localBooking.user)}
+                </Badge>
+              </div>
+
+              {/* Booking Details */}
+              <Card className="p-4">
+                <div className="font-semibold mb-2">Booking Details</div>
+                <div className="text-sm mb-1">Group size: {localBooking.number_of_spots || 1}</div>
+                <div className="text-sm mb-1">
+                  Status: <Badge variant={isCheckedIn ? 'default' : 'outline'}>{localBooking.status}</Badge>
+                </div>
+                {localBooking.notes && <div className="text-sm mb-1">Notes: {localBooking.notes}</div>}
+                {localBooking.created_at && (
+                  <div className="text-xs text-muted-foreground">
+                    Booked: {new Date(localBooking.created_at).toLocaleString()}
+                  </div>
+                )}
+              </Card>
+
+              {/* About User */}
+              <Card className="p-4">
+                <div className="font-semibold mb-2">
+                  About {user.first_name || user.full_name?.split(' ')[0] || user.name?.split(' ')[0] || 'Guest'}
+                </div>
+                {user.visits && (
+                  <div className="flex items-center gap-2 text-sm mb-1">
+                    <Check className="h-4 w-4 text-muted-foreground" /> {user.visits} visits
+                  </div>
+                )}
+                {user.survey_complete && (
+                  <div className="flex items-center gap-2 text-sm mb-1">
+                    <Check className="h-4 w-4 text-muted-foreground" /> Survey complete
+                  </div>
+                )}
+                {user.joined_year && (
+                  <div className="flex items-center gap-2 text-sm mb-1">
+                    <Check className="h-4 w-4 text-muted-foreground" /> Joined in {user.joined_year}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* Sticky footer */}
+            <div className="sticky bottom-0 bg-white border-t px-6 py-4 -mx-6 -mb-4">
+              <div className="flex gap-2 justify-end w-full">
+                <Button variant="outline" size="sm" onClick={onEdit}>
+                  <Pencil className="h-4 w-4 mr-1" /> Edit
+                </Button>
+                <Button
+                  variant={isCheckedIn ? 'default' : 'outline'}
+                  size="sm"
+                  className={isCheckedIn ? 'bg-green-500 hover:bg-green-600' : ''}
+                  onClick={handleCheckIn}
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  {isCheckedIn ? 'Checked In' : 'Check In'}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
-} 
+}

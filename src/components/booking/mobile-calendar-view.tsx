@@ -99,7 +99,7 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
+    <div className="bg-white pb-4 border-b">
       {/* Month title */}
       <div className="flex items-center justify-between p-4 border-b">
         <Button
@@ -164,18 +164,14 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
                 onClick={() => !isPastDay && handleDayClick(day)}
                 disabled={isPastDay}
               >
-                <span className="text-lg mb-1">{format(day, "d")}</span>
-                {displaySessions.length > 0 && (
+                <span className={`text-lg ${isSelected ? "" : "mb-1"}`}>{format(day, "d")}</span>
+                {displaySessions.length > 0 && !isSelected && (
                   <div className="flex justify-center space-x-0.5">
                     {displaySessions.map((session, index) => (
                       <div
                         key={index}
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{
-                          backgroundColor: isSelected
-                            ? 'white'
-                            : getEventColorValues(session.event_color).color500,
-                        }}
+                        style={{ backgroundColor: getEventColorValues(session.event_color).color500 }}
                       />
                     ))}
                   </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useUser, useClerk } from "@clerk/nextjs"
 import Link from "next/link"
-import { CreditCard, UserCircle, Settings, LogOut, ChevronDown } from "lucide-react"
+import { CreditCard, UserCircle, Settings, LogOut, ChevronDown, Shield } from "lucide-react"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { isProfileComplete } from "@/app/actions/user"
+import { getCommunitySurveyEnabled } from "@/app/actions/organization"
 import { CommunityProfileOverlay } from "@/components/auth/community-profile-overlay"
 
 interface UserDropdownProps {
@@ -26,12 +27,18 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
   const clerk = useClerk()
   const [profileIncomplete, setProfileIncomplete] = useState(false)
   const [showProfileOverlay, setShowProfileOverlay] = useState(false)
+  const [surveyEnabled, setSurveyEnabled] = useState(true)
 
   useEffect(() => {
     async function checkProfile() {
       if (!user) return
-      const result = await isProfileComplete()
-      if (result.success && result.isComplete === false) {
+      const [profileResult, surveyResult] = await Promise.all([
+        isProfileComplete(),
+        getCommunitySurveyEnabled(),
+      ])
+      const enabled = surveyResult.enabled ?? true
+      setSurveyEnabled(enabled)
+      if (enabled && profileResult.success && profileResult.isComplete === false) {
         setProfileIncomplete(true)
       }
     }
@@ -91,6 +98,18 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-56">
+          {isAdmin && (
+            <>
+              <DropdownMenuItem asChild className="md:hidden">
+                <Link href={`/${slug}/admin`} className="cursor-pointer">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Staff
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="md:hidden" />
+            </>
+          )}
+
           <DropdownMenuItem asChild>
             <Link href={`/${slug}/account`} className="cursor-pointer">
               <CreditCard className="mr-2 h-4 w-4" />
@@ -128,14 +147,16 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <CommunityProfileOverlay
-        isOpen={showProfileOverlay}
-        onComplete={() => {
-          setShowProfileOverlay(false)
-          setProfileIncomplete(false)
-        }}
-        onSkip={() => setShowProfileOverlay(false)}
-      />
+      {surveyEnabled && (
+        <CommunityProfileOverlay
+          isOpen={showProfileOverlay}
+          onComplete={() => {
+            setShowProfileOverlay(false)
+            setProfileIncomplete(false)
+          }}
+          onSkip={() => setShowProfileOverlay(false)}
+        />
+      )}
     </>
   )
 }

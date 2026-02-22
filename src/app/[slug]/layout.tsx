@@ -55,8 +55,8 @@ export async function generateMetadata({
   }
 
   const baseUrl = getBaseUrl()
-  const title = `Book a session at ${org.name}`
-  const description = org.description || `Book your sessions at ${org.name}`
+  const title = `Book a Session | ${org.name}`
+  const description = org.description || `Book a Session at ${org.name}`
 
   const icons: Metadata["icons"] = {}
   if (org.faviconUrl) {

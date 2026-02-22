@@ -8,7 +8,6 @@ import { SessionDetails } from '@/components/admin/session-details';
 import { BookingsList } from '@/components/admin/bookings-list';
 import { BookingDetailsPanel } from '@/components/admin/booking-details-panel';
 import { BookingsListView } from '@/components/admin/bookings-list-view';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useBookingsView } from '@/hooks/use-bookings-view';
 
 const NUM_DAYS = 14;
@@ -21,7 +20,6 @@ export default function AdminHomePage() {
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const [hasSetInitialSession, setHasSetInitialSession] = useState(false);
-  const isMobile = useIsMobile();
   const { view, searchQuery, setView, setSearchQuery } = useBookingsView();
 
   // Auto-switch to list view when search is active
@@ -155,36 +153,21 @@ export default function AdminHomePage() {
     return (
       <main className="flex-1 flex flex-col">
         <div className="flex-1 flex">
-          <div className={selectedBooking && !isMobile ? 'border-r border-gray-200 flex-1' : 'flex-1 border-gray-200'}>
+          <div className="flex-1">
             <BookingsListView
               searchQuery={searchQuery}
               onSelectBooking={setSelectedBooking}
               onClearSearch={() => setSearchQuery("")}
             />
           </div>
-          {/* Booking Details Panel */}
-          {selectedBooking && !isMobile && (
-            <div className="w-full lg:w-96">
-              <BookingDetailsPanel
-                booking={selectedBooking}
-                onClose={() => setSelectedBooking(null)}
-                onEdit={() => {}}
-                onCheckIn={handleCheckIn}
-              />
-            </div>
-          )}
         </div>
-        {/* Mobile overlay */}
-        {selectedBooking && isMobile && (
-          <div className="w-full lg:w-96 absolute inset-0 bg-background z-50">
-            <BookingDetailsPanel
-              booking={selectedBooking}
-              onClose={() => setSelectedBooking(null)}
-              onEdit={() => {}}
-              onCheckIn={handleCheckIn}
-            />
-          </div>
-        )}
+        <BookingDetailsPanel
+          open={!!selectedBooking}
+          booking={selectedBooking}
+          onClose={() => setSelectedBooking(null)}
+          onEdit={() => {}}
+          onCheckIn={handleCheckIn}
+        />
       </main>
     );
   }
@@ -205,8 +188,7 @@ export default function AdminHomePage() {
         onSelectSession={handleSelectSession}
       />
       <div className="flex-1 flex">
-
-        <div className={selectedBooking && !isMobile ? 'border-r border-gray-200 flex-1' : ' flex-1 border-gray-200'}>
+        <div className="flex-1">
           {currentSession ? (
             <>
               <SessionDetails
@@ -234,29 +216,14 @@ export default function AdminHomePage() {
             <div className="text-muted-foreground text-center py-12">No sessions for this day.</div>
           )}
         </div>
-        {/* Booking Details Panel */}
-        {selectedBooking && !isMobile && (
-          <div className="w-full lg:w-96">
-            <BookingDetailsPanel
-              booking={selectedBooking}
-              onClose={() => setSelectedBooking(null)}
-              onEdit={() => {}}
-              onCheckIn={handleCheckIn}
-            />
-          </div>
-        )}
       </div>
-      {/* Mobile overlay */}
-      {selectedBooking && isMobile && (
-        <div className="w-full lg:w-96 absolute inset-0 bg-background z-50">
-          <BookingDetailsPanel
-            booking={selectedBooking}
-            onClose={() => setSelectedBooking(null)}
-            onEdit={() => {}}
-            onCheckIn={handleCheckIn}
-          />
-        </div>
-      )}
+      <BookingDetailsPanel
+        open={!!selectedBooking}
+        booking={selectedBooking}
+        onClose={() => setSelectedBooking(null)}
+        onEdit={() => {}}
+        onCheckIn={handleCheckIn}
+      />
     </main>
   );
 }

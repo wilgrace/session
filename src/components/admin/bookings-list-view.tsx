@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, ArrowUp, ArrowDown, X } from "lucide-react"
 import { getAdminBookingsForOrg, type AdminBooking } from "@/app/actions/session"
+import { cn } from "@/lib/utils"
 
 type SortDirection = "asc" | "desc" | null
 type SortColumn = "name" | "type" | "qty" | "date" | "session" | "booking" | "paid" | null
@@ -31,6 +32,7 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
   const [total, setTotal] = useState(0)
   const [sortColumn, setSortColumn] = useState<SortColumn>("date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  const [timeFilter, setTimeFilter] = useState<'upcoming' | 'past'>('upcoming')
   const pageSize = 25
 
   const fetchBookings = useCallback(async () => {
@@ -39,7 +41,8 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
       const result = await getAdminBookingsForOrg({
         search: searchQuery || undefined,
         page,
-        pageSize
+        pageSize,
+        timeFilter,
       })
       console.log('[BookingsListView] Fetch result:', result)
       if (result.success && result.data) {
@@ -53,16 +56,16 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
     } finally {
       setLoading(false)
     }
-  }, [searchQuery, page])
+  }, [searchQuery, page, timeFilter])
 
   useEffect(() => {
     fetchBookings()
   }, [fetchBookings])
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search or time filter changes
   useEffect(() => {
     setPage(1)
-  }, [searchQuery])
+  }, [searchQuery, timeFilter])
 
   const getUserName = (user: AdminBooking["user"]) => {
     if (user?.first_name || user?.last_name) {
@@ -240,6 +243,31 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
         </div>
       )}
 
+      <div className="flex border-b">
+        <button
+          className={cn(
+            "px-4 py-2 text-sm font-medium border-b-2 -mb-px",
+            timeFilter === 'upcoming'
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => { setTimeFilter('upcoming'); setPage(1); }}
+        >
+          Upcoming
+        </button>
+        <button
+          className={cn(
+            "px-4 py-2 text-sm font-medium border-b-2 -mb-px",
+            timeFilter === 'past'
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => { setTimeFilter('past'); setPage(1); }}
+        >
+          Past
+        </button>
+      </div>
+
       <div className="flex-1 overflow-auto">
         <Table>
           <TableHeader>
@@ -257,7 +285,11 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
             {sortedBookings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                  {searchQuery ? "No bookings found matching your search" : "No bookings yet"}
+                  {searchQuery
+                    ? "No bookings found matching your search"
+                    : timeFilter === 'upcoming'
+                    ? "No upcoming bookings"
+                    : "No past bookings"}
                 </TableCell>
               </TableRow>
             ) : (

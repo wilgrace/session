@@ -26,6 +26,7 @@ export interface OrganizationSettings {
   memberPriceType: string | null;
   memberDiscountPercent: number | null;
   memberFixedPrice: number | null;
+  communitySurveyEnabled: boolean;
 }
 
 /**
@@ -80,7 +81,8 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         facebook_url,
         member_price_type,
         member_discount_percent,
-        member_fixed_price
+        member_fixed_price,
+        community_survey_enabled
       `)
       .eq('id', orgId)
       .single();
@@ -109,6 +111,7 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         memberPriceType: data.member_price_type,
         memberDiscountPercent: data.member_discount_percent,
         memberFixedPrice: data.member_fixed_price,
+        communitySurveyEnabled: data.community_survey_enabled ?? true,
       },
     };
   } catch (error) {
@@ -260,6 +263,84 @@ export async function checkSlugAvailability(
   } catch (error) {
     console.error('[checkSlugAvailability] Error:', error);
     return { success: false, error: 'Failed to check slug availability' };
+  }
+}
+
+/**
+ * Toggle community survey enabled for an organization.
+ * Admins can enable or disable the community survey for their org.
+ */
+export async function toggleCommunitySurvey(
+  organizationId: string,
+  enabled: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    const role = await getUserRoleForOrg(userId, organizationId);
+    if (role !== 'admin' && role !== 'superadmin') {
+      return { success: false, error: 'Not authorized' };
+    }
+
+    const supabase = createSupabaseServerClient();
+
+    const { error } = await supabase
+      .from('organizations')
+      .update({ community_survey_enabled: enabled, updated_at: new Date().toISOString() })
+      .eq('id', organizationId);
+
+    if (error) {
+      console.error('[toggleCommunitySurvey] Error:', error);
+      return { success: false, error: 'Failed to update community survey setting' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[toggleCommunitySurvey] Error:', error);
+    return { success: false, error: 'Failed to update community survey setting' };
+  }
+}
+
+/**
+ * Get whether the community survey is enabled for an organization.
+ * No admin check — used by public-facing components.
+ * Falls back to true (enabled) if org not found.
+ */
+export async function getCommunitySurveyEnabled(organizationId?: string): Promise<{
+  success: boolean;
+  enabled?: boolean;
+  error?: string;
+}> {
+  try {
+    let orgId = organizationId;
+    if (!orgId) {
+      const tenant = await getTenantFromHeaders();
+      if (!tenant) {
+        return { success: true, enabled: true };
+      }
+      orgId = tenant.organizationId;
+    }
+
+    const supabase = createSupabaseServerClient();
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('community_survey_enabled')
+      .eq('id', orgId)
+      .single();
+
+    if (error || !data) {
+      return { success: true, enabled: true };
+    }
+
+    return { success: true, enabled: data.community_survey_enabled ?? true };
+  } catch (error) {
+    console.error('[getCommunitySurveyEnabled] Error:', error);
+    return { success: true, enabled: true };
   }
 }
 

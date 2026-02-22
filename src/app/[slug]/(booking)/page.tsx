@@ -97,8 +97,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
         />
 
         <main
-          className="flex-1 md:pb-6 pb-[env(safe-area-inset-bottom)]"
-          style={{ backgroundColor: "#F6F2EF" }}
+          className="flex-1 md:pb-6 pb-[env(safe-area-inset-bottom)] bg-white md:bg-[#F6F2EF]"
         >
           <div className="lg:container md:mx-auto md:px-4">
             <BookingConfirmationToast />

@@ -8,10 +8,7 @@ export default async function BookingLayout({
   children,
 }: BookingLayoutProps) {
   return (
-    <div
-      className="min-h-screen"
-      style={{ backgroundColor: "#F6F2EF" }}
-    >
+    <div className="min-h-screen bg-white md:bg-[#F6F2EF]">
       {children}
       <AuthOverlay />
     </div>

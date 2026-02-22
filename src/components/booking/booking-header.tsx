@@ -39,7 +39,7 @@ export function BookingHeader({
   const isCalendarPage = pathname === `/${slug}` || pathname === `/${slug}/`
 
   return (
-    <header className="relative" style={{ backgroundColor: "#F6F2EF" }}>
+    <header className="relative bg-white md:bg-[#F6F2EF]">
       {/* Navigation row */}
       <div className="lg:container md:mx-auto flex h-16 items-center justify-between px-4 md:px-4">
         {/* Left - Home nav, social links, or back button */}
@@ -88,11 +88,11 @@ export function BookingHeader({
                 {isAdmin && (
                   <Button
                     asChild
-                    size="sm"
-                    className="hidden md:inline-flex gap-1.5 rounded-full mr-3"
+                    size="default"
+                    className="hidden md:inline-flex gap-3 rounded-md hover:opacity-90 text-base py-2 px-4"
                   >
                     <Link href={`/${slug}/admin`}>
-                      <Shield className="h-4 w-4" />
+                      <Shield className="h-7 w-7 md:h-7" />
                       Staff
                     </Link>
                   </Button>
@@ -121,7 +121,7 @@ export function BookingHeader({
         hasHeaderImage ? "-mt-[140px] md:-mt-[176px]" : "pt-2"
       )}>
         <Link href={`/${slug}`} className="block">
-          <div className="rounded-full bg-[#F6F2EF] p-1 ring-[4px] ring-[#F6F2EF] md:p-2 md:ring-[8px]">
+          <div className="rounded-full bg-[#FFFFFF] md:bg-[#F6F2EF] p-1 ring-[4px] ring-[#FFFFFF] md:ring-[#F6F2EF] md:p-2 md:ring-[8px]">
             {logoUrl ? (
               <Image
                 src={logoUrl}
