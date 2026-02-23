@@ -1,49 +1,46 @@
-"use client"
-
-import { useEffect, useState } from "react";
 import { UsersPage } from "@/components/admin/users-page";
-import { Profile } from "@/types/profile";
+import { requireTenantFromHeaders } from "@/lib/tenant-utils";
+import { createSupabaseServerClient } from "@/lib/supabase";
 
-export default function Page() {
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export default async function Page() {
+  const { organizationId } = await requireTenantFromHeaders();
+  const supabase = createSupabaseServerClient();
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('/api/users');
-        const data = await response.json();
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setUsers(data.users || []);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch users');
-      } finally {
-        setLoading(false);
-      }
+  const { data: users } = await supabase
+    .from("clerk_users")
+    .select(`
+      id, clerk_user_id, email, first_name, last_name, role, organization_id, created_at,
+      user_memberships!left(status, current_period_end)
+    `)
+    .eq("organization_id", organizationId)
+    .eq("user_memberships.organization_id", organizationId)
+    .order("created_at", { ascending: false });
+
+  const now = new Date();
+  const mappedUsers = (users ?? []).map((user: any) => {
+    const membership = user.user_memberships?.[0];
+    const isMember =
+      membership?.status === "active" ||
+      (membership?.status === "cancelled" &&
+        membership?.current_period_end &&
+        new Date(membership.current_period_end) > now);
+
+    return {
+      id: user.id,
+      clerk_user_id: user.clerk_user_id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      organization_id: user.organization_id,
+      role: user.role,
+      roleLabel:
+        user.role === "superadmin" ? "Super Admin" :
+        user.role === "admin" ? "Admin" :
+        user.role === "user" ? "User" : "Guest",
+      isMember,
+      created_at: user.created_at,
     };
+  });
 
-    fetchUsers();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div>Loading users...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="text-red-500">Error loading users: {error}</div>
-      </div>
-    );
-  }
-
-  return <UsersPage initialUsers={users} />;
-} 
+  return <UsersPage initialUsers={mappedUsers} />;
+}
