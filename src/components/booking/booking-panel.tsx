@@ -120,37 +120,38 @@ export function BookingPanel({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="font-semibold text-lg">Your booking</h2>
-        <p className="text-xl font-bold mt-1">
-          {format(startTime, "HH:mm 'on' EEEE, do MMMM")}
-        </p>
-      </div>
 
       {/* Booking details as icon rows */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <CalendarDays className="h-4 w-4 flex-shrink-0" />
+      <div className="space-y-3">
+
+        {/* Header */}
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">Your booking</h2>
+          <p className="text-xl font-bold mt-1 md:hidden">
+            {format(startTime, "HH:mm 'on' EEEE, do MMMM")}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 font-medium md:hidden text-muted-foreground">
           <span>
             {session.name}
             {session.duration_minutes ? ` (${session.duration_minutes} minutes)` : ""}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 font-medium">
           <Users className="h-4 w-4 flex-shrink-0" />
           <span>
             {booking.number_of_spots} {booking.number_of_spots === 1 ? "spot" : "spots"} booked
           </span>
         </div>
         {booking.amount_paid != null && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 font-medium">
             <CreditCard className="h-4 w-4 flex-shrink-0" />
             <span>{formatPrice(booking.amount_paid)} paid</span>
           </div>
         )}
         {isGuest && guestEmail && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 font-medium">
             <Mail className="h-4 w-4 flex-shrink-0" />
             <span>{guestEmail}</span>
           </div>
@@ -209,20 +210,21 @@ export function BookingPanel({
         </div>
       )}
 
+      {/* Guest account CTA */}
+      {isGuest && (
+        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
+      )}
+
       {/* Good to know */}
       {session.booking_instructions && (
         <div className="space-y-1">
-          <h3 className="font-semibold">Good to know</h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+          <h3 className="text-sm font-medium text-muted-foreground">Good to know</h3>
+          <p className="text-foreground whitespace-pre-wrap font-medium ">
             {session.booking_instructions}
           </p>
         </div>
       )}
 
-      {/* Guest account CTA */}
-      {isGuest && (
-        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
-      )}
     </div>
   )
 }
