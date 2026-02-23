@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { ChevronLeft } from "lucide-react"
 import { SessionDetails } from "@/components/booking/session-details"
 import { BookingForm } from "@/components/booking/booking-form"
@@ -11,7 +12,6 @@ import { useUser } from "@clerk/nextjs"
 import { getBookingDetails, getPublicSessionById, checkUserExistingBooking } from "@/app/actions/session"
 import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 interface SessionPageClientProps {
@@ -54,7 +54,6 @@ export function SessionPageClient({
 }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
-  const { toast } = useToast()
   const [session, setSession] = useState<SessionTemplate | null>(initialSession ?? null)
   // Start loading=false if we have server-provided session data
   const [loading, setLoading] = useState(!initialSession)
@@ -74,7 +73,6 @@ export function SessionPageClient({
   const [bookingDetails, setBookingDetails] = useState<any>(initialBookingDetails ?? null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
-  const [hasShownConfirmationToast, setHasShownConfirmationToast] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
   const handleBack = () => {
     router.push(`/${slug}`)
@@ -88,28 +86,12 @@ export function SessionPageClient({
   const lastBookingCheckUserIdRef = useRef<string | null>(null)
 
   // Determine the mode based on URL params and booking state
-  const isConfirmation = searchParams.confirmed === 'true'
   const isEditMode = searchParams.edit === 'true' && searchParams.bookingId
   // Show confirmation view if:
   // 1. Edit mode with bookingId → 'edit'
-  // 2. Confirmed param or existing booking details → 'confirmation' (allows guests to see their booking)
+  // 2. Existing booking details → 'confirmation' (allows guests to see their booking)
   // 3. Otherwise → 'new'
   const mode = isEditMode ? 'edit' : (bookingDetails ? 'confirmation' : 'new')
-
-  // Show confirmation toast when arriving with confirmed=true
-  useEffect(() => {
-    if (isConfirmation && !hasShownConfirmationToast && !loading) {
-      toast({
-        title: "Booking Confirmed!",
-        description: "Your booking has been successfully created.",
-      })
-      setHasShownConfirmationToast(true)
-
-      // Clear the confirmed param from URL without reload
-      const newUrl = `/${slug}/${sessionId}${searchParams.start ? `?start=${encodeURIComponent(searchParams.start)}` : ''}${searchParams.bookingId ? `${searchParams.start ? '&' : '?'}bookingId=${searchParams.bookingId}` : ''}`
-      router.replace(newUrl, { scroll: false })
-    }
-  }, [isConfirmation, hasShownConfirmationToast, loading, toast, router, slug, sessionId, searchParams])
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -347,6 +329,18 @@ export function SessionPageClient({
       {/* Right Column - White background */}
       <div className="bg-white flex justify-center pb-[env(safe-area-inset-bottom)]">
         <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px] pb-6">
+          {/* Session image — mobile only, confirmation/edit modes */}
+          {mode !== "new" && session.image_url && (
+            <div className="relative w-full h-48 rounded-lg overflow-hidden mb-6 md:hidden">
+              <Image
+                src={session.image_url}
+                alt={session.name}
+                fill
+                className="object-cover"
+                sizes="100vw"
+              />
+            </div>
+          )}
           {/* Desktop-only auth row */}
           <div className="hidden md:flex justify-end h-20">
             <SessionAuthControls isAdmin={isAdmin} slug={slug} />

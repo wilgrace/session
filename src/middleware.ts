@@ -295,8 +295,8 @@ export default clerkMiddleware(async (auth, req) => {
         // User has no org - send to sign-in (they may need to be invited to an org)
         return NextResponse.redirect(new URL('/sign-in', req.url));
       }
-      // Unauthenticated users go to sign-in
-      return NextResponse.redirect(new URL('/sign-in', req.url));
+      // Unauthenticated users see the landing page
+      return NextResponse.next();
     }
 
     // Handle sign-in/sign-up for authenticated users - redirect to their org
