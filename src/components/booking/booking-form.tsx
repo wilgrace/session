@@ -69,6 +69,7 @@ interface BookingFormProps {
   // Guest status for edit/confirmation modes
   isGuest?: boolean
   guestEmail?: string
+  isAdmin?: boolean
 }
 
 type CheckoutStepType = "form" | "checkout"
@@ -91,6 +92,7 @@ export function BookingForm({
   userDetails,
   isGuest = false,
   guestEmail,
+  isAdmin = false,
 }: BookingFormProps) {
   const { user } = useUser()
   const router = useRouter()
@@ -184,6 +186,7 @@ export function BookingForm({
         slug={slug}
         sessionId={sessionId}
         isConfirmation={mode === 'confirmation'}
+        isAdmin={isAdmin}
       />
     )
   }

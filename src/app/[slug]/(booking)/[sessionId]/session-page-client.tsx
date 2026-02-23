@@ -369,6 +369,7 @@ export function SessionPageClient({
             isGuest={isGuest}
             guestEmail={guestEmail}
             onStepChange={setCheckoutStep}
+            isAdmin={isAdmin}
           />
         </div>
       </div>

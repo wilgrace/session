@@ -8,9 +8,8 @@ import { useToast } from "@/hooks/use-toast"
 import { SessionTemplate } from "@/types/session"
 import { cancelBookingWithRefund } from "@/app/actions/session"
 import { formatPrice } from "./price-display"
-import { ShareActions } from "./share-actions"
-import { ImportantInfo } from "./important-info"
 import { GuestAccountCallout } from "./guest-account-callout"
+import { CalendarDays, Users, CreditCard, Mail, Copy, Check, X } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +43,7 @@ interface BookingPanelProps {
   sessionId?: string
   isConfirmation?: boolean
   organizationId?: string
+  isAdmin?: boolean
 }
 
 export function BookingPanel({
@@ -57,10 +57,12 @@ export function BookingPanel({
   sessionId,
   isConfirmation = false,
   organizationId,
+  isAdmin = false,
 }: BookingPanelProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [sessionUrl, setSessionUrl] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -71,27 +73,7 @@ export function BookingPanel({
     }
   }, [sessionId, slug, startTime])
 
-  // Calculate the end time based on session duration
-  const endTime = new Date(startTime.getTime() + (session.duration_minutes || 60) * 60 * 1000)
-
-  // Calculate pricing breakdown for display
-  const dropInPrice = session.drop_in_price || 0
-  const additionalPeople = Math.max(0, booking.number_of_spots - 1)
-
-  // Use stored unit_price if available, otherwise use drop-in price
-  const unitPrice = booking.unit_price ?? dropInPrice
-
-  // Calculate additional guests price (always drop-in rate)
-  const additionalGuestsTotal = additionalPeople * dropInPrice
-
-  // Subtotal before discount (what would have been paid without discount)
-  const subtotal = unitPrice + additionalGuestsTotal
-
-  // Original total paid
-  const originalTotal = booking.amount_paid ?? 0
-
-  // Calculate discount: use stored value, or infer from difference between subtotal and amount paid
-  const discountAmount = booking.discount_amount ?? (subtotal > originalTotal ? subtotal - originalTotal : 0)
+  const canAct = isGuest || !!userDetails || isAdmin
 
   const handleCancel = async () => {
     setLoading(true)
@@ -102,7 +84,6 @@ export function BookingPanel({
         throw new Error(result.error || "Failed to cancel booking")
       }
 
-      // Save delete details to localStorage for toast on calendar page
       const deleteDetails = {
         type: "delete",
         sessionName: session.name,
@@ -126,128 +107,122 @@ export function BookingPanel({
     }
   }
 
+  const handleCopyLink = async () => {
+    const url = sessionUrl || (typeof window !== "undefined" ? window.location.href : "")
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Session Header */}
+      {/* Header */}
       <div>
-        <h2 className="font-semibold text-lg leading-tight">{session.name}</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {format(startTime, "HH:mm 'on' EEEE d MMMM")}
+        <h2 className="font-semibold text-lg">Your booking</h2>
+        <p className="text-xl font-bold mt-1">
+          {format(startTime, "HH:mm 'on' EEEE, do MMMM")}
         </p>
       </div>
 
-      {/* Share Actions */}
-      <ShareActions
-        sessionName={session.name}
-        startTime={startTime}
-        endTime={endTime}
-        duration={session.duration_minutes}
-        description={session.description || undefined}
-        bookingUrl={sessionUrl}
-      />
-
-      {/* Important Information */}
-      <ImportantInfo instructions={session.booking_instructions} />
-
-      {/* Booking Details */}
-      {isGuest ? (
-        <div className="bg-muted/30 rounded-xl p-4 space-y-2">
-          <h4 className="font-medium text-sm text-muted-foreground">Booking Details</h4>
-          <div className="space-y-1">
-            <p className="text-sm">
-              <span className="text-muted-foreground">Email:</span>{" "}
-              <span className="font-medium">{guestEmail}</span>
-            </p>
-            <p className="text-sm">
-              <span className="text-muted-foreground">Number of people:</span>{" "}
-              <span className="font-medium">{booking.number_of_spots}</span>
-            </p>
-          </div>
-        </div>
-      ) : userDetails ? (
-        <div className="bg-muted/30 rounded-xl p-4 space-y-2">
-          <h4 className="font-medium text-sm text-muted-foreground">Booking Details</h4>
-          <div className="space-y-1">
-            <p className="text-sm">
-              <span className="text-muted-foreground">Name:</span>{" "}
-              <span className="font-medium">{userDetails.name}</span>
-            </p>
-            <p className="text-sm">
-              <span className="text-muted-foreground">Email:</span>{" "}
-              <span className="font-medium">{userDetails.email}</span>
-            </p>
-            <p className="text-sm">
-              <span className="text-muted-foreground">Number of people:</span>{" "}
-              <span className="font-medium">{booking.number_of_spots}</span>
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Guest Account Callout */}
-      {isGuest && (
-        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
-      )}
-
-      {/* Price Summary */}
-      <div className="space-y-3">
-        {/* Session price (first person) */}
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">
-            Session{unitPrice < dropInPrice ? " (member rate)" : ""}
+      {/* Booking details as icon rows */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CalendarDays className="h-4 w-4 flex-shrink-0" />
+          <span>
+            {session.name}
+            {session.duration_minutes ? ` (${session.duration_minutes} minutes)` : ""}
           </span>
-          <span className="font-medium">{formatPrice(unitPrice)}</span>
         </div>
-
-        {/* Additional guests */}
-        {additionalPeople > 0 && (
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Additional guests × {additionalPeople}</span>
-            <span>{formatPrice(additionalGuestsTotal)}</span>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Users className="h-4 w-4 flex-shrink-0" />
+          <span>
+            {booking.number_of_spots} {booking.number_of_spots === 1 ? "spot" : "spots"} booked
+          </span>
+        </div>
+        {booking.amount_paid != null && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CreditCard className="h-4 w-4 flex-shrink-0" />
+            <span>{formatPrice(booking.amount_paid)} paid</span>
           </div>
         )}
-
-        {/* Discount */}
-        {discountAmount > 0 && (
-          <div className="flex justify-between text-sm text-primary">
-            <span>Discount</span>
-            <span>−{formatPrice(discountAmount)}</span>
+        {isGuest && guestEmail && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Mail className="h-4 w-4 flex-shrink-0" />
+            <span>{guestEmail}</span>
           </div>
         )}
-
-        {/* Total paid */}
-        <div className="flex justify-between pt-3 border-t border-muted">
-          <span className="text-lg font-semibold">Total paid</span>
-          <span className="text-xl font-bold">{formatPrice(originalTotal)}</span>
-        </div>
       </div>
 
-      {/* Action Buttons */}
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
+      {/* Action buttons — only for authorized viewers */}
+      {canAct && (
+        <div className="flex gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+                disabled={loading}
+              >
+                <X className="h-4 w-4" />
+                Cancel Booking
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. Your booking will be cancelled and you will receive a full refund if a payment was made.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>No, keep booking</AlertDialogCancel>
+                <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="w-full text-primary"
-            disabled={loading}
+            className="flex-1 gap-2"
+            onClick={handleCopyLink}
           >
-            Cancel Booking
+            {copied ? (
+              <>
+                <Check className="h-4 w-4" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" />
+                Copy Link & Share
+              </>
+            )}
           </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. Your booking will be cancelled and you will receive a full refund if a payment was made.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>No, keep booking</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        </div>
+      )}
+
+      {/* Good to know */}
+      {session.booking_instructions && (
+        <div className="space-y-1">
+          <h3 className="font-semibold">Good to know</h3>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {session.booking_instructions}
+          </p>
+        </div>
+      )}
+
+      {/* Guest account CTA */}
+      {isGuest && (
+        <GuestAccountCallout email={guestEmail} organizationId={organizationId} />
+      )}
     </div>
   )
 }
