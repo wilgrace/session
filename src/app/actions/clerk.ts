@@ -116,7 +116,7 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
   }
 }
 
-async function ensureClerkUser(clerkUserId: string, email: string, firstName: string | null, lastName: string | null) {
+async function ensureClerkUser(clerkUserId: string, email: string, firstName: string | null, lastName: string | null, organizationId?: string) {
   try {
     if (!email) {
       return {
@@ -150,8 +150,8 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
     }
 
     // If user doesn't exist, create them
-    // Use the default organization ID from environment variables
-    const orgId = process.env.DEFAULT_ORGANIZATION_ID;
+    // Use the provided organization ID or fall back to the default
+    const orgId = organizationId || process.env.DEFAULT_ORGANIZATION_ID;
     if (!orgId) {
       return {
         success: false,
@@ -438,10 +438,30 @@ async function handleOrganizationChange(organizationId: string) {
   }
 }
 
+async function updateUserOrganization(clerkUserId: string, organizationId: string) {
+  try {
+    const supabase = createSupabaseClient()
+
+    const { error } = await supabase
+      .from("clerk_users")
+      .update({ organization_id: organizationId })
+      .eq("clerk_user_id", clerkUserId)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
+  }
+}
+
 export {
   getClerkUser,
   createClerkUser,
   ensureClerkUser,
+  updateUserOrganization,
   listClerkUsers,
   updateClerkUser,
   deleteClerkUser,

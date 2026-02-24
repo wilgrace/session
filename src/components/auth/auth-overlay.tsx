@@ -5,7 +5,7 @@ import { SignIn, SignUp, useUser } from "@clerk/nextjs"
 import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { checkClerkUserSynced } from "@/app/actions/session"
-import { ensureClerkUser } from "@/app/actions/clerk"
+import { ensureClerkUser, updateUserOrganization } from "@/app/actions/clerk"
 import { checkWaiverAgreement } from "@/app/actions/waivers"
 import { getCommunitySurveyEnabled } from "@/app/actions/organization"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -119,6 +119,11 @@ export function AuthOverlay() {
             setIsSyncing(false)
             setAuthCompleted(true)
 
+            // Assign user to the correct org (webhook always uses DEFAULT_ORGANIZATION_ID)
+            if (organizationId) {
+              await updateUserOrganization(user.id, organizationId)
+            }
+
             // For sign-up, check for waiver then show community profile
             // For sign-in, complete immediately
             if (mode === 'sign-up') {
@@ -151,7 +156,7 @@ export function AuthOverlay() {
           attemptedDirectCreate = true
           const firstName = user.firstName || null
           const lastName = user.lastName || null
-          await ensureClerkUser(clerkUserId, clerkEmail, firstName, lastName)
+          await ensureClerkUser(clerkUserId, clerkEmail, firstName, lastName, organizationId)
           // Continue polling - the next check should succeed
         }
 
