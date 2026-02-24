@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import Image from "next/image"
 import { notFound } from "next/navigation"
 import { getPublicSessionsByOrg, getUserUpcomingBookings } from "@/app/actions/session"
+import { getPublicMembershipsForListing } from "@/app/actions/memberships"
 import { LazyBookingCalendar } from "@/components/booking/lazy-booking-calendar"
 import { UpcomingBookings } from "@/components/booking/upcoming-bookings"
 import { BookingHeader } from "@/components/booking/booking-header"
@@ -55,12 +56,17 @@ export default async function BookingPage({ params }: BookingPageProps) {
   const { userId } = await auth()
 
   // Only fast fetches block the initial render
-  const [organization, isAdmin] = await Promise.all([
+  const [organization, isAdmin, membershipsResult] = await Promise.all([
     getTenantOrganization(),
     userId
       ? canAccessAdminForOrg(userId, tenant.organizationId)
       : Promise.resolve(false),
+    getPublicMembershipsForListing(tenant.organizationId),
   ])
+
+  const showMembersButton =
+    (membershipsResult.data?.memberships?.length ?? 0) > 0 &&
+    !membershipsResult.data?.userHasActiveMembership
 
   const hasHeaderImage = !!organization?.headerImageUrl
 
@@ -94,6 +100,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
           homepageUrl={organization?.homepageUrl}
           instagramUrl={organization?.instagramUrl}
           facebookUrl={organization?.facebookUrl}
+          showMembersButton={showMembersButton}
         />
 
         <main

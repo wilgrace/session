@@ -71,7 +71,6 @@ export function MembershipForm({
   const [memberPriceType, setMemberPriceType] = useState<"discount" | "fixed">("discount")
   const [discountPercent, setDiscountPercent] = useState("")
   const [fixedPrice, setFixedPrice] = useState("")
-  const [showOnBookingPage, setShowOnBookingPage] = useState(true)
   const [showOnMembershipPage, setShowOnMembershipPage] = useState(true)
   const [isActive, setIsActive] = useState(true)
 
@@ -99,7 +98,6 @@ export function MembershipForm({
           ? (membership.memberFixedPrice / 100).toString()
           : ""
       )
-      setShowOnBookingPage(membership.showOnBookingPage ?? membership.displayToNonMembers)
       setShowOnMembershipPage(membership.showOnMembershipPage ?? true)
       setIsActive(membership.isActive)
       setFieldErrors({})
@@ -114,7 +112,6 @@ export function MembershipForm({
       setMemberPriceType("discount")
       setDiscountPercent("20")
       setFixedPrice("")
-      setShowOnBookingPage(true)
       setShowOnMembershipPage(true)
       setIsActive(true)
       setFieldErrors({})
@@ -162,7 +159,6 @@ export function MembershipForm({
       memberDiscountPercent:
         memberPriceType === "discount" ? parseInt(discountPercent) : undefined,
       memberFixedPrice: fixedPriceInPence,
-      showOnBookingPage,
       showOnMembershipPage,
       isActive,
     }
@@ -392,51 +388,12 @@ export function MembershipForm({
           <div className="space-y-4 border-t pt-4">
             <div>
               <Label className="text-base font-medium">Signing Up</Label>
-              <p className="text-sm text-gray-500 mt-0.5">
-                How can customers find and sign up for this membership
-              </p>
             </div>
 
-            {/* Toggle 1: When booking a session */}
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="showOnBookingPage" className="font-normal">
-                  When booking a session
-                </Label>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Can be bought at the same time as booking a session
-                </p>
-              </div>
-              <Switch
-                id="showOnBookingPage"
-                checked={showOnBookingPage}
-                onCheckedChange={setShowOnBookingPage}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Toggle 2: On a membership page */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="showOnMembershipPage" className="font-normal">
-                    On a membership page
-                  </Label>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    Customers can sign up directly at a dedicated URL
-                  </p>
-                </div>
-                <Switch
-                  id="showOnMembershipPage"
-                  checked={showOnMembershipPage}
-                  onCheckedChange={setShowOnMembershipPage}
-                  disabled={loading}
-                />
-              </div>
-
-              {/* Show copyable URL when enabled and editing existing membership */}
-              {showOnMembershipPage && membership && slug && (
-                <div className="flex items-center gap-2 mt-2">
+            {/* Direct link — always shown for existing memberships */}
+            {membership && slug && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
                   <Input
                     readOnly
                     value={`${typeof window !== "undefined" ? window.location.origin : ""}/${slug}/membership/${membership.id}`}
@@ -462,19 +419,33 @@ export function MembershipForm({
                     )}
                   </Button>
                 </div>
-              )}
+              </div>
+            )}
 
-              {showOnMembershipPage && !membership && (
-                <p className="text-sm text-gray-500 italic">
-                  Save the membership to get the shareable URL
-                </p>
-              )}
+            {/* On the members page toggle */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="showOnMembershipPage" className="font-normal">
+                    List on the members page
+                  </Label>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Show publicly on the /members listing page
+                  </p>
+                </div>
+                <Switch
+                  id="showOnMembershipPage"
+                  checked={showOnMembershipPage}
+                  onCheckedChange={setShowOnMembershipPage}
+                  disabled={loading}
+                />
+              </div>
             </div>
 
-            {/* Warning when both are off */}
-            {!showOnBookingPage && !showOnMembershipPage && (
+            {/* Warning when not visible on members page */}
+            {!showOnMembershipPage && (
               <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
-                This membership won&apos;t be visible anywhere. Only users who already have this membership will see it.
+                This membership won&apos;t be visible on the members page. Users can still sign up via a direct link.
               </p>
             )}
           </div>

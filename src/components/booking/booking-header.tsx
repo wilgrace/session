@@ -19,6 +19,7 @@ interface BookingHeaderProps {
   homepageUrl?: string | null
   instagramUrl?: string | null
   facebookUrl?: string | null
+  showMembersButton?: boolean
 }
 
 export function BookingHeader({
@@ -29,7 +30,8 @@ export function BookingHeader({
   hasHeaderImage = false,
   homepageUrl,
   instagramUrl,
-  facebookUrl
+  facebookUrl,
+  showMembersButton = false,
 }: BookingHeaderProps) {
   const pathname = usePathname()
   const { openSignIn } = useAuthOverlay()
@@ -94,6 +96,16 @@ export function BookingHeader({
 
         {/* Right - Auth controls */}
         <div className="flex items-center gap-3">
+          {showMembersButton && (
+            <Button
+              asChild
+              variant="outline"
+              size="default"
+              className="rounded-md text-base py-2 px-4"
+            >
+              <Link href={`/${slug}/members`}>Members</Link>
+            </Button>
+          )}
           <SignedIn>
             {isAdmin && (
               <Button

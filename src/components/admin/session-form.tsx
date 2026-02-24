@@ -31,6 +31,7 @@ import { localToUTC, SAUNA_TIMEZONE } from '@/lib/time-utils'
 import { ImageUpload } from "@/components/admin/image-upload"
 import { getMemberships, getSessionMembershipPrices, updateSessionMembershipPrices } from "@/app/actions/memberships"
 import type { Membership } from "@/lib/db/schema"
+import { Checkbox } from "@/components/ui/checkbox"
 import { EVENT_COLORS, EventColorKey, DEFAULT_EVENT_COLOR, normalizeEventColor } from "@/lib/event-colors"
 
 async function generateInstances() {
@@ -81,6 +82,17 @@ const daysOfWeek = [
   { value: "sun", label: "Sun" },
 ]
 
+function getDefaultMembershipPrice(membership: Membership, dropInPricePence: number): string {
+  if (membership.memberPriceType === 'fixed' && membership.memberFixedPrice != null) {
+    return (membership.memberFixedPrice / 100).toFixed(2)
+  }
+  if (membership.memberPriceType === 'discount' && membership.memberDiscountPercent != null && dropInPricePence > 0) {
+    const price = Math.round(dropInPricePence * (1 - membership.memberDiscountPercent / 100))
+    return (price / 100).toFixed(2)
+  }
+  return ''
+}
+
 export function SessionForm({ open, onClose, template, initialTimeSlot, onSuccess }: SessionFormProps) {
   const { toast } = useToast()
   const { user } = useUser()
@@ -105,14 +117,17 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   // Pricing state
-  const [pricingType, setPricingType] = useState<'free' | 'paid'>('free')
+  const [pricingType, setPricingType] = useState<'free' | 'paid'>('paid')
+  const [dropInEnabled, setDropInEnabled] = useState(true)
   const [dropInPrice, setDropInPrice] = useState('')
   const [memberPrice, setMemberPrice] = useState('') // Deprecated: kept for backward compatibility
   const [bookingInstructions, setBookingInstructions] = useState('')
 
   // Membership pricing state (new multi-membership system)
   const [memberships, setMemberships] = useState<Membership[]>([])
+  const [membershipEnabled, setMembershipEnabled] = useState<Record<string, boolean>>({}) // membershipId -> enabled
   const [membershipPrices, setMembershipPrices] = useState<Record<string, string>>({}) // membershipId -> price string
+  const [membershipPriceEditing, setMembershipPriceEditing] = useState<Record<string, boolean>>({}) // membershipId -> price input visible
   const [loadingMemberships, setLoadingMemberships] = useState(false)
 
   // Image state
@@ -188,6 +203,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
 
       // Load pricing fields
       setPricingType(template.pricing_type === 'paid' ? 'paid' : 'free')
+      setDropInEnabled(template.drop_in_enabled !== false)
       setDropInPrice(template.drop_in_price ? (template.drop_in_price / 100).toFixed(2) : '')
       setMemberPrice(template.member_price ? (template.member_price / 100).toFixed(2) : '')
       setBookingInstructions(template.booking_instructions || '')
@@ -244,25 +260,62 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       if (!open) return
 
       setLoadingMemberships(true)
+      setMembershipPriceEditing({})
       try {
         // Load all memberships for the org
         const membershipsResult = await getMemberships()
+        const activeMemberships = (membershipsResult.success && membershipsResult.data)
+          ? membershipsResult.data.filter(m => m.isActive)
+          : []
         if (membershipsResult.success && membershipsResult.data) {
           setMemberships(membershipsResult.data)
         }
 
-        // If editing, load existing session membership prices
+        // If editing, load existing session membership prices and enabled state
         if (template?.id) {
           const pricesResult = await getSessionMembershipPrices(template.id)
           if (pricesResult.success && pricesResult.data) {
+            const hasPerSessionRows = pricesResult.data.length > 0
+            const enabledMap: Record<string, boolean> = {}
             const priceMap: Record<string, string> = {}
-            pricesResult.data.forEach((p) => {
-              priceMap[p.membershipId] = (p.overridePrice / 100).toFixed(2)
+
+            // Default all memberships to enabled
+            activeMemberships.forEach((m) => {
+              enabledMap[m.id] = true
             })
+
+            if (hasPerSessionRows) {
+              // Apply saved per-session state
+              pricesResult.data.forEach((p) => {
+                enabledMap[p.membershipId] = p.isEnabled
+                if (p.overridePrice != null) {
+                  priceMap[p.membershipId] = (p.overridePrice / 100).toFixed(2)
+                }
+              })
+            }
+
+            // Pre-populate price inputs with membership defaults for any that have no override
+            const dropInPricePence = template.drop_in_price || 0
+            activeMemberships.forEach((m) => {
+              if (!priceMap[m.id]) {
+                priceMap[m.id] = getDefaultMembershipPrice(m, dropInPricePence)
+              }
+            })
+
+            setMembershipEnabled(enabledMap)
             setMembershipPrices(priceMap)
           }
         } else {
-          setMembershipPrices({})
+          // New session: all enabled, pre-populate fixed-price memberships
+          const enabledMap: Record<string, boolean> = {}
+          const priceMap: Record<string, string> = {}
+          activeMemberships.forEach((m) => {
+            enabledMap[m.id] = true
+            const defaultPrice = getDefaultMembershipPrice(m, 0)
+            if (defaultPrice) priceMap[m.id] = defaultPrice
+          })
+          setMembershipEnabled(enabledMap)
+          setMembershipPrices(priceMap)
         }
       } catch (error) {
         console.error("Error loading memberships:", error)
@@ -273,6 +326,26 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
     loadMembershipsData()
   }, [open, template?.id])
 
+  // When drop-in price changes, update pre-populated prices for discount-type memberships
+  // (only if the current value is blank or matches the previously auto-calculated price)
+  useEffect(() => {
+    if (!dropInPrice || memberships.length === 0) return
+    const dropInPricePence = Math.round(parseFloat(dropInPrice) * 100)
+    if (isNaN(dropInPricePence) || dropInPricePence <= 0) return
+
+    setMembershipPrices(prev => {
+      const updated = { ...prev }
+      memberships.filter(m => m.isActive && m.memberPriceType === 'discount').forEach(m => {
+        if (!prev[m.id] || prev[m.id] === '') {
+          const calc = getDefaultMembershipPrice(m, dropInPricePence)
+          if (calc) updated[m.id] = calc
+        }
+      })
+      return updated
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dropInPrice])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -282,7 +355,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
     if (!capacity || parseInt(capacity) < 1) errors.capacity = "Capacity is required"
     if (scheduleType === "once" && !date) errors.date = "Date is required"
     if (!durationMinutes || durationMinutes <= 0) errors.duration = "Duration is required"
-    if (pricingType === "paid" && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
+    if (pricingType === "paid" && dropInEnabled && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
+    if (pricingType === "paid") {
+      const activeMembershipIds = memberships.filter(m => m.isActive).map(m => m.id)
+      const anyEnabled = dropInEnabled || activeMembershipIds.some(id => membershipEnabled[id])
+      if (!anyEnabled) errors.pricingOptions = "At least one pricing option must be selected"
+    }
     if (scheduleType === "repeat") {
       schedules.forEach((schedule) => {
         if (!schedule.days || schedule.days.length === 0) {
@@ -296,7 +374,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       // Auto-expand sections containing errors
       if (errors.name || errors.capacity) setGeneralExpanded(true)
       if (errors.date || errors.duration || Object.keys(errors).some(k => k.startsWith("schedule-days-"))) setScheduleExpanded(true)
-      if (errors.dropInPrice) setPaymentExpanded(true)
+      if (errors.dropInPrice || errors.pricingOptions) setPaymentExpanded(true)
       // Scroll to first error after a tick (to allow sections to expand)
       setTimeout(() => {
         const firstKey = Object.keys(errors)[0]
@@ -332,7 +410,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
             recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
             recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
             pricing_type: pricingType,
-            drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+            drop_in_price: pricingType === 'paid' && dropInEnabled && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+            drop_in_enabled: pricingType === 'paid' ? dropInEnabled : true,
             member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
             booking_instructions: bookingInstructions || null,
             image_url: imageUrl || null,
@@ -367,7 +446,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
           created_by: user.id,
           // Pricing fields
           pricing_type: pricingType,
-          drop_in_price: pricingType === 'paid' && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          drop_in_price: pricingType === 'paid' && dropInEnabled && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          drop_in_enabled: pricingType === 'paid' ? dropInEnabled : true,
           member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
           booking_instructions: bookingInstructions || null,
           // Image field
@@ -482,20 +562,26 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         });
       }
 
-      // Save membership price overrides
-      if (pricingType === 'paid' && Object.keys(membershipPrices).length > 0) {
-        const pricesToSave = Object.entries(membershipPrices)
-          .filter(([_, price]) => price && parseFloat(price) >= 0)
-          .map(([membershipId, price]) => ({
-            membershipId,
-            overridePrice: Math.round(parseFloat(price) * 100),
-          }))
-
-        if (pricesToSave.length > 0) {
-          await updateSessionMembershipPrices(templateId, pricesToSave)
+      // Save per-session membership settings (enabled state + optional price override)
+      if (pricingType === 'paid') {
+        const activeMemberships = memberships.filter(m => m.isActive)
+        if (activeMemberships.length > 0) {
+          const membershipSettings = activeMemberships.map((m) => {
+            const isEnabled = membershipEnabled[m.id] ?? true
+            const priceStr = membershipPrices[m.id]
+            const overridePrice = priceStr && parseFloat(priceStr) >= 0
+              ? Math.round(parseFloat(priceStr) * 100)
+              : null
+            return {
+              membershipId: m.id,
+              isEnabled,
+              overridePrice,
+            }
+          })
+          await updateSessionMembershipPrices(templateId, membershipSettings)
         }
       } else {
-        // Clear any existing prices if session is free or no prices set
+        // Clear any existing settings if session is free
         await updateSessionMembershipPrices(templateId, [])
       }
 
@@ -1048,7 +1134,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
               className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
               onClick={() => setPaymentExpanded(!paymentExpanded)}
             >
-              <span>Payment</span>
+              <span>Pricing</span>
               {paymentExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
             </button>
 
@@ -1115,93 +1201,123 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
                   </div>
                 </div>
 
-                {pricingType === "free" && (
-                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3">
-                    <p className="text-sm text-amber-800">
-                      Free sessions are visible on the public calendar but cannot be booked online.
-                      Visitors will see a &quot;Contact us for details&quot; message.
-                    </p>
-                  </div>
-                )}
 
                 {pricingType === "paid" && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="dropInPrice" className="text-sm font-medium">
-                        Drop-in Price <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
-                        <Input
-                          id="dropInPrice"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={dropInPrice}
-                          onChange={(e) => { setDropInPrice(e.target.value); clearError("dropInPrice") }}
-                          className={cn("pl-7", fieldErrors.dropInPrice && "border-red-500 focus-visible:ring-red-500")}
-                        />
+                  <div className="space-y-2">
+                    {fieldErrors.pricingOptions && (
+                      <p className="text-sm text-red-500">{fieldErrors.pricingOptions}</p>
+                    )}
+
+                    <div className="space-y-px rounded-lg border overflow-hidden">
+                      {/* Drop-in row */}
+                      <div className="space-y-2 bg-gray-50 p-3">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            id="dropInEnabled"
+                            checked={dropInEnabled}
+                            onCheckedChange={(checked) => {
+                              setDropInEnabled(!!checked)
+                              clearError("dropInPrice")
+                              clearError("pricingOptions")
+                            }}
+                          />
+                          <label htmlFor="dropInEnabled" className="flex-1 min-w-0 cursor-pointer">
+                            <p className="text-sm font-medium">Drop-in</p>
+                            <p className="text-xs text-gray-500">Single session for non-members</p>
+                          </label>
+                          {dropInEnabled && (
+                            <div className="relative w-32">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
+                              <Input
+                                id="dropInPrice"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={dropInPrice}
+                                onChange={(e) => { setDropInPrice(e.target.value); clearError("dropInPrice") }}
+                                className={cn("pl-7", fieldErrors.dropInPrice && "border-red-500 focus-visible:ring-red-500")}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        {dropInEnabled && fieldErrors.dropInPrice && (
+                          <p className="text-sm text-red-500 pl-7">{fieldErrors.dropInPrice}</p>
+                        )}
                       </div>
-                      {fieldErrors.dropInPrice ? (
-                        <p className="text-sm text-red-500">{fieldErrors.dropInPrice}</p>
-                      ) : (
-                        <p className="text-sm text-gray-500">Price per person for non-members.</p>
-                      )}
-                    </div>
 
-                    {/* Per-Membership Price Overrides */}
-                    {memberships.length > 0 && (
-                      <div className="space-y-3">
-                        <Label className="text-sm font-medium">
-                          Membership Pricing <span className="text-gray-400 font-normal">(optional overrides)</span>
-                        </Label>
-                        <p className="text-sm text-gray-500">
-                          Override the default member price for specific memberships. Leave blank to use each membership&apos;s default pricing.
-                        </p>
-                        <div className="space-y-2 rounded-lg border p-3 bg-gray-50">
-                          {memberships.filter(m => m.isActive).map((membership) => {
-                            const defaultPrice = membership.memberPriceType === 'fixed'
-                              ? membership.memberFixedPrice
-                                ? `£${(membership.memberFixedPrice / 100).toFixed(2)}`
-                                : '—'
-                              : membership.memberDiscountPercent
-                                ? `${membership.memberDiscountPercent}% off`
-                                : '—'
-
-                            return (
-                              <div key={membership.id} className="flex items-center gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{membership.name}</p>
-                                  <p className="text-xs text-gray-500">Default: {defaultPrice}</p>
+                      {/* Per-membership rows */}
+                      {memberships.filter(m => m.isActive).map((membership) => {
+                        const isEnabled = membershipEnabled[membership.id] ?? true
+                        const isPriceEditing = membershipPriceEditing[membership.id] ?? false
+                        const currentPrice = membershipPrices[membership.id] || ''
+                        return (
+                          <div key={membership.id} className="bg-gray-50 p-3 space-y-2">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                id={`membership-${membership.id}`}
+                                checked={isEnabled}
+                                onCheckedChange={(checked) => {
+                                  setMembershipEnabled(prev => ({ ...prev, [membership.id]: !!checked }))
+                                  clearError("pricingOptions")
+                                }}
+                              />
+                              <label htmlFor={`membership-${membership.id}`} className="flex-1 min-w-0 cursor-pointer">
+                                <p className="text-sm font-medium">{membership.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {membership.memberPriceType === 'discount' && membership.memberDiscountPercent
+                                    ? `${membership.memberDiscountPercent}% off drop-in`
+                                    : membership.memberPriceType === 'fixed' && membership.memberFixedPrice != null
+                                      ? `Default: £${(membership.memberFixedPrice / 100).toFixed(2)}`
+                                      : 'Member pricing'}
+                                </p>
+                              </label>
+                              {isEnabled && !isPriceEditing && (
+                                <div className="flex items-center gap-2">
+                                  {currentPrice && (
+                                    <span className="text-sm font-medium">£{parseFloat(currentPrice).toFixed(2)}</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setMembershipPriceEditing(prev => ({ ...prev, [membership.id]: true }))}
+                                    className="text-xs text-primary underline underline-offset-2 hover:no-underline whitespace-nowrap"
+                                  >
+                                    {currentPrice ? 'Edit' : 'Set price'}
+                                  </button>
                                 </div>
-                                <div className="relative w-28">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">£</span>
+                              )}
+                              {isEnabled && isPriceEditing && (
+                                <div className="relative w-32">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
                                   <Input
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    placeholder="—"
-                                    value={membershipPrices[membership.id] || ''}
+                                    placeholder="0.00"
+                                    value={currentPrice}
+                                    autoFocus
                                     onChange={(e) => setMembershipPrices(prev => ({
                                       ...prev,
                                       [membership.id]: e.target.value
                                     }))}
-                                    className="pl-7 h-9 text-sm"
+                                    onBlur={() => setMembershipPriceEditing(prev => ({ ...prev, [membership.id]: false }))}
+                                    className="pl-7"
                                   />
                                 </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
 
-                    {memberships.length === 0 && !loadingMemberships && (
-                      <p className="text-sm text-gray-500 italic">
-                        No memberships configured. Create memberships in Billing settings to offer member pricing.
-                      </p>
-                    )}
+                      {memberships.filter(m => m.isActive).length === 0 && !loadingMemberships && (
+                        <div className="bg-gray-50 p-3">
+                          <p className="text-sm text-gray-500 italic">
+                            No memberships configured. Create memberships in Billing settings to offer member pricing.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

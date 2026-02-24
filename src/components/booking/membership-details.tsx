@@ -57,40 +57,25 @@ export function MembershipDetails({ membership }: MembershipDetailsProps) {
           </p>
         </div>
 
-        {membership.description && (
-          <p className="text-muted-foreground">{membership.description}</p>
-        )}
-
-        {/* Benefits */}
-        <div className="space-y-2">
-          <h3 className="font-medium">Member Benefits</h3>
-          <ul className="space-y-1.5 text-sm text-muted-foreground">
+                {/* Benefits */}
+                <div className="space-y-2 text-lg">
             {membership.memberPriceType === "discount" &&
               membership.memberDiscountPercent && (
-                <li className="flex items-start gap-2">
-                  <span
-                    className="mt-0.5 h-1.5 w-1.5 rounded-full flex-shrink-0 bg-primary"
-                  />
+                <p className="flex items-start gap-2">
                   <span>{membership.memberDiscountPercent}% off all sessions</span>
-                </li>
+                </p>
               )}
             {membership.memberPriceType === "fixed" &&
               membership.memberFixedPrice !== null && (
-                <li className="flex items-start gap-2">
-                  <span
-                    className="mt-0.5 h-1.5 w-1.5 rounded-full flex-shrink-0 bg-primary"
-                  />
+                <p className="flex items-start gap-2">
                   <span>Fixed session price: {formatPrice(membership.memberFixedPrice)}</span>
-                </li>
+                </p>
               )}
-            <li className="flex items-start gap-2">
-              <span
-                className="mt-0.5 h-1.5 w-1.5 rounded-full flex-shrink-0 bg-primary"
-              />
-              <span>Priority access to sessions</span>
-            </li>
-          </ul>
         </div>
+
+        {membership.description && (
+          <p className="text-muted-foreground">{membership.description}</p>
+        )}
       </div>
     </div>
   )

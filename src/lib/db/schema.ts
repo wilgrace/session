@@ -103,6 +103,7 @@ export const sessionTemplates = pgTable('session_templates', {
   pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
   dropInPrice: integer('drop_in_price'), // Price in pence for non-members
   memberPrice: integer('member_price'), // Override org-level member pricing (if set)
+  dropInEnabled: boolean('drop_in_enabled').notNull().default(true), // Whether drop-in pricing is available for this session
   bookingInstructions: text('booking_instructions'), // Instructions shown on confirmation page
   // Image field
   imageUrl: text('image_url'), // Optional image URL for the session
@@ -215,7 +216,8 @@ export const sessionMembershipPrices = pgTable('session_membership_prices', {
   id: uuid('id').defaultRandom().primaryKey(),
   sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
   membershipId: uuid('membership_id').notNull().references(() => memberships.id, { onDelete: 'cascade' }),
-  overridePrice: integer('override_price').notNull(), // in pence
+  overridePrice: integer('override_price'), // in pence (nullable: row may exist just to track isEnabled)
+  isEnabled: boolean('is_enabled').notNull().default(true), // Whether this membership is available for this session
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

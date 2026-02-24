@@ -245,19 +245,16 @@ function SettingsPageContent() {
       {/* Basic Information */}
       <div className="border-b border-gray-200 bg-white p-6 space-y-6">
 
-        <div className="space-y-4">
+        <div className="space-y-8 max-w-xl ">
           {/* Name */}
           <div className="space-y-2">
-            <Label htmlFor="name">Organization Name</Label>
+            <Label htmlFor="name">Organisation Name</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Organization"
+              placeholder="My Organisation"
             />
-            <p className="text-sm text-gray-500">
-              The name of your organization displayed to customers.
-            </p>
           </div>
 
           {/* Description */}
@@ -271,12 +268,12 @@ function SettingsPageContent() {
               rows={3}
             />
             <p className="text-sm text-gray-500">
-              A brief description shown to customers on your booking page.
+              To help search engines find you
             </p>
           </div>
 
           {/* Slug */}
-          <div className="space-y-2">
+          <div className="space-y-2 ">
             <Label htmlFor="slug">Booking URL (Slug)</Label>
             <div className="flex items-center gap-0">
               <span className="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 h-10 whitespace-nowrap">

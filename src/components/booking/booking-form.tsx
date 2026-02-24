@@ -520,6 +520,7 @@ export function BookingForm({
           monthlyMembershipPrice={monthlyMembershipPrice}
           isActiveMember={isActiveMember}
           defaultToMembership={defaultToMembership}
+          dropInEnabled={session.drop_in_enabled !== false}
         />
       )
     }

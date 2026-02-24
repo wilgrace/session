@@ -49,6 +49,8 @@ interface PreCheckoutFormProps {
   isActiveMember?: boolean
   // Pre-select membership option (from sign-up redirect)
   defaultToMembership?: boolean
+  // Whether drop-in pricing is available for this session
+  dropInEnabled?: boolean
 }
 
 interface AppliedCoupon {
@@ -81,6 +83,7 @@ export function PreCheckoutForm({
   monthlyMembershipPrice: legacyMonthlyMembershipPrice,
   isActiveMember: legacyIsActiveMember,
   defaultToMembership = false,
+  dropInEnabled = true,
 }: PreCheckoutFormProps) {
   const { openSignUp, openSignIn } = useAuthOverlay()
 
@@ -96,9 +99,9 @@ export function PreCheckoutForm({
   // Get monthly price for showing on new membership options
   const getMonthlyPrice = (membership: Membership) => membership.price
 
-  // Form state - default to "membership" if user is already a member or returning from sign-up
+  // Form state - default to "membership" if user is already a member, returning from sign-up, or drop-in is disabled
   const [pricingType, setPricingType] = useState<"drop_in" | "membership">(
-    isActiveMember || defaultToMembership ? "membership" : "drop_in"
+    isActiveMember || defaultToMembership || dropInEnabled === false ? "membership" : "drop_in"
   )
   const [selectedMembershipId, setSelectedMembershipId] = useState<string | null>(
     userMembershipId || (memberships.length > 0 ? memberships[0].membership.id : null)
@@ -340,8 +343,8 @@ export function PreCheckoutForm({
           </button>
         )}
 
-                {/* Drop-in Option - always show at bottom unless user already has membership */}
-                {!isActiveMember && (
+                {/* Drop-in Option - show unless user has membership or drop-in is disabled for this session */}
+                {!isActiveMember && dropInEnabled !== false && (
           <button
             type="button"
             onClick={() => setPricingType("drop_in")}

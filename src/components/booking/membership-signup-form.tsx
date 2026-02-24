@@ -190,19 +190,6 @@ export function MembershipSignupForm({
 
   return (
     <div className="space-y-6">
-      {/* Price display */}
-      <div className="text-center py-4">
-        <p
-          className="text-3xl font-bold text-primary"
-        >
-          {isFree ? "Free" : formatPrice(membership.price)}
-          {!isFree && (
-            <span className="text-lg font-normal text-muted-foreground">
-              /{membership.billingPeriod === "yearly" ? "year" : "month"}
-            </span>
-          )}
-        </p>
-      </div>
 
       {/* Email input for guests */}
       {!isLoggedIn && isLoaded && (

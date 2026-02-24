@@ -32,8 +32,8 @@ export interface CreateMembershipParams {
   memberPriceType: "discount" | "fixed"
   memberDiscountPercent?: number
   memberFixedPrice?: number // in pence
-  displayToNonMembers?: boolean // Deprecated, use showOnBookingPage
-  showOnBookingPage: boolean
+  displayToNonMembers?: boolean // Deprecated
+  showOnBookingPage?: boolean // Deprecated: per-session control now handled in session settings
   showOnMembershipPage: boolean
   isActive?: boolean
 }
@@ -48,7 +48,8 @@ export interface MembershipWithUserStatus extends Membership {
 
 export interface SessionMembershipPriceInput {
   membershipId: string
-  overridePrice: number // in pence
+  isEnabled: boolean // Whether this membership is available for this session
+  overridePrice?: number | null // in pence; null = use membership default
 }
 
 // ============================================
@@ -330,8 +331,8 @@ export async function createMembership(
         member_price_type: params.memberPriceType,
         member_discount_percent: params.memberDiscountPercent || null,
         member_fixed_price: params.memberFixedPrice || null,
-        display_to_non_members: params.showOnBookingPage, // Backward compat
-        show_on_booking_page: params.showOnBookingPage,
+        display_to_non_members: params.showOnBookingPage ?? true, // Backward compat
+        show_on_booking_page: params.showOnBookingPage ?? true,
         show_on_membership_page: params.showOnMembershipPage,
         stripe_product_id: stripeProductId,
         stripe_price_id: stripePriceId,
@@ -588,13 +589,13 @@ export async function reorderMemberships(
  */
 export async function getSessionMembershipPrices(
   sessionTemplateId: string
-): Promise<ActionResult<{ membershipId: string; overridePrice: number }[]>> {
+): Promise<ActionResult<{ membershipId: string; overridePrice: number | null; isEnabled: boolean }[]>> {
   try {
     const supabase = createSupabaseServerClient()
 
     const { data, error } = await supabase
       .from("session_membership_prices")
-      .select("membership_id, override_price")
+      .select("membership_id, override_price, is_enabled")
       .eq("session_template_id", sessionTemplateId)
 
     if (error) {
@@ -607,6 +608,7 @@ export async function getSessionMembershipPrices(
       data: data.map((d) => ({
         membershipId: d.membership_id,
         overridePrice: d.override_price,
+        isEnabled: d.is_enabled ?? true,
       })),
     }
   } catch (error) {
@@ -645,7 +647,8 @@ export async function updateSessionMembershipPrices(
         prices.map((p) => ({
           session_template_id: sessionTemplateId,
           membership_id: p.membershipId,
-          override_price: p.overridePrice,
+          is_enabled: p.isEnabled,
+          override_price: p.overridePrice ?? null,
         }))
       )
 
@@ -731,17 +734,83 @@ export async function getVisibleMemberships(
     // Map snake_case DB columns to camelCase
     const memberships = (membershipsData || []).map(mapDbMembershipToMembership)
 
-    // Filter: show visible memberships + user's own membership
-    const visibleMemberships = memberships
-      .filter((m) => m.showOnBookingPage || m.id === userMembershipId)
-      .map((m) => ({
-        ...m,
-        isUserMembership: m.id === userMembershipId,
-      }))
+    // All active memberships are visible; per-session isEnabled controls availability at checkout
+    const visibleMemberships = memberships.map((m) => ({
+      ...m,
+      isUserMembership: m.id === userMembershipId,
+    }))
 
     return { success: true, data: visibleMemberships }
   } catch (error) {
     console.error("Error in getVisibleMemberships:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+/**
+ * Get memberships for the public /members listing page.
+ * Returns only active memberships with showOnMembershipPage = true.
+ * Also checks if the current user has an active membership.
+ */
+export async function getPublicMembershipsForListing(
+  organizationId: string
+): Promise<ActionResult<{ memberships: Membership[]; userHasActiveMembership: boolean }>> {
+  try {
+    const supabase = createSupabaseServerClient()
+
+    // Check if current user has an active membership
+    let userHasActiveMembership = false
+    const { userId: clerkUserId } = await auth()
+
+    if (clerkUserId) {
+      const { data: user } = await supabase
+        .from("clerk_users")
+        .select("id")
+        .eq("clerk_user_id", clerkUserId)
+        .single()
+
+      if (user) {
+        const { data: userMembership } = await supabase
+          .from("user_memberships")
+          .select("membership_id, status, current_period_end")
+          .eq("user_id", user.id)
+          .eq("organization_id", organizationId)
+          .in("status", ["active", "cancelled"])
+          .maybeSingle()
+
+        if (userMembership) {
+          const isActive =
+            userMembership.status === "active" ||
+            (userMembership.status === "cancelled" &&
+              userMembership.current_period_end &&
+              new Date(userMembership.current_period_end) > new Date())
+          userHasActiveMembership = isActive
+        }
+      }
+    }
+
+    // Get active memberships visible on the members page
+    const { data: membershipsData, error } = await supabase
+      .from("memberships")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .eq("show_on_membership_page", true)
+      .order("sort_order", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching public memberships:", error)
+      return { success: false, error: error.message }
+    }
+
+    const memberships = (membershipsData || []).map(mapDbMembershipToMembership)
+
+    return { success: true, data: { memberships, userHasActiveMembership } }
+  } catch (error) {
+    console.error("Error in getPublicMembershipsForListing:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -785,10 +854,6 @@ export async function getMembershipByIdPublic(
     // Check if membership is publicly accessible via the landing page
     if (!data.is_active) {
       return { success: false, error: "This membership is no longer available" }
-    }
-
-    if (!data.show_on_membership_page) {
-      return { success: false, error: "Membership not found" }
     }
 
     const membership = mapDbMembershipToMembership(data)
@@ -994,18 +1059,28 @@ export async function getBookingMembershipPricingData(params: {
 
     const memberships = membershipsResult.data
 
-    // Get session membership price overrides
+    // Get session membership price overrides and availability
     const pricesResult = await getSessionMembershipPrices(params.sessionTemplateId)
-    const overrides: Record<string, number> = {}
+    const overrides: Record<string, number | null> = {}
+    const hasPerSessionSettings = !!(pricesResult.success && pricesResult.data && pricesResult.data.length > 0)
+    const enabledMembershipIds = new Set<string>()
+
     if (pricesResult.success && pricesResult.data) {
       pricesResult.data.forEach((p) => {
-        overrides[p.membershipId] = p.overridePrice
+        if (p.overridePrice != null) overrides[p.membershipId] = p.overridePrice
+        if (p.isEnabled) enabledMembershipIds.add(p.membershipId)
       })
     }
 
+    // Filter memberships by per-session availability
+    // If no per-session rows exist (legacy session), show all memberships
+    const filteredMemberships = hasPerSessionSettings
+      ? memberships.filter((m) => enabledMembershipIds.has(m.id) || m.isUserMembership)
+      : memberships
+
     // Calculate session price for each membership
     const { calculateMembershipSessionPrice } = await import("@/lib/pricing-utils")
-    const pricingOptions: MembershipPricingOption[] = memberships.map((m) => ({
+    const pricingOptions: MembershipPricingOption[] = filteredMemberships.map((m) => ({
       membership: m,
       sessionPrice: calculateMembershipSessionPrice({
         dropInPrice: params.dropInPrice,

@@ -51,6 +51,8 @@ export interface SessionTemplate {
   image_url?: string | null
   // Calendar display color
   event_color?: string | null
+  // Pricing availability
+  drop_in_enabled?: boolean | null
 }
 
 export interface SessionInstance {

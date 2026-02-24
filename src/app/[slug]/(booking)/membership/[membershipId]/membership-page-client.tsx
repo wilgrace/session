@@ -6,7 +6,7 @@ import { ChevronLeft } from "lucide-react"
 import { MembershipDetails } from "@/components/booking/membership-details"
 import { MembershipSignupForm } from "@/components/booking/membership-signup-form"
 import { useUser } from "@clerk/nextjs"
-import { getMembershipByIdPublic } from "@/app/actions/memberships"
+import { getMembershipByIdPublic, getUserMembershipWithDetails } from "@/app/actions/memberships"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import type { Membership } from "@/lib/db/schema"
@@ -29,12 +29,13 @@ export function MembershipPageClient({
   organizationName,
   organizationId,
 }: MembershipPageClientProps) {
-  const { user } = useUser()
+  const { user, isLoaded } = useUser()
   const router = useRouter()
   const { toast } = useToast()
   const [membership, setMembership] = useState<Membership | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [userHasActiveMembership, setUserHasActiveMembership] = useState(false)
   // Mode: 'signup' (default) or 'confirmation'
   // Persist confirmation state so it survives URL param clearing
   const isConfirmationFromUrl = searchParams.confirmed === "true"
@@ -92,6 +93,20 @@ export function MembershipPageClient({
 
     fetchMembership()
   }, [membershipId])
+
+  // Check if user already has an active membership
+  useEffect(() => {
+    if (!isLoaded || !user) return
+
+    async function checkExistingMembership() {
+      const result = await getUserMembershipWithDetails(organizationId)
+      if (result.success && result.data) {
+        setUserHasActiveMembership(true)
+      }
+    }
+
+    checkExistingMembership()
+  }, [isLoaded, user, organizationId])
 
   // Loading state
   if (loading) {
@@ -154,12 +169,29 @@ export function MembershipPageClient({
           {/* Header spacing to align with left column */}
           <div className="h-20 hidden md:block" />
 
-          <MembershipSignupForm
-            membership={membership}
-            slug={slug}
-            organizationId={organizationId}
-            mode={mode}
-          />
+          {userHasActiveMembership && mode !== "confirmation" ? (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <p className="font-semibold text-amber-900">You already have an active membership</p>
+                <p className="text-sm text-amber-800 mt-1">
+                  Only one membership can be active at a time. To join a different membership, cancel your current one first.
+                </p>
+              </div>
+              <Link
+                href={`/${slug}/account`}
+                className="inline-flex items-center gap-1 text-sm text-primary hover:opacity-70 transition-opacity"
+              >
+                Manage your membership →
+              </Link>
+            </div>
+          ) : (
+            <MembershipSignupForm
+              membership={membership}
+              slug={slug}
+              organizationId={organizationId}
+              mode={mode}
+            />
+          )}
         </div>
       </div>
     </div>

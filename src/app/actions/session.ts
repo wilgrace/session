@@ -44,6 +44,7 @@ interface CreateSessionTemplateParams {
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
   member_price?: number | null
+  drop_in_enabled?: boolean
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
@@ -99,6 +100,7 @@ interface UpdateSessionTemplateParams {
   pricing_type?: 'free' | 'paid'
   drop_in_price?: number | null
   member_price?: number | null
+  drop_in_enabled?: boolean
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
@@ -191,6 +193,7 @@ interface DBSessionTemplate {
   // Pricing fields
   pricing_type: string;
   drop_in_price: number | null;
+  drop_in_enabled: boolean;
   booking_instructions: string | null;
   // Image field
   image_url: string | null;
@@ -264,9 +267,10 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         created_by: userData.id,
         organization_id: organizationId,
         // Pricing fields
-        pricing_type: params.pricing_type || 'free',
+        pricing_type: params.pricing_type || 'paid',
         drop_in_price: params.drop_in_price,
         member_price: params.member_price,
+        drop_in_enabled: params.drop_in_enabled ?? true,
         booking_instructions: params.booking_instructions,
         // Image field
         image_url: params.image_url,
@@ -624,6 +628,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         organization_id,
         pricing_type,
         drop_in_price,
+        drop_in_enabled,
         booking_instructions,
         image_url,
         event_color
@@ -754,6 +759,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         // Pricing fields
         pricing_type: template.pricing_type,
         drop_in_price: template.drop_in_price,
+        drop_in_enabled: template.drop_in_enabled ?? true,
         booking_instructions: template.booking_instructions,
         // Image field
         image_url: template.image_url,
@@ -825,6 +831,7 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         organization_id,
         pricing_type,
         drop_in_price,
+        drop_in_enabled,
         booking_instructions,
         image_url
       `)
@@ -1473,6 +1480,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         organization_id,
         pricing_type,
         drop_in_price,
+        drop_in_enabled,
         booking_instructions,
         image_url,
         event_color
@@ -1720,6 +1728,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         organization_id,
         pricing_type,
         drop_in_price,
+        drop_in_enabled,
         booking_instructions,
         image_url,
         event_color
@@ -2642,6 +2651,7 @@ export async function getPublicSessionById(
         organization_id,
         pricing_type,
         drop_in_price,
+        drop_in_enabled,
         member_price,
         booking_instructions,
         image_url
