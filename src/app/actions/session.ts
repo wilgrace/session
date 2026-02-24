@@ -933,7 +933,7 @@ export async function updateSessionTemplate(params: UpdateSessionTemplateParams)
     // Get the user's clerk_users record
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
-      .select("id")
+      .select("id, role, organization_id")
       .eq("clerk_user_id", userId)
       .single()
 
@@ -945,18 +945,23 @@ export async function updateSessionTemplate(params: UpdateSessionTemplateParams)
       return { success: false, error: "No clerk user found" }
     }
 
-    // Only allow update if the user is the creator
+    // Fetch template to verify org membership
     const { data: template, error: fetchError } = await supabase
       .from("session_templates")
-      .select("created_by")
+      .select("organization_id")
       .eq("id", params.id)
       .single()
 
     if (fetchError || !template) {
       return { success: false, error: "Template not found" }
     }
-    if (template.created_by !== userData.id) {
-      return { success: false, error: "Unauthorized: You can only update your own templates" }
+
+    const hasAccess =
+      userData.role === 'superadmin' ||
+      (userData.role === 'admin' && userData.organization_id === template.organization_id)
+
+    if (!hasAccess) {
+      return { success: false, error: "Unauthorized: Admin access required" }
     }
 
     // Remove id from update fields
@@ -1092,7 +1097,7 @@ export async function updateSessionWithSchedules(params: {
     // Get user's clerk_users record (once)
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
-      .select("id")
+      .select("id, role, organization_id")
       .eq("clerk_user_id", userId)
       .single()
 
@@ -1100,10 +1105,10 @@ export async function updateSessionWithSchedules(params: {
       return { success: false, error: "Failed to get user" }
     }
 
-    // Verify ownership (once)
+    // Fetch template to verify org membership
     const { data: template, error: templateError } = await supabase
       .from("session_templates")
-      .select("created_by")
+      .select("organization_id")
       .eq("id", params.templateId)
       .single()
 
@@ -1111,8 +1116,12 @@ export async function updateSessionWithSchedules(params: {
       return { success: false, error: "Template not found" }
     }
 
-    if (template.created_by !== userData.id) {
-      return { success: false, error: "Unauthorized: You can only update your own templates" }
+    const hasAccess =
+      userData.role === 'superadmin' ||
+      (userData.role === 'admin' && userData.organization_id === template.organization_id)
+
+    if (!hasAccess) {
+      return { success: false, error: "Unauthorized: Admin access required" }
     }
 
     // Update template + delete schedules + delete instances in parallel
