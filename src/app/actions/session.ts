@@ -2371,6 +2371,233 @@ export async function checkInBooking(bookingId: string) {
   }
 }
 
+export async function getDateChangeOptions(bookingId: string): Promise<{
+  success: boolean
+  data?: Array<{ id: string; start_time: string; end_time: string; available_spots: number }>
+  error?: string
+}> {
+  try {
+    const supabase = createSupabaseClient();
+
+    // Fetch booking with its current instance and template
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        number_of_spots,
+        session_instance_id,
+        session_instance:session_instances(
+          id,
+          template_id,
+          template:session_templates(id, capacity)
+        )
+      `)
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    const instance = booking.session_instance as any;
+    const templateId = instance?.template_id;
+    const capacity = instance?.template?.capacity;
+    const currentInstanceId = booking.session_instance_id;
+    const requiredSpots = booking.number_of_spots;
+
+    if (!templateId || !capacity) {
+      return { success: false, error: 'Session template not found' };
+    }
+
+    // Fetch future instances of same template, excluding current
+    const { data: instances, error: instancesError } = await supabase
+      .from('session_instances')
+      .select(`id, start_time, end_time, bookings(number_of_spots, status)`)
+      .eq('template_id', templateId)
+      .neq('id', currentInstanceId)
+      .gt('start_time', new Date().toISOString())
+      .order('start_time', { ascending: true });
+
+    if (instancesError) {
+      return { success: false, error: 'Failed to fetch available sessions' };
+    }
+
+    // Calculate available spots, filter to those with enough capacity
+    const available = (instances || []).map((inst: any) => {
+      const bookedSpots = (inst.bookings || [])
+        .filter((b: any) => b.status !== 'cancelled')
+        .reduce((sum: number, b: any) => sum + (b.number_of_spots || 0), 0);
+      return {
+        id: inst.id,
+        start_time: inst.start_time,
+        end_time: inst.end_time,
+        available_spots: capacity - bookedSpots,
+      };
+    }).filter((inst) => inst.available_spots >= requiredSpots);
+
+    return { success: true, data: available };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getAdminMoveOptions(
+  bookingId: string,
+  fromDate: string,
+  toDate: string
+): Promise<{
+  success: boolean
+  data?: Array<{
+    id: string
+    start_time: string
+    end_time: string
+    template_name: string
+    available_spots: number
+  }>
+  error?: string
+}> {
+  try {
+    const supabase = createSupabaseClient();
+
+    // Fetch booking to get org ID and current instance
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('id, number_of_spots, session_instance_id, organization_id')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    // Fetch all instances in date range for the org
+    const { data: instances, error: instancesError } = await supabase
+      .from('session_instances')
+      .select(`
+        id,
+        start_time,
+        end_time,
+        template:session_templates(name, capacity),
+        bookings(number_of_spots, status)
+      `)
+      .eq('organization_id', booking.organization_id)
+      .neq('id', booking.session_instance_id)
+      .gte('start_time', fromDate)
+      .lte('start_time', toDate)
+      .order('start_time', { ascending: true });
+
+    if (instancesError) {
+      return { success: false, error: 'Failed to fetch available sessions' };
+    }
+
+    const requiredSpots = booking.number_of_spots;
+    const available = (instances || []).map((inst: any) => {
+      const capacity = inst.template?.capacity || 0;
+      const bookedSpots = (inst.bookings || [])
+        .filter((b: any) => b.status !== 'cancelled')
+        .reduce((sum: number, b: any) => sum + (b.number_of_spots || 0), 0);
+      return {
+        id: inst.id,
+        start_time: inst.start_time,
+        end_time: inst.end_time,
+        template_name: inst.template?.name || 'Session',
+        available_spots: capacity - bookedSpots,
+      };
+    }).filter((inst) => inst.available_spots >= requiredSpots);
+
+    return { success: true, data: available };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function moveBookingToInstance(
+  bookingId: string,
+  newInstanceId: string,
+  adminOverride = false
+): Promise<{ success: boolean; newStartTime?: string; error?: string }> {
+  try {
+    const supabase = createSupabaseClient();
+
+    // Fetch current booking
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        number_of_spots,
+        session_instance_id,
+        status,
+        session_instance:session_instances(template_id)
+      `)
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    if (booking.status !== 'confirmed') {
+      return { success: false, error: 'Only confirmed bookings can be moved' };
+    }
+
+    // Fetch the target instance
+    const { data: newInstance, error: instanceError } = await supabase
+      .from('session_instances')
+      .select(`
+        id,
+        template_id,
+        start_time,
+        template:session_templates(capacity),
+        bookings(number_of_spots, status)
+      `)
+      .eq('id', newInstanceId)
+      .single();
+
+    if (instanceError || !newInstance) {
+      return { success: false, error: 'Target session not found' };
+    }
+
+    // Must be in the future
+    if (new Date(newInstance.start_time) <= new Date()) {
+      return { success: false, error: 'Cannot move booking to a session in the past' };
+    }
+
+    // Non-admins: must be same template
+    const currentInstance = booking.session_instance as any;
+    if (!adminOverride && newInstance.template_id !== currentInstance?.template_id) {
+      return { success: false, error: 'Cannot move booking to a different session type' };
+    }
+
+    // Validate capacity
+    const newInstanceTyped = newInstance as any;
+    const capacity = newInstanceTyped.template?.capacity || 0;
+    const bookedSpots = (newInstanceTyped.bookings || [])
+      .filter((b: any) => b.status !== 'cancelled')
+      .reduce((sum: number, b: any) => sum + (b.number_of_spots || 0), 0);
+
+    if (capacity - bookedSpots < booking.number_of_spots) {
+      return { success: false, error: 'Not enough spots available in the selected session' };
+    }
+
+    // Update the booking's session instance
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({
+        session_instance_id: newInstanceId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingId);
+
+    if (updateError) {
+      return { success: false, error: `Failed to move booking: ${updateError.message}` };
+    }
+
+    return { success: true, newStartTime: newInstance.start_time };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 // ============================================
 // PUBLIC SESSION DATA (no auth required)
 // Use these for public booking pages
