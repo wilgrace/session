@@ -100,13 +100,13 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
         <DropdownMenuContent align="end" className="w-56">
           {isAdmin && (
             <>
-              <DropdownMenuItem asChild className="md:hidden">
+              <DropdownMenuItem asChild>
                 <Link href={`/${slug}/admin`} className="cursor-pointer">
                   <Shield className="mr-2 h-4 w-4" />
                   Staff
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="md:hidden" />
+              <DropdownMenuSeparator />
             </>
           )}
 
