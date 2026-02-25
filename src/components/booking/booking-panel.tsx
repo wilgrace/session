@@ -27,6 +27,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface BookingPanelProps {
   session: SessionTemplate
@@ -54,6 +61,94 @@ interface BookingPanelProps {
 
 type DateOption = { id: string; start_time: string; end_time: string; available_spots: number }
 
+function ChangeDateBody({
+  dateOptionsLoading,
+  dateOptions,
+  selectedOption,
+  setSelectedOption,
+  session,
+  movingDate,
+  handleConfirmDateChange,
+}: {
+  dateOptionsLoading: boolean
+  dateOptions: DateOption[]
+  selectedOption: DateOption | null
+  setSelectedOption: (o: DateOption | null) => void
+  session: SessionTemplate
+  movingDate: boolean
+  handleConfirmDateChange: () => void
+}) {
+  return (
+    <div className="flex-1 overflow-auto py-2">
+      {dateOptionsLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!dateOptionsLoading && !selectedOption && (
+        <>
+          {dateOptions.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              No other dates available for this session.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {dateOptions.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedOption(option)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg border hover:bg-accent transition-colors text-left"
+                >
+                  <div>
+                    <div className="font-medium">
+                      {format(new Date(option.start_time), "EEEE, do MMMM")}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(option.start_time), "HH:mm")}
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground shrink-0">
+                    {option.available_spots} spot{option.available_spots !== 1 ? "s" : ""} left
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {!dateOptionsLoading && selectedOption && (
+        <div className="space-y-4 px-1">
+          <p className="text-sm text-muted-foreground">Move your booking to:</p>
+          <div className="rounded-lg border p-4 space-y-1">
+            <div className="font-semibold">
+              {format(new Date(selectedOption.start_time), "EEEE, do MMMM")}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {format(new Date(selectedOption.start_time), "HH:mm")}
+              {session.duration_minutes ? ` · ${session.duration_minutes} minutes` : ""}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Your payment details and number of spots will remain the same.
+          </p>
+          <Button className="w-full" onClick={handleConfirmDateChange} disabled={movingDate}>
+            {movingDate ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Moving...
+              </>
+            ) : (
+              "Confirm Date Change"
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function BookingPanel({
   session,
   startTime,
@@ -69,6 +164,7 @@ export function BookingPanel({
 }: BookingPanelProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const isMobile = useIsMobile()
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [sessionUrl, setSessionUrl] = useState<string | undefined>(undefined)
@@ -163,14 +259,7 @@ export function BookingPanel({
         description: `Moved to ${format(new Date(result.newStartTime), "EEEE, do MMMM 'at' HH:mm")}`,
       })
       setChangeDateOpen(false)
-      // Navigate to the updated booking URL with the new start time
-      if (sessionId) {
-        router.push(
-          `/${slug}/${sessionId}?edit=true&bookingId=${booking.id}&start=${encodeURIComponent(result.newStartTime)}`
-        )
-      } else {
-        router.push(`/${slug}`)
-      }
+      router.push(`/${slug}`)
     } else {
       toast({
         title: "Error",
@@ -289,104 +378,60 @@ export function BookingPanel({
         </div>
       )}
 
-      {/* Change Date Sheet */}
-      <Sheet open={changeDateOpen} onOpenChange={(open) => {
-        if (!movingDate) setChangeDateOpen(open)
-      }}>
-        <SheetContent side="bottom" className="max-h-[80vh] flex flex-col rounded-t-xl">
-          <SheetHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              {selectedOption && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setSelectedOption(null)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              )}
-              <SheetTitle>
-                {selectedOption ? "Confirm Date Change" : "Choose a New Date"}
-              </SheetTitle>
-            </div>
-          </SheetHeader>
-
-          <div className="flex-1 overflow-auto py-2">
-            {dateOptionsLoading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-
-            {!dateOptionsLoading && !selectedOption && (
-              <>
-                {dateOptions.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-8">
-                    No other dates available for this session.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {dateOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        onClick={() => setSelectedOption(option)}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg border hover:bg-accent transition-colors text-left"
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {format(new Date(option.start_time), "EEEE, do MMMM")}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(option.start_time), "HH:mm")}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground shrink-0">
-                          {option.available_spots} spot{option.available_spots !== 1 ? "s" : ""} left
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+      {/* Change Date — bottom sheet on mobile, dialog on desktop */}
+      {isMobile ? (
+        <Sheet open={changeDateOpen} onOpenChange={(open) => {
+          if (!movingDate) setChangeDateOpen(open)
+        }}>
+          <SheetContent side="bottom" className="max-h-[80vh] flex flex-col rounded-t-xl">
+            <SheetHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                {selectedOption && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedOption(null)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
                 )}
-              </>
-            )}
-
-            {!dateOptionsLoading && selectedOption && (
-              <div className="space-y-4 px-1">
-                <p className="text-sm text-muted-foreground">
-                  Move your booking to:
-                </p>
-                <div className="rounded-lg border p-4 space-y-1">
-                  <div className="font-semibold">
-                    {format(new Date(selectedOption.start_time), "EEEE, do MMMM")}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {format(new Date(selectedOption.start_time), "HH:mm")}
-                    {session.duration_minutes ? ` · ${session.duration_minutes} minutes` : ""}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Your payment details and number of spots will remain the same.
-                </p>
-                <Button
-                  className="w-full"
-                  onClick={handleConfirmDateChange}
-                  disabled={movingDate}
-                >
-                  {movingDate ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Moving...
-                    </>
-                  ) : (
-                    "Confirm Date Change"
-                  )}
-                </Button>
+                <SheetTitle>{selectedOption ? "Confirm Date Change" : "Choose a New Date"}</SheetTitle>
               </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </SheetHeader>
+            <ChangeDateBody
+              dateOptionsLoading={dateOptionsLoading}
+              dateOptions={dateOptions}
+              selectedOption={selectedOption}
+              setSelectedOption={setSelectedOption}
+              session={session}
+              movingDate={movingDate}
+              handleConfirmDateChange={handleConfirmDateChange}
+            />
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={changeDateOpen} onOpenChange={(open) => {
+          if (!movingDate) setChangeDateOpen(open)
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                {selectedOption && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedOption(null)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                )}
+                <DialogTitle>{selectedOption ? "Confirm Date Change" : "Choose a New Date"}</DialogTitle>
+              </div>
+            </DialogHeader>
+            <ChangeDateBody
+              dateOptionsLoading={dateOptionsLoading}
+              dateOptions={dateOptions}
+              selectedOption={selectedOption}
+              setSelectedOption={setSelectedOption}
+              session={session}
+              movingDate={movingDate}
+              handleConfirmDateChange={handleConfirmDateChange}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Guest account CTA */}
       {isGuest && (
