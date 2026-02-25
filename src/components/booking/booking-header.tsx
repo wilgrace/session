@@ -44,7 +44,7 @@ export function BookingHeader({
   return (
     <header className="relative bg-white md:bg-[#F6F2EF]">
       {/* Navigation row */}
-      <div className="lg:container md:mx-auto relative flex h-16 items-center justify-between px-4 md:px-4">
+      <div className="lg:container md:mx-auto relative flex h-16 items-center justify-between px-3 md:px-4">
         {/* Left - Home nav, social links, or back button */}
         <div className="flex items-center gap-4">
           {isCalendarPage ? (
@@ -57,7 +57,7 @@ export function BookingHeader({
                   size="default"
                   className="md:hidden rounded-md text-base py-2 px-4"
                 >
-                  <Link href={`/${slug}/members`}>Members</Link>
+                  <Link href={`/${slug}/members`}>Member</Link>
                 </Button>
               )}
               {homepageUrl && (

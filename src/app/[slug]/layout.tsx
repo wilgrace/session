@@ -136,14 +136,6 @@ export default async function SlugLayout({
 
   return (
     <>
-      {/* Brand background color — applied before JS loads to prevent white flash */}
-      {brandColor && (
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `html,body{background-color:${brandColor}}`,
-          }}
-        />
-      )}
       {/* iOS PWA splash screens — rendered as direct Server Component output so
           Next.js SSRs them into <head> reliably, outside the Client Component wrapper */}
       {uniqueSplashSizes.map(({ w, h, dpr }) => (
