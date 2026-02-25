@@ -1,43 +1,44 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useSlug } from '@/lib/slug-context'
-import { useAuthOverlay } from '@/hooks/use-auth-overlay'
+import type { PWAInstallElement } from '@khmyznikov/pwa-install'
 import '@khmyznikov/pwa-install'
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'pwa-install': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        'manifest-url'?: string
-        'manual-apple'?: string
-        'manual-chrome'?: string
-        'use-local-storage'?: string
-      }, HTMLElement>
-    }
-  }
+interface PWAInstallWrapperProps {
+  orgName?: string
+  slug?: string
 }
 
-export function PWAInstallWrapper() {
-  const ref = useRef<HTMLElement & { showDialog: () => void }>(null)
-  const slug = useSlug()
-  const { shouldShowPWAPrompt, setShouldShowPWAPrompt } = useAuthOverlay()
+export function PWAInstallWrapper({ orgName, slug: slugProp }: PWAInstallWrapperProps) {
+  const ref = useRef<PWAInstallElement>(null)
+  const slugFromContext = useSlug()
+  const slug = slugProp ?? slugFromContext
+  const searchParams = useSearchParams()
+  const isConfirmationPage = searchParams.get('confirmed') === 'true'
 
   useEffect(() => {
-    if (shouldShowPWAPrompt && ref.current) {
-      setShouldShowPWAPrompt(false)
+    if (!isConfirmationPage) return
+    const pending = sessionStorage.getItem('pwa-prompt-pending')
+    if (pending && ref.current) {
+      sessionStorage.removeItem('pwa-prompt-pending')
       const el = ref.current
       setTimeout(() => el.showDialog?.(), 1500)
     }
-  }, [shouldShowPWAPrompt, setShouldShowPWAPrompt])
+  }, [isConfirmationPage])
 
   return (
     <pwa-install
-      ref={ref as React.RefObject<HTMLElement>}
+      ref={ref}
       manifest-url={`/${slug}/manifest.webmanifest`}
-      manual-apple=""
-      manual-chrome=""
-      use-local-storage=""
+      name={orgName}
+      description="Web App"
+      icon={`/api/og/pwa-icon/${slug}?size=192`}
+      install-description="This website works like an app when added to your Home Screen"
+      manual-apple="true"
+      manual-chrome="true"
+      use-local-storage="true"
     />
   )
 }

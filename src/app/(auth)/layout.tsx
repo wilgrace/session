@@ -1,8 +1,12 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Community Sauna",
-  description: "Book your sessions",
+  title: "Sign in",
+  description: "Sign in to your account",
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function AuthLayout({

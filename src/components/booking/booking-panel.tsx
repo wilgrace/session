@@ -411,7 +411,7 @@ export function BookingPanel({
         <Dialog open={changeDateOpen} onOpenChange={(open) => {
           if (!movingDate) setChangeDateOpen(open)
         }}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md flex flex-col max-h-[80vh] overflow-hidden">
             <DialogHeader>
               <div className="flex items-center gap-2">
                 {selectedOption && (

@@ -435,12 +435,12 @@ export function PreCheckoutForm({
               <div className="text-right">
                 <div className="text-xl font-bold">{formatPrice(option.sessionPrice)}</div>
                 {!isFree && (
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-primary">
                     + {formatPrice(monthlyPrice)}/{option.membership.billingPeriod === 'yearly' ? 'yr' : 'mo'}
                   </div>
                 )}
                 {isFree && (
-                  <div className="text-sm text-green-600">Free membership</div>
+                  <div className="text-sm text-muted-foreground">Free membership</div>
                 )}
               </div>
             </button>

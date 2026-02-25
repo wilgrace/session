@@ -14,14 +14,12 @@ interface AuthOverlayStore {
   showWaiverOverlay: boolean
   pendingWaiver: Waiver | null
   organizationId?: string
-  shouldShowPWAPrompt: boolean
 
   openSignIn: (options?: { onComplete?: () => void; organizationId?: string }) => void
   openSignUp: (options?: { initialEmail?: string; onComplete?: () => void; organizationId?: string }) => void
   close: () => void
   setShowProfileOverlay: (show: boolean) => void
   setShowWaiverOverlay: (show: boolean, waiver?: Waiver | null) => void
-  setShouldShowPWAPrompt: (value: boolean) => void
   triggerOnComplete: () => void
 }
 
@@ -34,7 +32,6 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
   showWaiverOverlay: false,
   pendingWaiver: null,
   organizationId: undefined,
-  shouldShowPWAPrompt: false,
 
   openSignIn: (options) => set({
     isOpen: true,
@@ -72,13 +69,14 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
     pendingWaiver: waiver,
   }),
 
-  setShouldShowPWAPrompt: (value) => set({ shouldShowPWAPrompt: value }),
-
   triggerOnComplete: () => {
     const { onComplete, mode } = get()
     const wasSignUp = mode === 'sign-up'
     if (onComplete) {
       onComplete()
+    }
+    if (wasSignUp) {
+      sessionStorage.setItem('pwa-prompt-pending', '1')
     }
     set({
       isOpen: false,
@@ -89,7 +87,6 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
       showWaiverOverlay: false,
       pendingWaiver: null,
       organizationId: undefined,
-      ...(wasSignUp ? { shouldShowPWAPrompt: true } : {}),
     })
   }
 }))
