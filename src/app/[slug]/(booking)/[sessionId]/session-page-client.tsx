@@ -329,20 +329,20 @@ export function SessionPageClient({
       </div>
 
       {/* Right Column - White background */}
-      <div className="bg-white flex justify-center pb-[env(safe-area-inset-bottom)]">
-        <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px] pb-6">
-          {/* Session image — mobile only, confirmation/edit modes */}
-          {mode !== "new" && session.image_url && (
-            <div className="relative w-full h-48 rounded-lg overflow-hidden mb-6 md:hidden">
-              <Image
-                src={session.image_url}
-                alt={session.name}
-                fill
-                className="object-cover"
-                sizes="100vw"
-              />
-            </div>
-          )}
+      <div className="bg-white flex flex-col pb-[env(safe-area-inset-bottom)]">
+        {/* Session image — mobile only, edit/confirmation modes */}
+        {mode !== "new" && session.image_url && (
+          <div className="relative w-full h-52 overflow-hidden md:hidden shrink-0">
+            <Image
+              src={session.image_url}
+              alt={session.name}
+              fill
+              className="object-cover"
+              sizes="100vw"
+            />
+          </div>
+        )}
+        <div className="w-full max-w-[550px] mx-auto px-4 md:px-8 pt-4 md:pt-[60px] pb-6">
           {/* Desktop-only auth row */}
           <div className="hidden md:flex justify-end h-20">
             <SessionAuthControls isAdmin={isAdmin} slug={slug} />

@@ -1,127 +1,119 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   format,
-  addMonths,
-  subMonths,
-  startOfMonth,
-  endOfMonth,
+  addDays,
+  startOfWeek,
+  startOfDay,
   eachDayOfInterval,
   isSameDay,
   isSameMonth,
   isPast,
   isToday,
+  getDate,
 } from "date-fns"
 import { SessionTemplate } from "@/types/session"
-import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getEventColorValues } from "@/lib/event-colors"
 import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 
 interface MobileCalendarViewProps {
-  currentDate: Date
   selectedDate: Date
   onDateSelect: (date: Date) => void
   sessions: SessionTemplate[]
 }
 
-export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, sessions }: MobileCalendarViewProps) {
-  const router = useRouter()
-  const [viewDate, setViewDate] = useState(currentDate)
+export function MobileCalendarView({ selectedDate, onDateSelect, sessions }: MobileCalendarViewProps) {
+  const [weekOffset, setWeekOffset] = useState(0)
+  const touchStartX = useRef(0)
 
-  // Only update viewDate when selectedDate changes to a different month
-  // and when it's not already in the same month as viewDate
+  // Sync weekOffset when selectedDate moves outside the current 3-week window
   useEffect(() => {
-    if (!isSameMonth(selectedDate, viewDate)) {
-      setViewDate(selectedDate)
-    }
+    const todayMonday = startOfWeek(startOfDay(new Date()), { weekStartsOn: 1 })
+    setWeekOffset(prev => {
+      const windowStart = addDays(todayMonday, prev * 7)
+      const windowEnd = addDays(windowStart, 20)
+      const sel = startOfDay(selectedDate)
+      if (sel >= windowStart && sel <= windowEnd) return prev
+      const daysDiff = Math.floor((sel.getTime() - todayMonday.getTime()) / 86400000)
+      return Math.max(0, Math.floor(daysDiff / 7))
+    })
   }, [selectedDate])
 
-  const monthStart = startOfMonth(viewDate)
-  const monthEnd = endOfMonth(viewDate)
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const todayMonday = startOfWeek(startOfDay(new Date()), { weekStartsOn: 1 })
+  const windowStart = addDays(todayMonday, weekOffset * 7)
+  const windowEnd = addDays(windowStart, 20)
+  const days = eachDayOfInterval({ start: windowStart, end: windowEnd })
 
-  // Get the day names for the header
   const dayNames = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
-  // Get sessions for a specific day
   const getSessionsForDay = (day: Date) => {
     return sessions.filter((template) => {
-      // Check if any instance matches this day
       if (template.instances) {
-        return template.instances.some(instance =>
+        const hasInstance = template.instances.some(instance =>
           formatLocalDate(new Date(instance.start_time), SAUNA_TIMEZONE) === format(day, 'yyyy-MM-dd')
         )
+        if (hasInstance) return true
+        // No instance found for this day — fall through to recurring schedule check
       }
-      
-      // Check if any recurring schedule matches this day
       if (template.is_recurring && template.schedules) {
         const dayName = format(day, 'EEEE').toLowerCase()
-        return template.schedules.some(schedule => 
-          schedule.days.some(scheduleDay => 
+        return template.schedules.some(schedule =>
+          schedule.days.some(scheduleDay =>
             scheduleDay.toLowerCase() === dayName
           )
         )
       }
-      
       return false
     })
   }
 
-  // Generate color dots for sessions
-  const renderSessionDots = (day: Date) => {
-    const daySessions = getSessionsForDay(day)
-    if (daySessions.length === 0) return null
+  const handlePrevWeek = () => setWeekOffset(prev => Math.max(0, prev - 1))
+  const handleNextWeek = () => setWeekOffset(prev => prev + 1)
 
-    // Limit to 4 dots
-    const displaySessions = daySessions.slice(0, 4)
-
-    return (
-      <div className="flex justify-center mt-1 space-x-0.5">
-        {displaySessions.map((session, index) => (
-          <div key={index} className="h-1.5 w-1.5 rounded-full bg-primary" />
-        ))}
-      </div>
-    )
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
   }
 
-  const handleDayClick = (day: Date) => {
-    onDateSelect(day)
-  }
-
-  const handlePrevMonth = () => {
-    setViewDate(prev => subMonths(prev, 1))
-  }
-
-  const handleNextMonth = () => {
-    setViewDate(prev => addMonths(prev, 1))
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const delta = touchStartX.current - e.changedTouches[0].clientX
+    if (Math.abs(delta) > 50) {
+      delta > 0 ? handleNextWeek() : handlePrevWeek()
+    }
   }
 
   return (
     <div className="bg-white pb-4 border-b">
-      {/* Month title */}
+      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          onClick={handlePrevMonth}
+          onClick={handlePrevWeek}
+          disabled={weekOffset === 0}
           className="h-8 w-8"
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <h2 className="text-2xl font-bold">
-          <span>
-            {format(viewDate, "MMMM")} <span className="text-primary">{format(viewDate, "yyyy")}</span>
-          </span>
+          {isSameMonth(windowStart, windowEnd) ? (
+            <>
+              {format(windowStart, 'MMMM')} <span className="text-primary">{format(windowStart, 'yyyy')}</span>
+            </>
+          ) : (
+            <>
+              {format(windowStart, 'MMM')} – {format(windowEnd, 'MMM')} <span className="text-primary">{format(windowEnd, 'yyyy')}</span>
+            </>
+          )}
         </h2>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          onClick={handleNextMonth}
+          onClick={handleNextWeek}
           className="h-8 w-8"
         >
           <ChevronRight className="h-5 w-5" />
@@ -131,30 +123,27 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
       {/* Day names header */}
       <div className="grid grid-cols-7 text-center text-xs font-medium py-2">
         {dayNames.map((day, i) => (
-          <div key={i} className="py-1">
-            {day}
-          </div>
+          <div key={i} className="py-1">{day}</div>
         ))}
       </div>
 
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 text-center">
-        {daysInMonth.map((day, i) => {
-          // Adjust the index to start from Monday (1) instead of Sunday (0)
-          const dayOfWeek = day.getDay() === 0 ? 6 : day.getDay() - 1
-
-          // Static array required so Tailwind includes these classes in the CSS bundle
-          const colStartClasses = ['col-start-1', 'col-start-2', 'col-start-3', 'col-start-4', 'col-start-5', 'col-start-6', 'col-start-7']
-          const startSpacing = i === 0 ? colStartClasses[dayOfWeek] : ""
-
+      {/* Calendar grid — always 21 cells (3 rows × 7), always starts on Monday */}
+      <div
+        className="grid grid-cols-7 text-center"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {days.map((day, i) => {
           const isSelected = isSameDay(day, selectedDate)
-          const isCurrentMonth = isSameMonth(day, viewDate)
           const isPastDay = isPast(day) && !isToday(day)
+          // Show month label on the 1st, but not when it's the very first cell
+          // (already clear from the header)
+          const isMonthStart = getDate(day) === 1 && i > 0
           const daySessions = getSessionsForDay(day)
           const displaySessions = daySessions.slice(0, 4)
 
           return (
-            <div key={i} className={`p-2 ${startSpacing} ${!isCurrentMonth ? "text-gray-400" : ""}`}>
+            <div key={i} className="p-2">
               <button
                 type="button"
                 className={`aspect-square w-full flex flex-col items-center justify-center rounded-full ${
@@ -163,12 +152,14 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
                   "hover:bg-gray-100"
                 }`}
                 style={isSelected ? { backgroundColor: 'hsl(var(--primary))' } : undefined}
-                onClick={() => !isPastDay && handleDayClick(day)}
+                onClick={() => !isPastDay && onDateSelect(day)}
                 disabled={isPastDay}
               >
-                <span className={`text-lg ${isSelected ? "" : "mb-1"}`}>{format(day, "d")}</span>
-                {displaySessions.length > 0 && !isSelected && (
-                  <div className="flex justify-center space-x-0.5">
+                <span className="text-lg leading-none">{format(day, "d")}</span>
+                {isMonthStart ? (
+                  <span className="text-[9px] leading-none mt-0.5 opacity-70">{format(day, 'MMM')}</span>
+                ) : displaySessions.length > 0 && !isSelected && !isPastDay ? (
+                  <div className="flex justify-center space-x-0.5 mt-0.5">
                     {displaySessions.map((session, index) => (
                       <div
                         key={index}
@@ -177,7 +168,7 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
                       />
                     ))}
                   </div>
-                )}
+                ) : null}
               </button>
             </div>
           )
@@ -185,4 +176,4 @@ export function MobileCalendarView({ currentDate, selectedDate, onDateSelect, se
       </div>
     </div>
   )
-} 
+}

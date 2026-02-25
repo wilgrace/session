@@ -319,7 +319,7 @@ export function BookingPanel({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="flex-1 gap-2"
+                className="w-full gap-2"
                 onClick={handleOpenChangeDateSheet}
                 disabled={loading}
               >
@@ -327,27 +327,7 @@ export function BookingPanel({
                 Change Date
               </Button>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="flex-1 gap-2"
-              onClick={handleCopyLink}
-            >
-              {copied ? (
-                <>
-                  <Check className="h-4 w-4" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copy Link
-                </>
-              )}
-            </Button>
-          </div>
-          {!isConfirmation && (
+                      {!isConfirmation && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -375,6 +355,28 @@ export function BookingPanel({
               </AlertDialogContent>
             </AlertDialog>
           )}
+          </div>
+          <div className="flex gap-2">
+          <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2"
+              onClick={handleCopyLink}
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copy Link
+                </>
+              )}
+            </Button>
+            </div>
         </div>
       )}
 
