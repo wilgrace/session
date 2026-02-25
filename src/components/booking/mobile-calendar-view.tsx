@@ -18,14 +18,18 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getEventColorValues } from "@/lib/event-colors"
 import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
+import { SessionFilter } from "./session-filter"
 
 interface MobileCalendarViewProps {
   selectedDate: Date
   onDateSelect: (date: Date) => void
   sessions: SessionTemplate[]
+  allSessions: SessionTemplate[]
+  selectedTemplateIds: string[]
+  onFilterChange: (ids: string[]) => void
 }
 
-export function MobileCalendarView({ selectedDate, onDateSelect, sessions }: MobileCalendarViewProps) {
+export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSessions, selectedTemplateIds, onFilterChange }: MobileCalendarViewProps) {
   const [weekOffset, setWeekOffset] = useState(0)
   const touchStartX = useRef(0)
 
@@ -87,37 +91,38 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions }: Mob
   return (
     <div className="bg-white pb-4 border-b">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={handlePrevWeek}
-          disabled={weekOffset === 0}
-          className="h-8 w-8"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
-        <h2 className="text-2xl font-bold">
-          {isSameMonth(windowStart, windowEnd) ? (
-            <>
-              {format(windowStart, 'MMMM')} <span className="text-primary">{format(windowStart, 'yyyy')}</span>
-            </>
-          ) : (
-            <>
-              {format(windowStart, 'MMM')} – {format(windowEnd, 'MMM')} <span className="text-primary">{format(windowEnd, 'yyyy')}</span>
-            </>
-          )}
+      <div className="flex items-center gap-2 p-4 border-b">
+        <h2 className="flex-1 text-2xl font-bold">
+          {isSameMonth(windowStart, windowEnd)
+            ? format(windowStart, 'MMMM')
+            : `${format(windowStart, 'MMM')} – ${format(windowEnd, 'MMM')}`}
         </h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={handleNextWeek}
-          className="h-8 w-8"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </Button>
+        <SessionFilter
+          sessions={allSessions}
+          selectedIds={selectedTemplateIds}
+          onSelectionChange={onFilterChange}
+        />
+        <div className="flex items-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handlePrevWeek}
+            disabled={weekOffset === 0}
+            className="h-9 w-9 rounded-r-none border-r-0"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleNextWeek}
+            className="h-9 w-9 rounded-l-none"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Day names header */}

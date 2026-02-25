@@ -16,6 +16,7 @@ import { MobileSessionList } from "./mobile-session-list"
 import { useUser } from "@clerk/nextjs"
 import { getInternalUserId } from "@/app/actions/session"
 import { getEventColorValues } from "@/lib/event-colors"
+import { SessionFilter } from "./session-filter"
 
 // Add custom styles to hide rbc-event-label
 const calendarStyles = `
@@ -118,6 +119,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [internalUserId, setInternalUserId] = useState<string | null>(null)
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   // isAdmin is now passed as a prop from the server component
 
   useEffect(() => {
@@ -136,9 +138,15 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
     setCurrentView(isMobile ? 'day' : 'week')
   }, [isMobile])
 
+  const filteredSessions = useMemo(() =>
+    selectedTemplateIds.length === 0
+      ? sessions
+      : sessions.filter(s => selectedTemplateIds.includes(s.id)),
+  [sessions, selectedTemplateIds])
+
   // Convert sessions to events format for react-big-calendar
   // Memoize to prevent expensive recalculation on every render
-  const events = useMemo(() => sessions.flatMap((template): CalendarEvent[] => {
+  const events = useMemo(() => filteredSessions.flatMap((template): CalendarEvent[] => {
     if (template.instances && template.instances.length > 0) {
       return template.instances.map(instance => {
         const startTime = new Date(instance.start_time);
@@ -225,7 +233,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
     }
 
     return []
-  }), [sessions, user?.id])
+  }), [filteredSessions, user?.id])
 
   // Calculate time range based on sessions
   const calculateTimeRange = () => {
@@ -341,12 +349,15 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
           <MobileCalendarView
             selectedDate={selectedDate}
             onDateSelect={handleDateSelect}
-            sessions={sessions}
+            sessions={filteredSessions}
+            allSessions={sessions}
+            selectedTemplateIds={selectedTemplateIds}
+            onFilterChange={setSelectedTemplateIds}
           />
         </div>
         <div>
           <MobileSessionList
-            sessions={sessions}
+            sessions={filteredSessions}
             selectedDate={selectedDate}
             slug={slug}
             isAdmin={isAdmin}
@@ -366,6 +377,11 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
             {format(currentDate, 'MMMM yyyy')}
           </div>
           <div className="flex items-center space-x-2">
+            <SessionFilter
+              sessions={sessions}
+              selectedIds={selectedTemplateIds}
+              onSelectionChange={setSelectedTemplateIds}
+            />
             <Button
               variant="outline"
               size="sm"
