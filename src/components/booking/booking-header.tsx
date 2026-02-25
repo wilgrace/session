@@ -49,14 +49,25 @@ export function BookingHeader({
         <div className="flex items-center gap-4">
           {isCalendarPage ? (
             <>
+              {/* Mobile-only Members button on left (replaces social icons) */}
+              {showMembersButton && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="default"
+                  className="md:hidden rounded-md text-base py-2 px-4"
+                >
+                  <Link href={`/${slug}/members`}>Members</Link>
+                </Button>
+              )}
               {homepageUrl && (
-                <a href={homepageUrl} target="_blank" rel="noopener noreferrer" className="font-medium py-2 flex gap-1 hover:opacity-70 transition-opacity">
+                <a href={homepageUrl} target="_blank" rel="noopener noreferrer" className={cn("font-medium py-2 flex gap-1 hover:opacity-70 transition-opacity", showMembersButton && "hidden md:flex")}>
                   <HouseIcon className="h-7 w-7 md:h-5 md:w-5 md:opacity-50" />
                   <span className="hidden md:block">Home</span>
                 </a>
               )}
               {instagramUrl && (
-                <a href={instagramUrl} target="_blank" rel="noopener noreferrer" className="font-medium py-2 flex gap-1 hover:opacity-70 transition-opacity">
+                <a href={instagramUrl} target="_blank" rel="noopener noreferrer" className={cn("font-medium py-2 flex gap-1 hover:opacity-70 transition-opacity", showMembersButton && "hidden md:flex")}>
                   <svg className="h-7 w-7 md:h-5 md:opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
                     <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
@@ -66,7 +77,7 @@ export function BookingHeader({
                 </a>
               )}
               {facebookUrl && (
-                <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="font-medium py-2 flex gap-1 over:opacity-70 transition-opacity">
+                <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className={cn("font-medium py-2 flex gap-1 over:opacity-70 transition-opacity", showMembersButton && "hidden md:flex")}>
                   <svg className="h-7 w-7 md:h-5 md:opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
                   </svg>
@@ -75,7 +86,7 @@ export function BookingHeader({
               )}
               {/* Left-aligned org name when no logo and no links */}
               {showOrgName && !hasLinks && (
-                <span className="font-semibold text-lg">{organizationName}</span>
+                <span className={cn("font-semibold text-lg", showMembersButton && "hidden md:block")}>{organizationName}</span>
               )}
             </>
           ) : (
@@ -101,7 +112,7 @@ export function BookingHeader({
               asChild
               variant="outline"
               size="default"
-              className="rounded-md text-base py-2 px-4"
+              className="hidden md:inline-flex rounded-md text-base py-2 px-4"
             >
               <Link href={`/${slug}/members`}>Members</Link>
             </Button>

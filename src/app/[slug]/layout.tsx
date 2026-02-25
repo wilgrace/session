@@ -4,6 +4,7 @@ import { getTenantFromHeaders, getOrganizationBySlug } from "@/lib/tenant-utils"
 import { SlugProvider } from "@/lib/slug-context"
 import { hexToHSL, getForegroundHSL } from "@/lib/color-utils"
 import { getBaseUrl } from "@/lib/site-config"
+import { SplashWarmer } from "@/components/splash-warmer"
 
 // iOS device sizes for PWA splash screens (logical pixels × DPR = physical image pixels)
 // Media queries use logical points; image dimensions use physical pixels (w×dpr, h×dpr)
@@ -74,6 +75,9 @@ export async function generateMetadata({
       statusBarStyle: "default",
       title: org.name,
     },
+    ...(org.brandColor && {
+      other: { "theme-color": org.brandColor },
+    }),
     openGraph: {
       title,
       description,
@@ -132,6 +136,14 @@ export default async function SlugLayout({
 
   return (
     <>
+      {/* Brand background color — applied before JS loads to prevent white flash */}
+      {brandColor && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html,body{background-color:${brandColor}}`,
+          }}
+        />
+      )}
       {/* iOS PWA splash screens — rendered as direct Server Component output so
           Next.js SSRs them into <head> reliably, outside the Client Component wrapper */}
       {uniqueSplashSizes.map(({ w, h, dpr }) => (
@@ -144,6 +156,7 @@ export default async function SlugLayout({
       ))}
       <SlugProvider slug={slug}>
         <div style={brandStyle}>
+          <SplashWarmer />
           {children}
         </div>
       </SlugProvider>
