@@ -488,52 +488,51 @@ export function PreCheckoutForm({
           )}
         </div>
 
-        {/* Email Input */}
-        <div className="space-y-2">
-          <Label htmlFor="email" className="text-base font-semibold">Email</Label>
-          <div className="relative">
-            <Input
-              id="email"
-              type="email"
-              value={isLoggedIn ? userEmail || "" : email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                setEmailValidation(null)
-              }}
-              onBlur={handleEmailBlur}
-              disabled={isLoggedIn}
-              placeholder="your@email.com"
-              className={cn(
-                "h-12 rounded-xl bg-muted/50",
-                emailValidation?.requiresSignIn && "border-amber-500 focus-visible:ring-amber-500"
+        {/* Email Input - only shown to guests */}
+        {!isLoggedIn && (
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-base font-semibold">Email</Label>
+            <div className="relative">
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  setEmailValidation(null)
+                }}
+                onBlur={handleEmailBlur}
+                placeholder="your@email.com"
+                className={cn(
+                  "h-12 rounded-xl bg-muted/50",
+                  emailValidation?.requiresSignIn && "border-amber-500 focus-visible:ring-amber-500"
+                )}
+              />
+              {isValidatingEmail && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
               )}
-            />
-            {isValidatingEmail && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-            )}
-          </div>
-          {!isLoggedIn && (
+            </div>
             <p className="text-sm text-muted-foreground">
               We&apos;ll check if you have an existing account
             </p>
-          )}
-          {emailValidation?.requiresSignIn && (
-            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>An account exists with this email.</span>
-              <button
-                type="button"
-                onClick={() => openSignIn()}
-                className="font-medium underline whitespace-nowrap hover:opacity-80 text-primary"
-              >
-                Sign in
-              </button>
-            </div>
-          )}
-          {emailValidation?.error && !emailValidation.requiresSignIn && (
-            <p className="text-sm text-destructive">{emailValidation.error}</p>
-          )}
-        </div>
+            {emailValidation?.requiresSignIn && (
+              <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>An account exists with this email.</span>
+                <button
+                  type="button"
+                  onClick={() => openSignIn()}
+                  className="font-medium underline whitespace-nowrap hover:opacity-80 text-primary"
+                >
+                  Sign in
+                </button>
+              </div>
+            )}
+            {emailValidation?.error && !emailValidation.requiresSignIn && (
+              <p className="text-sm text-destructive">{emailValidation.error}</p>
+            )}
+          </div>
+        )}
 
         {/* Coupon Code */}
         <div className="space-y-2">

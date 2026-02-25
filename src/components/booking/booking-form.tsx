@@ -125,7 +125,8 @@ export function BookingForm({
   const [pendingFreeSubmit, setPendingFreeSubmit] = useState(false)
 
   // Determine if this is a paid session (not in edit mode)
-  const isPaidSession = session.pricing_type === "paid" && session.drop_in_price && !isEditMode
+  // Note: drop_in_price being null/0 does NOT mean the session is free — it may be membership-only
+  const isPaidSession = session.pricing_type === "paid" && !isEditMode
 
   // NOTE: All hooks must be called before any conditional returns
   // The BookingPanel return is moved below this useEffect to comply with React's rules of hooks
@@ -581,28 +582,30 @@ export function BookingForm({
     <Card className="border-0 shadow-none p-0">
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={user ? user.fullName || "" : name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={!!user}
-              placeholder={user ? "" : "Enter your name"}
-            />
-          </div>
+          {!user && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your name"
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={user ? user.primaryEmailAddress?.emailAddress || "" : email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={!!user}
-              placeholder={user ? "" : "Enter your email"}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                />
+              </div>
+            </>
+          )}
 
           {/* Number of spots for free sessions */}
           <div className="space-y-2">

@@ -4,6 +4,7 @@ import { SessionPageClient } from "./session-page-client"
 import { notFound } from "next/navigation"
 import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
 import { getPublicSessionById, getBookingDetails } from "@/app/actions/session"
+import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
 
 interface SessionPageProps {
   params: Promise<{
@@ -47,6 +48,20 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
   ])
 
   const initialSession = sessionResult.success && sessionResult.data ? sessionResult.data : null
+
+  // Prefetch membership pricing server-side for paid sessions to avoid client-side delay
+  let initialPricingData: BookingMembershipPricingData | null = null
+  if (initialSession && initialSession.pricing_type === "paid") {
+    const pricingResult = await getBookingMembershipPricingData({
+      organizationId: tenant.organizationId,
+      dropInPrice: initialSession.drop_in_price ?? 0,
+      sessionTemplateId: resolvedParams.sessionId,
+    })
+    if (pricingResult.success && pricingResult.data) {
+      initialPricingData = pricingResult.data
+    }
+  }
+
   const initialBookingDetails =
     bookingResult && bookingResult.success
       ? (bookingResult as { success: true; data: any }).data.booking
@@ -79,6 +94,7 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
         initialSession={initialSession}
         initialBookingDetails={initialBookingDetails}
         initialStartTimeStr={initialStartTimeStr}
+        initialPricingData={initialPricingData}
       />
     </Suspense>
   )

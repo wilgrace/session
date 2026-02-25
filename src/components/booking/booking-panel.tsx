@@ -258,32 +258,34 @@ export function BookingPanel({
               )}
             </Button>
           </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full gap-2"
-                disabled={loading}
-              >
-                <X className="h-4 w-4" />
-                Cancel Booking
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. Your booking will be cancelled and you will receive a full refund if a payment was made.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>No, keep booking</AlertDialogCancel>
-                <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {!isConfirmation && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  disabled={loading}
+                >
+                  <X className="h-4 w-4" />
+                  Cancel Booking
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. Your booking will be cancelled and you will receive a full refund if a payment was made.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>No, keep booking</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       )}
 

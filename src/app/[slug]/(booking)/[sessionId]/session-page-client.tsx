@@ -30,6 +30,7 @@ interface SessionPageClientProps {
   initialSession?: SessionTemplate | null
   initialBookingDetails?: any
   initialStartTimeStr?: string
+  initialPricingData?: BookingMembershipPricingData | null
 }
 
 // Calculate spots remaining for a session
@@ -51,6 +52,7 @@ export function SessionPageClient({
   initialSession,
   initialBookingDetails,
   initialStartTimeStr,
+  initialPricingData,
 }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
@@ -72,7 +74,7 @@ export function SessionPageClient({
   })
   const [bookingDetails, setBookingDetails] = useState<any>(initialBookingDetails ?? null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
-  const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(null)
+  const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(initialPricingData ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
   const handleBack = () => {
     router.push(`/${slug}`)
@@ -80,8 +82,8 @@ export function SessionPageClient({
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
   // Pre-set to true when we have server-provided data
   const initialFetchDoneRef = useRef(!!initialSession)
-  // Ref to prevent fetching pricing more than once
-  const pricingFetchedRef = useRef(false)
+  // Ref to prevent fetching pricing more than once (pre-set when server provided pricing data)
+  const pricingFetchedRef = useRef(!!initialPricingData)
   // Track the user ID that was used for the last booking check
   const lastBookingCheckUserIdRef = useRef<string | null>(null)
 
