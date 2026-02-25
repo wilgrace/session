@@ -1,11 +1,15 @@
 import { getSessions } from "@/app/actions/session"
 import { CalendarPage } from "@/components/admin/calendar-page"
+import { getTenantFromHeaders } from "@/lib/tenant-utils"
 
 // Force dynamic rendering since we use auth() which requires headers
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-  const { data: sessions, error } = await getSessions()
+  const [{ data: sessions, error }, org] = await Promise.all([
+    getSessions(),
+    getTenantFromHeaders(),
+  ])
 
   if (error) {
     return (
@@ -18,5 +22,10 @@ export default async function Page() {
     )
   }
 
-  return <CalendarPage initialSessions={sessions || []} />
+  return (
+    <CalendarPage
+      initialSessions={sessions || []}
+      defaultSessionImageUrl={org?.defaultSessionImageUrl ?? null}
+    />
+  )
 }

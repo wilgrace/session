@@ -226,6 +226,57 @@ export async function updateOrganizationSettings(params: {
 }
 
 /**
+ * Apply the org's default session image to all session templates that have no image set.
+ * Called after saving org settings with a default session image.
+ */
+export async function applyDefaultImageToSessions(organizationId: string): Promise<{
+  success: boolean;
+  updated?: number;
+  error?: string;
+}> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return { success: false, error: 'Not authenticated' };
+
+    const role = await getUserRoleForOrg(userId, organizationId);
+    if (role !== 'admin' && role !== 'superadmin') {
+      return { success: false, error: 'Not authorized' };
+    }
+
+    const supabase = createSupabaseServerClient();
+
+    // Get the org's default session image
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('default_session_image_url')
+      .eq('id', organizationId)
+      .single();
+
+    if (orgError || !org?.default_session_image_url) {
+      return { success: true, updated: 0 };
+    }
+
+    // Update all session templates with no image
+    const { data, error } = await supabase
+      .from('session_templates')
+      .update({ image_url: org.default_session_image_url })
+      .eq('organization_id', organizationId)
+      .is('image_url', null)
+      .select('id');
+
+    if (error) {
+      console.error('[applyDefaultImageToSessions] Error:', error);
+      return { success: false, error: 'Failed to update sessions' };
+    }
+
+    return { success: true, updated: data?.length ?? 0 };
+  } catch (error) {
+    console.error('[applyDefaultImageToSessions] Error:', error);
+    return { success: false, error: 'Failed to update sessions' };
+  }
+}
+
+/**
  * Check if a slug is available (not already in use).
  * Optionally exclude a specific organization ID (for editing).
  */

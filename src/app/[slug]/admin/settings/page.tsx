@@ -12,6 +12,7 @@ import {
   updateOrganizationSettings,
   checkSlugAvailability,
   toggleCommunitySurvey,
+  applyDefaultImageToSessions,
   OrganizationSettings,
 } from "@/app/actions/organization"
 import { getWaivers } from "@/app/actions/waivers"
@@ -206,6 +207,11 @@ function SettingsPageContent() {
     })
 
     if (result.success) {
+      // Backfill sessions that have no image with the new default
+      if (defaultSessionImageUrl) {
+        await applyDefaultImageToSessions(settings.id)
+      }
+
       toast.success("Settings saved successfully")
 
       // If slug changed, redirect to new URL

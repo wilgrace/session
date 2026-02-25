@@ -7,9 +7,10 @@ import { SessionTemplate } from "@/types/session"
 
 interface CalendarPageProps {
   initialSessions: SessionTemplate[]
+  defaultSessionImageUrl?: string | null
 }
 
-export function CalendarPage({ initialSessions }: CalendarPageProps) {
+export function CalendarPage({ initialSessions, defaultSessionImageUrl }: CalendarPageProps) {
   const [sessions, setSessions] = useState(initialSessions)
   const [showSessionForm, setShowSessionForm] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionTemplate | null>(null)
@@ -55,6 +56,7 @@ export function CalendarPage({ initialSessions }: CalendarPageProps) {
         }}
         template={selectedSession}
         initialTimeSlot={selectedTimeSlot}
+        defaultSessionImageUrl={defaultSessionImageUrl}
         onSuccess={() => {
           // Refresh the page to get new data
           window.location.reload()

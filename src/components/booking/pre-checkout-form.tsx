@@ -338,7 +338,7 @@ export function PreCheckoutForm({
           >
             <div className="flex items-start gap-3">
               <div
-                className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-primary text-primary-foreground"
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary text-primary-foreground"
               >
                 <Check className="h-3 w-3" />
               </div>
@@ -372,7 +372,7 @@ export function PreCheckoutForm({
             <div className="flex items-start gap-3">
               <div
                 className={cn(
-                  "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
+                  "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
                   pricingType === "drop_in"
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-muted-foreground/30"
@@ -417,7 +417,7 @@ export function PreCheckoutForm({
               <div className="flex items-start gap-3">
                 <div
                   className={cn(
-                    "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
                     isSelected
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-muted-foreground/30"

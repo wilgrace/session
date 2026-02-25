@@ -62,6 +62,7 @@ interface SessionFormProps {
   onClose: () => void
   template: SessionTemplate | null
   initialTimeSlot?: { start: Date; end: Date } | null
+  defaultSessionImageUrl?: string | null
   onSuccess: () => void
 }
 
@@ -93,7 +94,7 @@ function getDefaultMembershipPrice(membership: Membership, dropInPricePence: num
   return ''
 }
 
-export function SessionForm({ open, onClose, template, initialTimeSlot, onSuccess }: SessionFormProps) {
+export function SessionForm({ open, onClose, template, initialTimeSlot, defaultSessionImageUrl, onSuccess }: SessionFormProps) {
   const { toast } = useToast()
   const { user } = useUser()
   const { getToken } = useAuth()
@@ -163,6 +164,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
         days: [getDayOfWeek(today)],
         durationMinutes: null
       }])
+      // Pre-populate image with org default for new sessions
+      setImageUrl(defaultSessionImageUrl || '')
     }
   }, [template])
 
@@ -208,8 +211,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, onSucces
       setMemberPrice(template.member_price ? (template.member_price / 100).toFixed(2) : '')
       setBookingInstructions(template.booking_instructions || '')
 
-      // Load image field
-      setImageUrl(template.image_url || '')
+      // Load image field (fall back to org default if session has no image)
+      setImageUrl(template.image_url || defaultSessionImageUrl || '')
 
       // Load event color
       setEventColor(normalizeEventColor(template.event_color))
