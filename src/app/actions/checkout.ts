@@ -609,7 +609,7 @@ export async function createEmbeddedCheckoutSession(
       return { success: false, error: "Session not found" }
     }
 
-    if (template.pricing_type !== "paid" || !template.drop_in_price) {
+    if (template.pricing_type !== "paid") {
       return { success: false, error: "This session does not require payment" }
     }
 
@@ -695,13 +695,43 @@ export async function createEmbeddedCheckoutSession(
 
     // Calculate member price using pricing utilities
     const { calculateMemberPrice, calculateBookingPrice } = await import("@/lib/pricing-utils")
-    const memberPrice = calculateMemberPrice({
-      dropInPrice: template.drop_in_price,
+    let memberPrice = calculateMemberPrice({
+      dropInPrice: template.drop_in_price ?? 0,
       templateMemberPrice: template.member_price,
       orgMemberPriceType: org?.member_price_type as "discount" | "fixed" | null,
       orgMemberDiscountPercent: org?.member_discount_percent,
       orgMemberFixedPrice: org?.member_fixed_price,
     })
+
+    // For existing members, use the new per-membership session price system.
+    // This overrides the legacy org-level member price so that membership-specific
+    // pricing (including £0 session prices) is respected correctly.
+    if (params.membershipId && !isNewMembership && isActiveMember) {
+      const { data: membershipData } = await supabase
+        .from("memberships")
+        .select("member_price_type, member_discount_percent, member_fixed_price")
+        .eq("id", params.membershipId)
+        .eq("organization_id", template.organization_id)
+        .single()
+
+      const { data: sessionOverride } = await supabase
+        .from("session_membership_prices")
+        .select("override_price")
+        .eq("session_template_id", params.sessionTemplateId)
+        .eq("membership_id", params.membershipId)
+        .maybeSingle()
+
+      if (membershipData) {
+        const overridePrice = sessionOverride?.override_price ?? null
+        if (overridePrice !== null) {
+          memberPrice = overridePrice
+        } else if (membershipData.member_price_type === "fixed" && membershipData.member_fixed_price !== null) {
+          memberPrice = membershipData.member_fixed_price
+        } else if (membershipData.member_price_type === "discount" && membershipData.member_discount_percent !== null) {
+          memberPrice = Math.round((template.drop_in_price ?? 0) * (1 - membershipData.member_discount_percent / 100))
+        }
+      }
+    }
 
     // Calculate pricing breakdown
     // Use selected membership price if purchasing new membership, otherwise null
@@ -710,7 +740,7 @@ export async function createEmbeddedCheckoutSession(
         numberOfSpots: params.numberOfSpots,
         isMember: isActiveMember,
         isNewMembership: params.isNewMembership || false,
-        dropInPrice: template.drop_in_price,
+        dropInPrice: template.drop_in_price ?? 0,
         memberPrice,
       },
       selectedMembership?.price ?? null

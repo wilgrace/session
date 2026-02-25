@@ -20,6 +20,7 @@ interface BookingHeaderProps {
   instagramUrl?: string | null
   facebookUrl?: string | null
   showMembersButton?: boolean
+  membersHref?: string
 }
 
 export function BookingHeader({
@@ -32,6 +33,7 @@ export function BookingHeader({
   instagramUrl,
   facebookUrl,
   showMembersButton = false,
+  membersHref,
 }: BookingHeaderProps) {
   const pathname = usePathname()
   const { openSignIn } = useAuthOverlay()
@@ -57,7 +59,7 @@ export function BookingHeader({
                   size="default"
                   className="md:hidden rounded-md text-base py-2 px-4"
                 >
-                  <Link href={`/${slug}/members`}>Member</Link>
+                  <Link href={membersHref ?? `/${slug}/members`}>Member</Link>
                 </Button>
               )}
               {homepageUrl && (
@@ -114,7 +116,7 @@ export function BookingHeader({
               size="default"
               className="hidden md:inline-flex rounded-md text-base py-2 px-4"
             >
-              <Link href={`/${slug}/members`}>Members</Link>
+              <Link href={membersHref ?? `/${slug}/members`}>Members</Link>
             </Button>
           )}
           <SignedIn>

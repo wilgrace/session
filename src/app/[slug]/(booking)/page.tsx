@@ -64,9 +64,16 @@ export default async function BookingPage({ params }: BookingPageProps) {
     getPublicMembershipsForListing(tenant.organizationId),
   ])
 
+  const memberships = membershipsResult.data?.memberships ?? []
+
   const showMembersButton =
-    (membershipsResult.data?.memberships?.length ?? 0) > 0 &&
+    memberships.length > 0 &&
     !membershipsResult.data?.userHasActiveMembership
+
+  const membersHref =
+    memberships.length === 1
+      ? `/${slug}/membership/${memberships[0].id}`
+      : `/${slug}/members`
 
   const hasHeaderImage = !!organization?.headerImageUrl
 
@@ -101,6 +108,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
           instagramUrl={organization?.instagramUrl}
           facebookUrl={organization?.facebookUrl}
           showMembersButton={showMembersButton}
+          membersHref={membersHref}
         />
 
         <main
