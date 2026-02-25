@@ -51,6 +51,9 @@ interface PreCheckoutFormProps {
   defaultToMembership?: boolean
   // Whether drop-in pricing is available for this session
   dropInEnabled?: boolean
+  // User has an active membership that is not enabled for this session
+  userMembershipDisabled?: boolean
+  userMembershipName?: string | null
 }
 
 interface AppliedCoupon {
@@ -84,6 +87,8 @@ export function PreCheckoutForm({
   isActiveMember: legacyIsActiveMember,
   defaultToMembership = false,
   dropInEnabled = true,
+  userMembershipDisabled = false,
+  userMembershipName = null,
 }: PreCheckoutFormProps) {
   const { openSignUp, openSignIn } = useAuthOverlay()
 
@@ -310,6 +315,15 @@ export function PreCheckoutForm({
 
   return (
     <div className="space-y-6">
+      {/* Membership not valid for this session */}
+      {userMembershipDisabled && (
+        <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-4">
+          <p className="font-medium text-amber-900">Membership not valid for this session</p>
+          <p className="text-sm text-amber-700 mt-1">
+            Your {userMembershipName ?? "membership"} is not available for this session.
+          </p>
+        </div>
+      )}
       {/* Pricing Options */}
       <div className="space-y-3">
         {/* User's Current Membership - show first if they have one */}

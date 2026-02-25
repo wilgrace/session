@@ -226,12 +226,12 @@ export function SessionPageClient({
   // Fetch pricing data whenever session is available (handles both server-prefetched and client-fetched sessions)
   useEffect(() => {
     if (!session || pricingFetchedRef.current) return
-    if (session.pricing_type !== "paid" || !session.drop_in_price) return
+    if (session.pricing_type !== "paid") return
 
     pricingFetchedRef.current = true
     getBookingMembershipPricingData({
       organizationId: session.organization_id,
-      dropInPrice: session.drop_in_price,
+      dropInPrice: session.drop_in_price ?? 0,
       sessionTemplateId: sessionId,
     }).then(result => {
       if (result.success && result.data) {
@@ -354,6 +354,8 @@ export function SessionPageClient({
             spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
             memberships={pricingData?.memberships}
             userMembershipId={pricingData?.userMembershipId}
+            userMembershipDisabled={pricingData?.userMembershipDisabled}
+            userMembershipName={pricingData?.userMembershipName}
             memberPrice={pricingData?.memberPrice}
             monthlyMembershipPrice={pricingData?.monthlyMembershipPrice}
             isActiveMember={pricingData?.isActiveMember}

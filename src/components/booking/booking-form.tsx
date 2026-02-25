@@ -51,6 +51,8 @@ interface BookingFormProps {
   // Multi-membership pricing props
   memberships?: MembershipPricingOption[]
   userMembershipId?: string | null
+  userMembershipDisabled?: boolean
+  userMembershipName?: string | null
   // Backward compatible membership pricing props
   memberPrice?: number
   monthlyMembershipPrice?: number | null
@@ -83,6 +85,8 @@ export function BookingForm({
   spotsRemaining = session.capacity,
   memberships = [],
   userMembershipId,
+  userMembershipDisabled = false,
+  userMembershipName = null,
   memberPrice = 0,
   monthlyMembershipPrice = null,
   isActiveMember = false,
@@ -516,6 +520,8 @@ export function BookingForm({
           isLoading={checkoutLoading}
           memberships={memberships}
           userMembershipId={userMembershipId}
+          userMembershipDisabled={userMembershipDisabled}
+          userMembershipName={userMembershipName}
           memberPrice={memberPrice}
           monthlyMembershipPrice={monthlyMembershipPrice}
           isActiveMember={isActiveMember}

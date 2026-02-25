@@ -1033,6 +1033,9 @@ export interface MembershipPricingOption {
 export interface BookingMembershipPricingData {
   memberships: MembershipPricingOption[]
   userMembershipId: string | null
+  // User's membership is active but not enabled for this specific session
+  userMembershipDisabled: boolean
+  userMembershipName: string | null
   // Backward compatibility
   memberPrice: number
   monthlyMembershipPrice: number | null
@@ -1072,10 +1075,19 @@ export async function getBookingMembershipPricingData(params: {
       })
     }
 
+    // Identify user's own membership before filtering
+    const userOwnMembership = memberships.find(m => m.isUserMembership)
+
+    // Detect if user's membership is specifically blocked by per-session config
+    const userMembershipDisabled = hasPerSessionSettings &&
+      !!userOwnMembership &&
+      !enabledMembershipIds.has(userOwnMembership.id)
+
     // Filter memberships by per-session availability
     // If no per-session rows exist (legacy session), show all memberships
+    // Do NOT include the user's membership if it's been explicitly disabled for this session
     const filteredMemberships = hasPerSessionSettings
-      ? memberships.filter((m) => enabledMembershipIds.has(m.id) || m.isUserMembership)
+      ? memberships.filter((m) => enabledMembershipIds.has(m.id))
       : memberships
 
     // Calculate session price for each membership
@@ -1110,6 +1122,8 @@ export async function getBookingMembershipPricingData(params: {
       data: {
         memberships: pricingOptions,
         userMembershipId,
+        userMembershipDisabled,
+        userMembershipName: userMembershipDisabled ? (userOwnMembership?.name ?? null) : null,
         // Backward compatibility
         memberPrice: userMembership?.sessionPrice ?? bestMemberPrice,
         monthlyMembershipPrice,
