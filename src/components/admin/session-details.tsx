@@ -1,12 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { getEventColorValues } from '@/lib/event-colors';
 
 interface Session {
   id: string;
   start_time: string;
   end_time?: string;
   bookings?: { number_of_spots?: number }[];
-  template?: { name?: string; capacity?: number };
+  template?: { name?: string; capacity?: number; event_color?: string | null };
 }
 
 interface SessionDetailsProps {
@@ -31,6 +32,7 @@ export function SessionDetails({
     (sum, b) => sum + (b.number_of_spots || 1), 0
   );
   const capacity = session.template?.capacity || 0;
+  const eventColor = getEventColorValues(session.template?.event_color);
 
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < totalSessions - 1;
@@ -44,7 +46,13 @@ export function SessionDetails({
             <span className="font-bold">{time}</span>
             <span className="text-muted-foreground ml-2">{spotsTaken}/{capacity}</span>
           </h2>
-          <p className="text-sm text-muted-foreground">{session.template?.name}</p>
+          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: eventColor.color500 }}
+            />
+            {session.template?.name}
+          </p>
         </div>
         {showNavigation && (
           <div className="flex items-center gap-2 justify-center" style={{ minWidth: '120px' }}>

@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { format, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { getEventColorValues } from '@/lib/event-colors';
 
 type DayPickerProps = {
   days: Date[];
@@ -92,17 +93,20 @@ export function DayPicker({
                       const isPast = session.end_time
                         ? new Date(session.end_time).getTime() < now.getTime()
                         : new Date(session.start_time).getTime() < now.getTime();
+                      const eventColor = getEventColorValues(session.template?.event_color);
+                      const pillStyle: React.CSSProperties = isActiveSession
+                        ? { backgroundColor: eventColor.color700, borderColor: eventColor.color700, color: 'white' }
+                        : isPast
+                          ? {}
+                          : { backgroundColor: `${eventColor.color500}1A`, borderColor: eventColor.color500, color: eventColor.color700 };
                       return (
                         <div
                           key={session.id}
                           className={cn(
                             "flex items-center justify-between border rounded px-2 py-1 text-xs cursor-pointer transition-colors",
-                            isActiveSession
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : isPast
-                                ? "bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200"
-                                : "bg-blue-50 hover:bg-blue-100"
+                            isPast && !isActiveSession && "bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200"
                           )}
+                          style={pillStyle}
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelectDay(date);

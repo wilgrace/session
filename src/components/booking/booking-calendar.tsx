@@ -7,7 +7,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, Users, EyeOff } from "lucide-react"
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, endOfWeek } from "date-fns"
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, endOfWeek, isSameDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -275,6 +275,12 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
 
   const timeRange = calculateTimeRange()
 
+  // Hide sessions on today that have already ended
+  const displayEvents = useMemo(() => {
+    const now = new Date()
+    return events.filter(event => !isSameDay(event.start, now) || event.end > now)
+  }, [events])
+
   const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate])
   const weekEnd = useMemo(() => endOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate])
 
@@ -436,7 +442,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
       <BigCalendar
         localizer={localizer}
         formats={calendarFormats}
-        events={events}
+        events={displayEvents}
         startAccessor="start"
         endAccessor="end"
         style={{ height: 'auto', minHeight: '60vh' }}

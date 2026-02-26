@@ -57,7 +57,7 @@ function findNextSessionDate(sessions: SessionTemplate[], afterDate: Date): Date
   return nextDateStr ? startOfDay(new Date(nextDateStr)) : null
 }
 
-export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = false, onDateSelect }: MobileSessionListProps) {
+export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }: MobileSessionListProps) {
   const router = useRouter()
   const { user } = useUser()
   // Build a flat list of all sessions for the selected day directly from sessions
@@ -120,6 +120,13 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
   // Sort by start time
   sessionsForDay.sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 
+  // Hide sessions that have already ended when viewing today (non-admin only)
+  const isViewingToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+  const now = new Date()
+  const visibleSessionsForDay = isViewingToday
+    ? sessionsForDay.filter(s => s.endTime > now)
+    : sessionsForDay
+
   const handleSessionClick = (template: SessionTemplate, startTime: Date, isBooked: boolean, bookingId?: string) => {
     if (isBooked && bookingId) {
       router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}`)
@@ -128,7 +135,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
     router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}`)
   }
 
-  if (sessionsForDay.length === 0) {
+  if (visibleSessionsForDay.length === 0) {
     const nextDate = findNextSessionDate(sessions, selectedDate)
     return (
       <div className="p-4 text-center text-muted-foreground space-y-1">
@@ -151,7 +158,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
 
   return (
     <div className="space-y-0 ">
-      {sessionsForDay.map(({ template, startTime, endTime, key, instance, isBooked, bookingId }) => {
+      {visibleSessionsForDay.map(({ template, startTime, endTime, key, instance, isBooked, bookingId }) => {
         const isFreeSession = template.pricing_type === 'free'
         const isHidden = template.visibility === 'hidden'
         const totalCapacity = template.capacity || 10
