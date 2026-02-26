@@ -1,6 +1,6 @@
 "use client"
 
-import { format } from "date-fns"
+import { format, addDays, startOfDay } from "date-fns"
 import { formatInTimeZone } from "date-fns-tz"
 import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 import { SessionTemplate, SessionInstance } from "@/types/session"
@@ -15,9 +15,49 @@ interface MobileSessionListProps {
   selectedDate: Date
   slug: string
   isAdmin?: boolean
+  onDateSelect?: (date: Date) => void
 }
 
-export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = false }: MobileSessionListProps) {
+function findNextSessionDate(sessions: SessionTemplate[], afterDate: Date): Date | null {
+  // Compare date strings to avoid timezone ambiguity
+  const afterStr = format(afterDate, 'yyyy-MM-dd')
+  let nextDateStr: string | null = null
+
+  for (const template of sessions) {
+    if (template.instances && template.instances.length > 0) {
+      // Use timezone-aware date string for instance comparison (same as MobileCalendarView)
+      for (const instance of template.instances) {
+        const instanceStr = formatLocalDate(new Date(instance.start_time), SAUNA_TIMEZONE)
+        if (instanceStr > afterStr && (!nextDateStr || instanceStr < nextDateStr)) {
+          nextDateStr = instanceStr
+        }
+      }
+    } else if (template.is_recurring && template.schedules) {
+      // No instances: find the next matching weekday from the schedule
+      for (const schedule of template.schedules) {
+        for (const day of schedule.days) {
+          let candidate = addDays(startOfDay(afterDate), 1)
+          for (let i = 0; i < 7; i++) {
+            if (format(candidate, 'EEEE').toLowerCase() === day.toLowerCase()) {
+              const candidateStr = format(candidate, 'yyyy-MM-dd')
+              const withinRange = !template.recurrence_end_date ||
+                candidateStr <= format(new Date(template.recurrence_end_date), 'yyyy-MM-dd')
+              if (withinRange && (!nextDateStr || candidateStr < nextDateStr)) {
+                nextDateStr = candidateStr
+              }
+              break
+            }
+            candidate = addDays(candidate, 1)
+          }
+        }
+      }
+    }
+  }
+
+  return nextDateStr ? startOfDay(new Date(nextDateStr)) : null
+}
+
+export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = false, onDateSelect }: MobileSessionListProps) {
   const router = useRouter()
   const { user } = useUser()
   // Build a flat list of all sessions for the selected day directly from sessions
@@ -89,9 +129,22 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
   }
 
   if (sessionsForDay.length === 0) {
+    const nextDate = findNextSessionDate(sessions, selectedDate)
     return (
-      <div className="p-4 text-center text-muted-foreground">
-        No sessions available for this day
+      <div className="p-4 text-center text-muted-foreground space-y-1">
+        {nextDate ? (
+          <>
+            <p className="text-sm">No sessions on this day</p>
+            <button
+              onClick={() => onDateSelect?.(nextDate)}
+              className="text-primary nderline-offset-4 hover:underline"
+            >
+              Skip to the next session →
+            </button>
+          </>
+        ) : (
+          <p>No sessions available</p>
+        )}
       </div>
     )
   }

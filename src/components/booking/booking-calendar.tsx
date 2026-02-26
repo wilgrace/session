@@ -7,7 +7,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, Users, EyeOff } from "lucide-react"
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from "date-fns"
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, endOfWeek } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -275,6 +275,19 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
 
   const timeRange = calculateTimeRange()
 
+  const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate])
+  const weekEnd = useMemo(() => endOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate])
+
+  const eventsInCurrentWeek = useMemo(
+    () => events.filter(e => e.start >= weekStart && e.start <= weekEnd),
+    [events, weekStart, weekEnd]
+  )
+
+  const nextEventAfterWeek = useMemo(
+    () => events.filter(e => e.start > weekEnd).sort((a, b) => a.start.getTime() - b.start.getTime())[0] ?? null,
+    [events, weekEnd]
+  )
+
   const handleSelectEvent = (event: CalendarEvent) => {
     if (event.isBooked && event.bookingId) {
       // Only allow editing
@@ -361,6 +374,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
             selectedDate={selectedDate}
             slug={slug}
             isAdmin={isAdmin}
+            onDateSelect={handleDateSelect}
           />
         </div>
       </div>
@@ -369,26 +383,38 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
 
   // For desktop view
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 rounded-lg overflow-clip">
       {/* Sticky toolbar */}
       <div className="sticky top-0 z-40 bg-white border-b h-[75px] flex items-center px-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="text-lg font-semibold">
+        <div className="flex items-center justify-between w-full gap-4">
+          <div className="text-lg font-semibold shrink-0">
             {format(currentDate, 'MMMM yyyy')}
           </div>
-          <div className="flex items-center space-x-2">
+          {eventsInCurrentWeek.length === 0 && (
+            <div className="flex flex-col items-center text-sm text-muted-foreground">
+              {sessions.length === 0 ? (
+                <span>No sessions available</span>
+              ) : (
+                <>
+                  <span>No sessions this week</span>
+                  {nextEventAfterWeek && (
+                    <button
+                      onClick={() => setCurrentDate(nextEventAfterWeek.start)}
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      Skip to the next session →
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          <div className="flex items-center space-x-2 shrink-0">
             <SessionFilter
               sessions={sessions}
               selectedIds={selectedTemplateIds}
               onSelectionChange={setSelectedTemplateIds}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToToday}
-            >
-              Today
-            </Button>
             <Button
               variant="outline"
               size="icon"
@@ -414,55 +440,55 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
         startAccessor="start"
         endAccessor="end"
         style={{ height: 'auto', minHeight: '60vh' }}
-          onSelectEvent={handleSelectEvent}
-          view={currentView}
-          onView={setCurrentView}
-          date={currentDate}
-          onNavigate={setCurrentDate}
-          step={30}
-          timeslots={2}
-          min={timeRange.min}
-          max={timeRange.max}
-          eventPropGetter={(event: CalendarEvent) => {
-            const customColor = event.resource.event_color
-            const isHidden = event.resource.visibility === 'hidden'
+        onSelectEvent={handleSelectEvent}
+        view={currentView}
+        onView={setCurrentView}
+        date={currentDate}
+        onNavigate={setCurrentDate}
+        step={30}
+        timeslots={2}
+        min={timeRange.min}
+        max={timeRange.max}
+        eventPropGetter={(event: CalendarEvent) => {
+          const customColor = event.resource.event_color
+          const isHidden = event.resource.visibility === 'hidden'
 
-            // Calculate availability for full/sold out state
-            const instance = event.resource.instances?.find(i => {
-              const instanceStart = new Date(i.start_time)
-              return instanceStart.getTime() === event.start.getTime()
-            })
-            const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
-            const availableSpots = (event.resource.capacity || 10) - totalSpotsBooked
-            const isFull = availableSpots === 0
+          // Calculate availability for full/sold out state
+          const instance = event.resource.instances?.find(i => {
+            const instanceStart = new Date(i.start_time)
+            return instanceStart.getTime() === event.start.getTime()
+          })
+          const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+          const availableSpots = (event.resource.capacity || 10) - totalSpotsBooked
+          const isFull = availableSpots === 0
 
-            // Determine session type class
-            // Priority: booked > hidden > free > full > default
-            let typeClass = 'session-default'
-            if (event.isBooked) {
-              typeClass = 'session-booked'
-            } else if (isHidden) {
-              typeClass = 'session-hidden'
-            } else if (isFull) {
-              typeClass = 'session-full'
-            }
+          // Determine session type class
+          // Priority: booked > hidden > free > full > default
+          let typeClass = 'session-default'
+          if (event.isBooked) {
+            typeClass = 'session-booked'
+          } else if (isHidden) {
+            typeClass = 'session-hidden'
+          } else if (isFull) {
+            typeClass = 'session-full'
+          }
 
-            // Build style object with custom color if provided (and not overridden by special states)
-            const style: React.CSSProperties = {}
-            if (customColor && !event.isBooked && !isHidden && !isFull) {
-              const colors = getEventColorValues(customColor)
-              style.borderLeftColor = colors.color500
-              style.backgroundColor = `${colors.color500}1A` // 10% opacity
-              style.color = colors.color700
-            }
+          // Build style object with custom color if provided (and not overridden by special states)
+          const style: React.CSSProperties = {}
+          if (customColor && !event.isBooked && !isHidden && !isFull) {
+            const colors = getEventColorValues(customColor)
+            style.borderLeftColor = colors.color500
+            style.backgroundColor = `${colors.color500}1A` // 10% opacity
+            style.color = colors.color700
+          }
 
-            return {
-              className: `session-event ${typeClass}`,
-              style,
-            }
-          }}
-          components={components}
-        />
+          return {
+            className: `session-event ${typeClass}`,
+            style,
+          }
+        }}
+        components={components}
+      />
 
     </div>
   )

@@ -141,10 +141,12 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
         {days.map((day, i) => {
           const isSelected = isSameDay(day, selectedDate)
           const isPastDay = isPast(day) && !isToday(day)
+          const daySessions = getSessionsForDay(day)
+          // Disable future days that have no sessions (like past days)
+          const isDisabled = isPastDay || (!isToday(day) && daySessions.length === 0)
           // Show month label on the 1st, but not when it's the very first cell
           // (already clear from the header)
           const isMonthStart = getDate(day) === 1 && i > 0
-          const daySessions = getSessionsForDay(day)
           const displaySessions = daySessions.slice(0, 4)
 
           return (
@@ -153,17 +155,17 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
                 type="button"
                 className={`aspect-square w-full flex flex-col items-center justify-center rounded-full ${
                   isSelected ? "text-white" :
-                  isPastDay ? "text-gray-400" :
+                  isDisabled ? "text-gray-400" :
                   "hover:bg-gray-100"
                 }`}
                 style={isSelected ? { backgroundColor: 'hsl(var(--primary))' } : undefined}
-                onClick={() => !isPastDay && onDateSelect(day)}
-                disabled={isPastDay}
+                onClick={() => !isDisabled && onDateSelect(day)}
+                disabled={isDisabled}
               >
                 <span className="text-lg leading-none">{format(day, "d")}</span>
                 {isMonthStart ? (
                   <span className="text-[9px] leading-none mt-0.5 opacity-70">{format(day, 'MMM')}</span>
-                ) : displaySessions.length > 0 && !isSelected && !isPastDay ? (
+                ) : displaySessions.length > 0 && !isSelected && !isDisabled ? (
                   <div className="flex justify-center space-x-0.5 mt-0.5">
                     {displaySessions.map((session, index) => (
                       <div
