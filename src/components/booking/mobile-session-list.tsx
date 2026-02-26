@@ -165,7 +165,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
           <Card
             key={key}
             className={`cursor-pointer transition-all duration-75 active:scale-[0.96] active:opacity-60 ${
-              isBooked ? 'border-primary bg-primary/5' : ''
+              isBooked ? 'border-primary bg-primary/5' : isFull ? 'border-gray-200 bg-gray-50' : ''
             }`}
             onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
           >
@@ -173,10 +173,10 @@ export function MobileSessionList({ sessions, selectedDate, slug, isAdmin = fals
               <div className="flex items-start gap-3">
                 <div
                   className="mt-2 ml-2 h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: eventColor.color500 }}
+                  style={{ backgroundColor: isFull ? '#9CA3AF' : eventColor.color500 }}
                 />
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-lg flex items-center gap-1">
+                  <h3 className={`font-medium text-lg flex items-center gap-1 ${isFull ? 'text-gray-300 text-muted-foreground' : ''}`}>
                     {isFreeSession && <span className="text-[10px] font-semibold uppercase text-muted-foreground">Free</span>}
                     {isHidden && <EyeOff className="h-3 w-3 text-gray-400" />}
                     {template.name}

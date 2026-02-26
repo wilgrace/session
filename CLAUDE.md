@@ -479,6 +479,34 @@ The account page (`/{slug}/account`) allows authenticated users to view and mana
 
 **Invalid slug 404**: Ensure the organization has a `slug` value in the database and it matches the URL
 
+## Performance Optimizations
+
+These optimisations were deliberately added to improve PageSpeed (mobile ~60→75+) and PWA startup. **Do not revert them** when merging landing page changes or other work.
+
+### Image Delivery (`next.config.ts`)
+- `images.formats: ['image/avif', 'image/webp']` — Next.js Image serves AVIF/WebP to supporting browsers. Do not remove this.
+- Logo in `src/components/booking/booking-header.tsx` uses `quality={75}` (not 90). Don't raise it without a clear reason.
+- Static assets (SVG, ICO, PNG, webmanifest) get `Cache-Control: public, max-age=31536000, immutable` via the `headers()` export in `next.config.ts`.
+
+### Font Loading (`src/app/layout.tsx`)
+- Inter is loaded with `display: "swap"` to prevent render-blocking. Keep this.
+
+### Lazy-Loaded Calendars
+- The **booking calendar** (`src/components/booking/lazy-booking-calendar.tsx`) is dynamically imported with `ssr: false` — keeps `react-big-calendar` + `moment` (~150 KB) out of the initial bundle.
+- The **admin calendar** (`src/components/admin/calendar-page.tsx`) is also dynamically imported using the same pattern. Do not change this back to a static import.
+
+### Org Data Caching (`src/lib/tenant-utils.ts`)
+- `getOrganizationBySlug` and `getOrganizationById` use `unstable_cache` (5-minute TTL) on top of React's `cache()`. This caches org metadata across requests in Next.js's Data Cache, avoiding a Supabase round-trip on every page load.
+- If org metadata needs to update immediately after an admin change, call `revalidateTag('org-by-id')` or `revalidateTag('org-by-slug')` in the relevant server action.
+
+### PWA Splash Screen & Service Worker (`next.config.ts`, `src/components/splash-warmer.tsx`)
+- The workbox `runtimeCaching` array has a `CacheFirst` rule for `/api/og/` URLs **before** the `NetworkOnly` catch-all for `/api/`. This ordering is intentional and critical — it ensures generated splash screens and PWA icons are cached by the service worker. **Never move the `/api/og/` rule below the `/api/` rule.**
+- `SplashWarmer` uses `fetch(url, { cache: 'force-cache' })` instead of `new Image()` to reliably populate the SW cache with the iOS splash image on first visit.
+
+### What Was Not Fixed (Infrastructure Limits)
+- ~1.5 s document request latency on first load is a Vercel free-tier cold-start issue, not a code problem.
+- ~175 KB unused JS is Clerk's SDK, unavoidable with the current auth architecture.
+
 ## Related Documentation
 
 - [README.md](README.md) - Setup and running locally

@@ -11,7 +11,6 @@ import {
   isSameMonth,
   isPast,
   isToday,
-  getDate,
 } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { ChevronLeft, ChevronRight } from "lucide-react"
@@ -52,6 +51,18 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
   const days = eachDayOfInterval({ start: windowStart, end: windowEnd })
 
   const dayNames = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+
+  const isSessionFullOnDay = (template: SessionTemplate, day: Date) => {
+    if (!template.instances) return false
+    const dateStr = format(day, 'yyyy-MM-dd')
+    const instance = template.instances.find(inst =>
+      formatLocalDate(new Date(inst.start_time), SAUNA_TIMEZONE) === dateStr
+    )
+    if (!instance) return false
+    const totalCapacity = template.capacity || 10
+    const totalSpotsBooked = instance.bookings?.reduce((sum: number, b: { number_of_spots?: number }) => sum + (b.number_of_spots || 1), 0) || 0
+    return totalSpotsBooked >= totalCapacity
+  }
 
   const getSessionsForDay = (day: Date) => {
     return sessions.filter((template) => {
@@ -146,7 +157,6 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
           const isDisabled = isPastDay || (!isToday(day) && daySessions.length === 0)
           // Show month label on the 1st, but not when it's the very first cell
           // (already clear from the header)
-          const isMonthStart = getDate(day) === 1 && i > 0
           const displaySessions = daySessions.slice(0, 4)
 
           return (
@@ -163,15 +173,13 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
                 disabled={isDisabled}
               >
                 <span className="text-lg leading-none">{format(day, "d")}</span>
-                {isMonthStart ? (
-                  <span className="text-[9px] leading-none mt-0.5 opacity-70">{format(day, 'MMM')}</span>
-                ) : displaySessions.length > 0 && !isSelected && !isDisabled ? (
+                {displaySessions.length > 0 && !isSelected && !isDisabled ? (
                   <div className="flex justify-center space-x-0.5 mt-0.5">
                     {displaySessions.map((session, index) => (
                       <div
                         key={index}
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: getEventColorValues(session.event_color).color500 }}
+                        style={{ backgroundColor: isSessionFullOnDay(session, day) ? '#9CA3AF' : getEventColorValues(session.event_color).color500 }}
                       />
                     ))}
                   </div>
