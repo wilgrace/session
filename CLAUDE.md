@@ -507,6 +507,65 @@ These optimisations were deliberately added to improve PageSpeed (mobile ~60→7
 - ~1.5 s document request latency on first load is a Vercel free-tier cold-start issue, not a code problem.
 - ~175 KB unused JS is Clerk's SDK, unavoidable with the current auth architecture.
 
+## Landing Page (`public/landing/index.html`)
+
+The landing page is a static Framer export served from `public/landing/`. After every new Framer export, run this full import workflow:
+
+### Import Workflow
+
+**1. Copy the new HTML export:**
+```bash
+cp "landing-page/Session - Sauna Booking Software.html" public/landing/index.html
+```
+
+**2. Copy new asset files:**
+```bash
+cp "landing-page/Session - Sauna Booking Software_files/"* public/landing/files/
+```
+
+**3. Rewrite asset paths** (Framer exports use relative `_files/` paths):
+```bash
+python3 -c "
+import re, pathlib
+p = pathlib.Path('public/landing/index.html')
+c = p.read_text()
+c = re.sub(r'./Session - Sauna Booking Software_files/', '/landing/files/', c)
+c = c.replace('src=\"script\"', 'src=\"script.js\"')
+p.write_text(c)
+"
+```
+
+**4. Download Framer CDN `.mjs` dependencies locally** (they are NOT included in the export):
+- Extract all `framerusercontent.com/sites/…/*.mjs` URLs from the HTML and from `script_main.*.mjs`
+- `curl` each one into `public/landing/files/` using just the filename
+- Repeat for any transitive imports inside downloaded files
+- Replace all `https://framerusercontent.com/sites/[SITE_ID]/FILENAME.mjs` with `/landing/files/FILENAME.mjs` in both the HTML and all local `.mjs` files
+
+**5. Strip Framer editor UI** (not needed in production — always remove after every export):
+```bash
+python3 << 'EOF'
+import re, pathlib
+p = pathlib.Path('public/landing/index.html')
+c = p.read_text()
+# Remove editorbar detection script in <head>
+c = re.sub(r'\s*<script>try\{if\(localStorage\.get\("__framer_force_showing_editorbar_since"\).*?</script>', '', c, flags=re.DOTALL)
+# Remove editorbar CSS style block
+c = re.sub(r'<style type="text/css" data-framer-css="true"></style><style>\s*#__framer-editorbar.*?</style>(?=</head>)', '<style type="text/css" data-framer-css="true"></style>', c, flags=re.DOTALL)
+# Remove editorbar container div, iframe, and its inline script
+c = re.sub(r'<div id="__framer-editorbar-container".*?</script>', '', c, flags=re.DOTALL)
+p.write_text(c)
+print("Editorbar removed. Remaining refs:", c.count('editorbar'))
+EOF
+```
+
+**6. Re-append the custom Clerk sign-in script** before `</body>` (it is stripped by a fresh export — check git diff to restore it).
+
+**7. Verify:**
+```bash
+grep -c 'framerusercontent.com/sites' public/landing/index.html   # should be 0
+grep -c 'editorbar' public/landing/index.html                     # should be 0
+```
+
 ## Related Documentation
 
 - [README.md](README.md) - Setup and running locally
