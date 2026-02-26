@@ -11,7 +11,20 @@ const withPWA = withPWAInit({
   },
   workboxOptions: {
     runtimeCaching: [
-      // Never cache API routes — booking data must always be fresh
+      // Cache generated OG images (splash screens, PWA icons) — stable PNG assets
+      // Must come BEFORE the /api/ NetworkOnly rule since Workbox matches in order
+      {
+        urlPattern: /\/api\/og\//,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "pwa-assets",
+          expiration: {
+            maxEntries: 32,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          },
+        },
+      },
+      // Never cache other API routes — booking data must always be fresh
       {
         urlPattern: /^\/api\//,
         handler: "NetworkOnly",

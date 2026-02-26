@@ -16,8 +16,9 @@ export function SplashWarmer() {
     )
     links.forEach((link) => {
       if (link.media && window.matchMedia(link.media).matches) {
-        const img = new Image()
-        img.src = link.href
+        fetch(link.href, { cache: "force-cache" }).catch(() => {
+          // Silent failure — non-critical prefetch
+        })
       }
     })
   }, [])
