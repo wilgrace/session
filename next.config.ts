@@ -58,6 +58,7 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -69,6 +70,20 @@ const nextConfig: NextConfig = {
         port: "54321",
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        // Long-lived cache for PWA icons and static SVGs
+        source: "/:path*.(svg|ico|png|webmanifest)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
   },
 };
 

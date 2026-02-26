@@ -1,9 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CalendarView } from "@/components/admin/calendar-view"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SessionForm } from "@/components/admin/session-form"
 import { SessionTemplate } from "@/types/session"
+
+const CalendarView = dynamic(
+  () => import("@/components/admin/calendar-view").then((mod) => ({ default: mod.CalendarView })),
+  { loading: () => <Skeleton className="h-[600px] w-full" />, ssr: false }
+)
 
 interface CalendarPageProps {
   initialSessions: SessionTemplate[]

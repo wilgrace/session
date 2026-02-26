@@ -160,7 +160,7 @@ export function BookingHeader({
                 width={400}
                 height={400}
                 sizes="(min-width: 768px) 200px, 150px"
-                quality={90}
+                quality={75}
                 className="h-[150px] w-[150px] md:h-[200px] md:w-[200px] rounded-full object-cover"
                 priority
               />

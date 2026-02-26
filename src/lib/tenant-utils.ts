@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import { createSupabaseServerClient } from './supabase';
 import type { UserRole } from './db/schema';
 
@@ -46,73 +47,63 @@ export interface TenantContext {
 export const TENANT_ID_HEADER = 'x-organization-id';
 export const TENANT_SLUG_HEADER = 'x-organization-slug';
 
+const mapOrgData = (data: {
+  id: string; name: string; slug: string; description: string | null;
+  logo_url: string | null; favicon_url: string | null; header_image_url: string | null;
+  default_session_image_url: string | null; button_color: string | null;
+  button_text_color: string | null; homepage_url: string | null;
+  instagram_url: string | null; facebook_url: string | null;
+}): TenantOrganization => ({
+  id: data.id,
+  name: data.name,
+  slug: data.slug,
+  description: data.description,
+  logoUrl: data.logo_url,
+  faviconUrl: data.favicon_url,
+  headerImageUrl: data.header_image_url,
+  defaultSessionImageUrl: data.default_session_image_url,
+  brandColor: data.button_color,
+  brandTextColor: data.button_text_color,
+  homepageUrl: data.homepage_url,
+  instagramUrl: data.instagram_url,
+  facebookUrl: data.facebook_url,
+});
+
+const ORG_SELECT = 'id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url';
+
 /**
  * Get organization by slug from the database.
- * Uses React cache() for request-level deduplication.
+ * Cached across requests for 5 minutes; deduplicated within a request.
  */
-export const getOrganizationBySlug = cache(async (slug: string): Promise<TenantOrganization | null> => {
-  const supabase = createSupabaseServerClient();
-
-  const { data, error } = await supabase
-    .from('organizations')
-    .select('id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url')
-    .eq('slug', slug)
-    .single();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return {
-    id: data.id,
-    name: data.name,
-    slug: data.slug,
-    description: data.description,
-    logoUrl: data.logo_url,
-    faviconUrl: data.favicon_url,
-    headerImageUrl: data.header_image_url,
-    defaultSessionImageUrl: data.default_session_image_url,
-    brandColor: data.button_color,
-    brandTextColor: data.button_text_color,
-    homepageUrl: data.homepage_url,
-    instagramUrl: data.instagram_url,
-    facebookUrl: data.facebook_url,
-  };
-});
+export const getOrganizationBySlug = cache(
+  unstable_cache(
+    async (slug: string): Promise<TenantOrganization | null> => {
+      const supabase = createSupabaseServerClient();
+      const { data, error } = await supabase.from('organizations').select(ORG_SELECT).eq('slug', slug).single();
+      if (error || !data) return null;
+      return mapOrgData(data);
+    },
+    ['org-by-slug'],
+    { revalidate: 300 }
+  )
+);
 
 /**
  * Get organization by ID from the database.
- * Uses React cache() for request-level deduplication.
+ * Cached across requests for 5 minutes; deduplicated within a request.
  */
-export const getOrganizationById = cache(async (id: string): Promise<TenantOrganization | null> => {
-  const supabase = createSupabaseServerClient();
-
-  const { data, error } = await supabase
-    .from('organizations')
-    .select('id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url')
-    .eq('id', id)
-    .single();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return {
-    id: data.id,
-    name: data.name,
-    slug: data.slug,
-    description: data.description,
-    logoUrl: data.logo_url,
-    faviconUrl: data.favicon_url,
-    headerImageUrl: data.header_image_url,
-    defaultSessionImageUrl: data.default_session_image_url,
-    brandColor: data.button_color,
-    brandTextColor: data.button_text_color,
-    homepageUrl: data.homepage_url,
-    instagramUrl: data.instagram_url,
-    facebookUrl: data.facebook_url,
-  };
-});
+export const getOrganizationById = cache(
+  unstable_cache(
+    async (id: string): Promise<TenantOrganization | null> => {
+      const supabase = createSupabaseServerClient();
+      const { data, error } = await supabase.from('organizations').select(ORG_SELECT).eq('id', id).single();
+      if (error || !data) return null;
+      return mapOrgData(data);
+    },
+    ['org-by-id'],
+    { revalidate: 300 }
+  )
+);
 
 /**
  * Get tenant context from request headers in a Server Component.
