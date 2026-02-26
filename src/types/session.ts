@@ -24,6 +24,14 @@ export interface SessionSchedule {
   updated_at: string
 }
 
+export interface SessionOneOffDate {
+  id: string
+  template_id: string
+  date: string            // YYYY-MM-DD
+  time: string            // HH:MM
+  duration_minutes: number | null
+}
+
 export interface SessionTemplate {
   id: string
   name: string
@@ -32,8 +40,7 @@ export interface SessionTemplate {
   duration_minutes: number
   visibility: SessionVisibility
   is_recurring: boolean
-  one_off_start_time?: string | null
-  one_off_date?: string | null
+  one_off_dates?: SessionOneOffDate[]
   recurrence_start_date?: string | null
   recurrence_end_date?: string | null
   created_at: string

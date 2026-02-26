@@ -1,4 +1,5 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +9,8 @@ import { Check, X, ChevronLeft, Loader2, CalendarDays } from 'lucide-react';
 import { checkInBooking, cancelBookingWithRefund, getAdminMoveOptions, moveBookingToInstance } from '@/app/actions/session';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect } from 'react';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays } from 'date-fns';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Booking {
   id: string;
@@ -72,6 +74,95 @@ function formatPrice(amount: number | null | undefined): string {
   return `£${(amount / 100).toFixed(2)}`;
 }
 
+type MoveBookingBodyProps = {
+  moveOptionsLoading: boolean;
+  moveOptions: MoveOption[];
+  selectedMoveOption: MoveOption | null;
+  setSelectedMoveOption: (o: MoveOption | null) => void;
+  moving: boolean;
+  handleConfirmMove: () => void;
+};
+
+function MoveBookingBody({
+  moveOptionsLoading,
+  moveOptions,
+  selectedMoveOption,
+  setSelectedMoveOption,
+  moving,
+  handleConfirmMove,
+}: MoveBookingBodyProps) {
+  return (
+    <div className="flex-1 overflow-auto py-2">
+      {moveOptionsLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!moveOptionsLoading && !selectedMoveOption && (
+        <>
+          {moveOptions.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              No other sessions available in the next 60 days.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {moveOptions.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedMoveOption(option)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg border hover:bg-accent transition-colors text-left"
+                >
+                  <div>
+                    <div className="font-medium">{option.template_name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(option.start_time), "EEEE, do MMMM")}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(option.start_time), "HH:mm")}
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground shrink-0">
+                    {option.available_spots} spot{option.available_spots !== 1 ? 's' : ''} left
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {!moveOptionsLoading && selectedMoveOption && (
+        <div className="space-y-4 px-1">
+          <p className="text-sm text-muted-foreground">Move this booking to:</p>
+          <div className="rounded-lg border p-4 space-y-1">
+            <div className="font-semibold">{selectedMoveOption.template_name}</div>
+            <div className="text-sm text-muted-foreground">
+              {format(new Date(selectedMoveOption.start_time), "EEEE, do MMMM")}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {format(new Date(selectedMoveOption.start_time), "HH:mm")}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            No payment changes will be made. Admin override — price discrepancies are your responsibility.
+          </p>
+          <Button className="w-full" onClick={handleConfirmMove} disabled={moving}>
+            {moving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Moving...
+              </>
+            ) : (
+              'Confirm Move'
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckIn }: {
   open: boolean;
   booking: Booking | null;
@@ -80,6 +171,7 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
   onCheckIn: (bookingId: string, newStatus: 'confirmed' | 'completed') => void;
 }) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [localBooking, setLocalBooking] = useState<Booking | null>(booking);
   const [cancelLoading, setCancelLoading] = useState(false);
 
@@ -349,97 +441,58 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
         </SheetContent>
       </Sheet>
 
-      {/* Move Booking Sheet */}
-      <Sheet open={moveOpen} onOpenChange={(open) => {
-        if (!moving) setMoveOpen(open);
-      }}>
-        <SheetContent side="bottom" className="max-h-[80vh] flex flex-col rounded-t-xl">
-          <SheetHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              {selectedMoveOption && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setSelectedMoveOption(null)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              )}
-              <SheetTitle>
-                {selectedMoveOption ? 'Confirm Move' : 'Move to Session'}
-              </SheetTitle>
-            </div>
-          </SheetHeader>
-
-          <div className="flex-1 overflow-auto py-2">
-            {moveOptionsLoading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-
-            {!moveOptionsLoading && !selectedMoveOption && (
-              <>
-                {moveOptions.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-8">
-                    No other sessions available in the next 60 days.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {moveOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        onClick={() => setSelectedMoveOption(option)}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg border hover:bg-accent transition-colors text-left"
-                      >
-                        <div>
-                          <div className="font-medium">{option.template_name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(option.start_time), "EEE d MMM 'at' HH:mm")}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground shrink-0">
-                          {option.available_spots} spot{option.available_spots !== 1 ? 's' : ''} left
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+      {/* Move Booking — bottom sheet on mobile, dialog on desktop */}
+      {isMobile ? (
+        <Sheet open={moveOpen} onOpenChange={(open) => {
+          if (!moving) setMoveOpen(open);
+        }}>
+          <SheetContent side="bottom" className="max-h-[80vh] flex flex-col rounded-t-xl">
+            <SheetHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                {selectedMoveOption && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedMoveOption(null)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
                 )}
-              </>
-            )}
-
-            {!moveOptionsLoading && selectedMoveOption && (
-              <div className="space-y-4 px-1">
-                <p className="text-sm text-muted-foreground">Move booking to:</p>
-                <div className="rounded-lg border p-4 space-y-1">
-                  <div className="font-semibold">{selectedMoveOption.template_name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {format(new Date(selectedMoveOption.start_time), "EEEE, do MMMM 'at' HH:mm")}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  No payment changes will be made. Admin override — price discrepancies are your responsibility.
-                </p>
-                <Button
-                  className="w-full"
-                  onClick={handleConfirmMove}
-                  disabled={moving}
-                >
-                  {moving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Moving...
-                    </>
-                  ) : (
-                    'Confirm Move'
-                  )}
-                </Button>
+                <SheetTitle>{selectedMoveOption ? 'Confirm Move' : 'Move to Session'}</SheetTitle>
               </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </SheetHeader>
+            <MoveBookingBody
+              moveOptionsLoading={moveOptionsLoading}
+              moveOptions={moveOptions}
+              selectedMoveOption={selectedMoveOption}
+              setSelectedMoveOption={setSelectedMoveOption}
+              moving={moving}
+              handleConfirmMove={handleConfirmMove}
+            />
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={moveOpen} onOpenChange={(open) => {
+          if (!moving) setMoveOpen(open);
+        }}>
+          <DialogContent className="sm:max-w-md flex flex-col max-h-[80vh] overflow-hidden">
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                {selectedMoveOption && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedMoveOption(null)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                )}
+                <DialogTitle>{selectedMoveOption ? 'Confirm Move' : 'Move to Session'}</DialogTitle>
+              </div>
+            </DialogHeader>
+            <MoveBookingBody
+              moveOptionsLoading={moveOptionsLoading}
+              moveOptions={moveOptions}
+              selectedMoveOption={selectedMoveOption}
+              setSelectedMoveOption={setSelectedMoveOption}
+              moving={moving}
+              handleConfirmMove={handleConfirmMove}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

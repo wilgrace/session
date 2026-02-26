@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, isValid, parseISO, startOfDay } from "date-fns"
-import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock, Loader2 } from "lucide-react"
+import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock, Loader2, RefreshCw, CalendarDays, Gift, CreditCard } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
@@ -73,6 +73,13 @@ interface ScheduleItem {
   durationMinutes?: number | null
 }
 
+interface OneOffDateItem {
+  id: string
+  date: Date | undefined
+  time: string
+  durationMinutes: number
+}
+
 const daysOfWeek = [
   { value: "mon", label: "Mon" },
   { value: "tue", label: "Tue" },
@@ -100,9 +107,11 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   const { getToken } = useAuth()
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [date, setDate] = useState<Date | undefined>(undefined)
   const [visibility, setVisibility] = useState<'open' | 'hidden' | 'closed'>(template?.visibility ?? 'open')
-  const [scheduleType, setScheduleType] = useState(template?.is_recurring ? "repeat" : "once")
+  const [scheduleType, setScheduleType] = useState(template?.is_recurring ? "repeat" : "date")
+  const [oneOffDates, setOneOffDates] = useState<OneOffDateItem[]>([
+    { id: "1", date: undefined, time: "09:00", durationMinutes: 75 }
+  ])
   const [durationMinutes, setDurationMinutes] = useState(template?.duration_minutes ?? 75)
   const [name, setName] = useState(template?.name || "")
   const [description, setDescription] = useState(template?.description || "")
@@ -154,7 +163,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   useEffect(() => {
     if (!template) {
       const today = new Date()
-      setDate(startOfDay(today))
       setRecurrenceStartDate(startOfDay(today))
       // Default to recurring schedule for new sessions with current day
       setScheduleType("repeat")
@@ -164,6 +172,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         days: [getDayOfWeek(today)],
         durationMinutes: null
       }])
+      setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: 75 }])
       // Pre-populate image with org default for new sessions
       setImageUrl(defaultSessionImageUrl || '')
     }
@@ -172,23 +181,21 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   // Update the date and time when initialTimeSlot changes
   useEffect(() => {
     if (initialTimeSlot) {
-      // Set the date
-      setDate(startOfDay(initialTimeSlot.start))
       setRecurrenceStartDate(startOfDay(initialTimeSlot.start))
-      
+
       // Calculate duration in minutes
       const durationMs = initialTimeSlot.end.getTime() - initialTimeSlot.start.getTime()
       const calculatedDuration = Math.floor(durationMs / (1000 * 60))
       setDurationMinutes(calculatedDuration)
-      
+
       // Set the time in the schedule and use the selected day
       const timeString = format(initialTimeSlot.start, 'HH:mm')
-      setSchedules([{ 
-        id: "1", 
-        time: timeString, 
-        days: [getDayOfWeek(initialTimeSlot.start)] 
+      setSchedules([{
+        id: "1",
+        time: timeString,
+        days: [getDayOfWeek(initialTimeSlot.start)]
       }])
-      
+
       // Keep it as recurring schedule
       setScheduleType("repeat")
     }
@@ -202,7 +209,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setCapacity(template.capacity.toString())
       setDurationMinutes(template.duration_minutes ?? 75)
       setVisibility(template.visibility ?? 'open')
-      setScheduleType(template.is_recurring ? "repeat" : "once")
+      setScheduleType(template.is_recurring ? "repeat" : "date")
 
       // Load pricing fields
       setPricingType(template.pricing_type === 'paid' ? 'paid' : 'free')
@@ -239,19 +246,19 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           }
         }
       } else {
-        // Handle one-off session
-        if (template.one_off_date) {
-          const oneOffDate = parseISO(template.one_off_date)
-          if (isValid(oneOffDate)) {
-            setDate(startOfDay(oneOffDate))
-          }
-        }
-        
-        // Set the time from one_off_start_time
-        if (template.one_off_start_time) {
-          setSchedules([{ id: "1", time: template.one_off_start_time, days: [], durationMinutes: null }])
+        // Load one-off dates from template
+        if (template.one_off_dates && template.one_off_dates.length > 0) {
+          setOneOffDates(template.one_off_dates.map((d, i) => {
+            const parsed = parseISO(d.date)
+            return {
+              id: String(i + 1),
+              date: isValid(parsed) ? startOfDay(parsed) : undefined,
+              time: d.time,
+              durationMinutes: d.duration_minutes ?? (template.duration_minutes ?? 75),
+            }
+          }))
         } else {
-          setSchedules([{ id: "1", time: "09:00", days: [], durationMinutes: null }])
+          setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: template.duration_minutes ?? 75 }])
         }
       }
     }
@@ -356,8 +363,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     const errors: Record<string, string> = {}
     if (!name.trim()) errors.name = "Session name is required"
     if (!capacity || parseInt(capacity) < 1) errors.capacity = "Capacity is required"
-    if (scheduleType === "once" && !date) errors.date = "Date is required"
-    if (!durationMinutes || durationMinutes <= 0) errors.duration = "Duration is required"
+    if (scheduleType === "date") {
+      oneOffDates.forEach((item) => {
+        if (!item.date) errors[`one-off-date-${item.id}`] = "Date is required"
+        if (!item.durationMinutes || item.durationMinutes <= 0) errors[`one-off-duration-${item.id}`] = "Duration is required"
+      })
+    }
+    if (scheduleType === "repeat" && (!durationMinutes || durationMinutes <= 0)) errors.duration = "Duration is required"
     if (pricingType === "paid" && dropInEnabled && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
     if (pricingType === "paid") {
       const activeMembershipIds = memberships.filter(m => m.isActive).map(m => m.id)
@@ -376,7 +388,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setFieldErrors(errors)
       // Auto-expand sections containing errors
       if (errors.name || errors.capacity) setGeneralExpanded(true)
-      if (errors.date || errors.duration || Object.keys(errors).some(k => k.startsWith("schedule-days-"))) setScheduleExpanded(true)
+      if (Object.keys(errors).some(k => k.startsWith("one-off-") || k.startsWith("schedule-days-") || k === "duration")) setScheduleExpanded(true)
       if (errors.dropInPrice || errors.pricingOptions) setPaymentExpanded(true)
       // Scroll to first error after a tick (to allow sections to expand)
       setTimeout(() => {
@@ -396,6 +408,14 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
       let templateId: string;
 
+      const oneOffDatesParam = scheduleType === "date"
+        ? oneOffDates.filter(d => d.date).map(d => ({
+            date: format(d.date!, 'yyyy-MM-dd'),
+            time: d.time,
+            duration_minutes: d.durationMinutes || null,
+          }))
+        : []
+
       if (template) {
         // Update existing template (single action: auth once, ownership check once,
         // update + delete + batch insert schedules + fire-and-forget generation)
@@ -408,8 +428,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             duration_minutes: durationMinutes,
             visibility: visibility,
             is_recurring: scheduleType === "repeat",
-            one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
-            one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
             recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
             recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
             pricing_type: pricingType,
@@ -426,6 +444,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             duration_minutes: s.durationMinutes || null,
           })) : [],
           isRecurring: scheduleType === "repeat",
+          one_off_dates: oneOffDatesParam,
         });
 
         if (!result.success) {
@@ -442,8 +461,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           duration_minutes: durationMinutes,
           visibility: visibility,
           is_recurring: scheduleType === "repeat",
-          one_off_start_time: scheduleType === "once" ? schedules[0]?.time : null,
-          one_off_date: scheduleType === "once" && date ? format(date, 'yyyy-MM-dd') : null,
           recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
           recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
           created_by: user.id,
@@ -457,6 +474,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           image_url: imageUrl || null,
           // Calendar display color
           event_color: eventColor,
+          one_off_dates: oneOffDatesParam,
         });
 
         if (!result.success || !result.id) {
@@ -466,48 +484,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         templateId = result.id;
       }
 
-      if (scheduleType === "once" && date) {
-        // Create single instance using the template's one_off_start_time and one_off_date
-        const [hours, minutes] = (schedules[0]?.time || "09:00").split(':').map(Number);
-        
-        // Create dates in local time
-        const localStartTime = new Date(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate(),
-          hours,
-          minutes,
-          0,
-          0
-        );
-        
-        const localEndTime = new Date(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate(),
-          hours,
-          minutes + durationMinutes,
-          0,
-          0
-        );
-
-        // Convert to UTC using the timezone
-        const instanceStartTimeUTC = localToUTC(localStartTime, SAUNA_TIMEZONE);
-        const instanceEndTimeUTC = localToUTC(localEndTime, SAUNA_TIMEZONE);
-
-
-        // Create the instance with the calculated times
-        const instanceResult = await createSessionInstance({
-          template_id: templateId,
-          start_time: instanceStartTimeUTC.toISOString(),
-          end_time: instanceEndTimeUTC.toISOString(),
-          status: 'scheduled'
-        });
-
-        if (!instanceResult.success) {
-          throw new Error(`Failed to create instance: ${instanceResult.error}`);
-        }
-      } else if (!template && scheduleType === "repeat") {
+      if (!template && scheduleType === "repeat") {
         // Schedule creation for new templates only — updates are handled by updateSessionWithSchedules
 
         // Validate schedules before creating
@@ -700,15 +677,27 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     )
   }
 
-  const handleScheduleTypeChange = (type: "repeat" | "once") => {
+  const handleScheduleTypeChange = (type: "repeat" | "date") => {
     setScheduleType(type)
-    if (type === "once") {
-      // Initialize with a single schedule for one-off sessions
-      setSchedules([{ id: "1", time: "09:00", days: [], durationMinutes: null }])
+    if (type === "date") {
+      setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: durationMinutes || 75 }])
     } else {
       // Initialize with default recurring schedule
       setSchedules([{ id: "1", time: "09:00", days: ["mon", "thu", "fri"], durationMinutes: null }])
     }
+  }
+
+  const addOneOffDate = () => {
+    const newId = String(Date.now())
+    setOneOffDates(prev => [...prev, { id: newId, date: undefined, time: "09:00", durationMinutes: durationMinutes || 75 }])
+  }
+
+  const removeOneOffDate = (id: string) => {
+    setOneOffDates(prev => prev.filter(d => d.id !== id))
+  }
+
+  const updateOneOffDate = (id: string, field: keyof OneOffDateItem, value: any) => {
+    setOneOffDates(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
   }
 
   return (
@@ -870,14 +859,21 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   <div className="grid grid-cols-2 gap-4">
                     <Card
                       className={cn(
-                        "cursor-pointer border",
-                        scheduleType === "repeat" ? "border-primary bg-primary/5" : "border-gray-200",
+                        "cursor-pointer border rounded-lg",
+                        scheduleType === "repeat" ? "border-primary bg-primary/5" : "border-gray-200 rounded-lg",
                       )}
                       onClick={() => handleScheduleTypeChange("repeat")}
                     >
-                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                      <CardContent className="p-4 flex text-left gap-1 justify-between">
+                        <div className="flex gap-2">
+                          <RefreshCw className="h-4 w-4 text-gray-500" />
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">Repeat</span>
+                            <span className="text-xs text-gray-500">Recurring on days</span>
+                          </div>
+                        </div>
                         {scheduleType === "repeat" && (
-                          <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                          <div className="relative h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 24 24"
@@ -892,20 +888,26 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             </svg>
                           </div>
                         )}
-                        <span className="font-medium">Repeat</span>
                       </CardContent>
                     </Card>
 
                     <Card
                       className={cn(
-                        "cursor-pointer border",
-                        scheduleType === "once" ? "border-primary bg-primary/5" : "border-gray-200",
+                        "cursor-pointer border rounded-lg",
+                        scheduleType === "date" ? "border-primary bg-primary/5" : "border-gray-200",
                       )}
-                      onClick={() => handleScheduleTypeChange("once")}
+                      onClick={() => handleScheduleTypeChange("date")}
                     >
-                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                        {scheduleType === "once" && (
-                          <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                      <CardContent className="p-4 flex justify-between gap-1">
+                        <div className="flex gap-2 justify-between">
+                        <CalendarDays className="h-4 w-4 text-gray-500" />
+                        <div className="flex flex-col">
+                            <span className="font-medium text-sm">Event</span>
+                            <span className="text-xs text-gray-500">One or more dates</span>
+                          </div>
+                          </div>
+                        {scheduleType === "date" && (
+                          <div className="relative h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 24 24"
@@ -920,76 +922,106 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             </svg>
                           </div>
                         )}
-                        <span className="font-medium">Once</span>
                       </CardContent>
                     </Card>
                   </div>
                 </div>
 
-                {scheduleType === "once" ? (
+                {scheduleType === "date" ? (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date" className="text-sm font-medium">
-                        Date <span className="text-red-500">*</span>
-                      </Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            id="date"
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !date && "text-muted-foreground",
-                              fieldErrors.date && "border-red-500"
+                    {oneOffDates.map((item) => (
+                      <div key={item.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium">Date <span className="text-red-500">*</span></Label>
+                          {oneOffDates.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                              onClick={() => removeOneOffDate(item.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              id={`one-off-date-${item.id}`}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !item.date && "text-muted-foreground",
+                                fieldErrors[`one-off-date-${item.id}`] && "border-red-500"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {item.date ? format(item.date, "PPP") : <span>Pick a date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={item.date}
+                              onSelect={(newDate) => {
+                                if (newDate) {
+                                  updateOneOffDate(item.id, "date", startOfDay(newDate))
+                                  clearError(`one-off-date-${item.id}`)
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        {fieldErrors[`one-off-date-${item.id}`] && (
+                          <p className="text-sm text-red-500">{fieldErrors[`one-off-date-${item.id}`]}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-sm font-medium">Time <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="time"
+                              value={item.time}
+                              onChange={(e) => updateOneOffDate(item.id, "time", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`one-off-duration-${item.id}`}
+                              className="text-sm font-medium"
+                            >
+                              Duration (mins) <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                              id={`one-off-duration-${item.id}`}
+                              type="number"
+                              min="1"
+                              value={item.durationMinutes || ""}
+                              onChange={(e) => {
+                                updateOneOffDate(item.id, "durationMinutes", parseInt(e.target.value) || 0)
+                                clearError(`one-off-duration-${item.id}`)
+                              }}
+                              className={cn(fieldErrors[`one-off-duration-${item.id}`] && "border-red-500 focus-visible:ring-red-500")}
+                            />
+                            {fieldErrors[`one-off-duration-${item.id}`] && (
+                              <p className="text-sm text-red-500">{fieldErrors[`one-off-duration-${item.id}`]}</p>
                             )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date ? format(date, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={date}
-                            onSelect={(newDate) => { if (newDate) { setDate(startOfDay(newDate)); clearError("date") } }}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      {fieldErrors.date && <p className="text-sm text-red-500">{fieldErrors.date}</p>}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="time" className="text-sm font-medium">
-                        Time <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="time"
-                        type="time"
-                        value={schedules[0]?.time || "09:00"}
-                        onChange={(e) => {
-                          const newTime = e.target.value
-                          if (schedules.length === 0) {
-                            setSchedules([{ id: "1", time: newTime, days: [] }])
-                          } else {
-                            updateScheduleTime(schedules[0].id, newTime)
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="duration" className="text-sm font-medium">
-                        Duration (mins) <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="duration"
-                        type="number"
-                        min="1"
-                        value={durationMinutes}
-                        onChange={(e) => { setDurationMinutes(parseInt(e.target.value) || 0); clearError("duration") }}
-                        className={cn(fieldErrors.duration && "border-red-500 focus-visible:ring-red-500")}
-                      />
-                      {fieldErrors.duration && <p className="text-sm text-red-500">{fieldErrors.duration}</p>}
-                    </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={addOneOffDate}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Another Date
+                    </Button>
                   </div>
                 ) : (
                   <>
@@ -1063,33 +1095,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                               <X className="h-4 w-4" />
                             </Button>
                           )}
-                          {/* Time and Duration inline */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor={`time-${schedule.id}`} className="text-sm font-medium">
-                                Time <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                id={`time-${schedule.id}`}
-                                type="time"
-                                value={schedule.time}
-                                onChange={(e) => updateScheduleTime(schedule.id, e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`duration-${schedule.id}`} className="text-sm font-medium">
-                                Duration (mins) <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                id={`duration-${schedule.id}`}
-                                type="number"
-                                min="1"
-                                value={schedule.durationMinutes ?? durationMinutes}
-                                onChange={(e) => updateScheduleDuration(schedule.id, parseInt(e.target.value) || 0)}
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2" id={`schedule-days-${schedule.id}`}>
+                                                    <div className="space-y-2" id={`schedule-days-${schedule.id}`}>
                             <Label className="text-sm font-medium">
                               Days <span className="text-red-500">*</span>
                             </Label>
@@ -1116,6 +1122,32 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             {fieldErrors[`schedule-days-${schedule.id}`] && (
                               <p className="text-sm text-red-500">{fieldErrors[`schedule-days-${schedule.id}`]}</p>
                             )}
+                          </div>
+                          {/* Time and Duration inline */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor={`time-${schedule.id}`} className="text-sm font-medium">
+                                Time <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id={`time-${schedule.id}`}
+                                type="time"
+                                value={schedule.time}
+                                onChange={(e) => updateScheduleTime(schedule.id, e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`duration-${schedule.id}`} className="text-sm font-medium">
+                                Duration (mins) <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id={`duration-${schedule.id}`}
+                                type="number"
+                                min="1"
+                                value={schedule.durationMinutes ?? durationMinutes}
+                                onChange={(e) => updateScheduleDuration(schedule.id, parseInt(e.target.value) || 0)}
+                              />
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1146,16 +1178,23 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 {/* Pricing Type Toggle */}
                 <div className="space-y-2 py-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <Card
+                  <Card
                       className={cn(
-                        "cursor-pointer border",
-                        pricingType === "free" ? "border-primary bg-primary/5" : "border-gray-200",
+                        "cursor-pointer border rounded-lg",
+                        pricingType === "paid" ? "border-primary bg-primary/5" : "border-gray-200",
                       )}
-                      onClick={() => setPricingType("free")}
+                      onClick={() => setPricingType("paid")}
                     >
-                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                        {pricingType === "free" && (
-                          <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                      <CardContent className="p-4 flex justify-between">
+                      <div className="flex gap-2">
+                            <CreditCard className="h-5 w-5 text-gray-500" />                          
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">Paid</span>
+                            <span className="text-xs text-gray-500">Take Stripe payment</span>
+                          </div>
+                        </div>
+                        {pricingType === "paid" && (
+                          <div className="relative h-4 w-4  rounded-full bg-primary text-white flex items-center justify-center">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 24 24"
@@ -1170,20 +1209,26 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             </svg>
                           </div>
                         )}
-                        <span className="font-medium">Free</span>
                       </CardContent>
                     </Card>
 
                     <Card
                       className={cn(
-                        "cursor-pointer border",
-                        pricingType === "paid" ? "border-primary bg-primary/5" : "border-gray-200",
+                        "cursor-pointer border rounded-lg",
+                        pricingType === "free" ? "border-primary bg-primary/5" : "border-gray-200",
                       )}
-                      onClick={() => setPricingType("paid")}
+                      onClick={() => setPricingType("free")}
                     >
-                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                        {pricingType === "paid" && (
-                          <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                      <CardContent className="p-4 flex justify-between">
+                        <div className="flex gap-2">
+                          <Gift className="h-5 w-5 text-gray-500" />
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">Free</span>
+                            <span className="text-xs text-gray-500">No charge and no checkout</span>
+                          </div>
+                        </div>
+                        {pricingType === "free" && (
+                          <div className="relative h-4 w-4  rounded-full bg-primary text-white flex items-center justify-center">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 24 24"
@@ -1198,7 +1243,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             </svg>
                           </div>
                         )}
-                        <span className="font-medium">Paid</span>
                       </CardContent>
                     </Card>
                   </div>

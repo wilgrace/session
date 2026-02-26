@@ -91,8 +91,6 @@ export const sessionTemplates = pgTable('session_templates', {
   durationMinutes: integer('duration_minutes').notNull(),
   visibility: text('visibility').notNull().default('open'), // 'open' | 'hidden' | 'closed'
   isRecurring: boolean('is_recurring').notNull().default(false),
-  oneOffStartTime: time('one_off_start_time'),
-  oneOffDate: date('one_off_date'),
   recurrenceStartDate: date('recurrence_start_date'),
   recurrenceEndDate: date('recurrence_end_date'),
   createdBy: uuid('created_by').notNull().references(() => clerkUsers.id),
@@ -121,6 +119,17 @@ export const sessionSchedules = pgTable('session_schedules', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   organizationId: text('organization_id').references(() => organizations.id),
+});
+
+export const sessionOneOffDates = pgTable('session_one_off_dates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateId: uuid('template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
+  organizationId: text('organization_id').references(() => organizations.id),
+  date: date('date').notNull(),
+  time: time('time').notNull(),
+  durationMinutes: integer('duration_minutes'), // null = fall back to template.duration_minutes
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const sessionInstances = pgTable('session_instances', {
@@ -258,6 +267,7 @@ export type ClerkUser = typeof clerkUsers.$inferSelect;
 export type Sauna = typeof saunas.$inferSelect;
 export type SessionTemplate = typeof sessionTemplates.$inferSelect;
 export type SessionSchedule = typeof sessionSchedules.$inferSelect;
+export type SessionOneOffDate = typeof sessionOneOffDates.$inferSelect;
 export type SessionInstance = typeof sessionInstances.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type UserMembership = typeof userMemberships.$inferSelect;
@@ -266,6 +276,7 @@ export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect;
 // Insert types (for creating new records)
 export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
 export type NewSessionSchedule = typeof sessionSchedules.$inferInsert;
+export type NewSessionOneOffDate = typeof sessionOneOffDates.$inferInsert;
 export type NewUserMembership = typeof userMemberships.$inferInsert;
 
 // Membership types

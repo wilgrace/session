@@ -98,7 +98,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
 }
 
 type SortDirection = "asc" | "desc" | null
-type SortColumn = "name" | "schedule" | "duration" | "capacity" | "status" | null
+type SortColumn = "name" | "schedule" | "capacity" | "status" | null
 
 export function CalendarView({ sessions, onEditSession, onCreateSession, onDeleteSession, showControls = true }: CalendarViewProps) {
   const { view, setView, date, setDate } = useCalendarView()
@@ -221,7 +221,7 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
 
     // Process one-off instances
     if (!session.is_recurring) {
-      if (session.instances) {
+      if (session.instances && session.instances.length > 0) {
         session.instances.forEach((instance) => {
           // Parse the ISO string and create a new Date object
           const startTime = new Date(instance.start_time);
@@ -240,26 +240,23 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
             resource: session
           });
         });
-      } else if (session.one_off_date && session.one_off_start_time) {
-        // Handle one-off sessions without instances
-        const [hours, minutes] = session.one_off_start_time.split(':').map(Number);
-        const startTime = new Date(session.one_off_date);
-        startTime.setHours(hours, minutes, 0, 0);
-        
-        const endTime = new Date(startTime);
-        endTime.setMinutes(endTime.getMinutes() + session.duration_minutes);
-
-        // Format the time in local timezone
-        const formattedStartTime = format(startTime, 'h:mm a');
-        const formattedEndTime = format(endTime, 'h:mm a');
-
-        events.push({
-          id: `${session.id}-one-off`,
-          title: `${formattedStartTime} – ${formattedEndTime}: ${session.name}`,
-          start: startTime,
-          end: endTime,
-          resource: session
-        });
+      } else if (session.one_off_dates && session.one_off_dates.length > 0) {
+        // Fallback: render directly from one_off_dates (same approach as recurring from schedules)
+        session.one_off_dates.forEach((d) => {
+          const [hours, minutes] = d.time.split(':').map(Number)
+          const startTime = new Date(d.date)
+          startTime.setHours(hours, minutes, 0, 0)
+          const effectiveDuration = d.duration_minutes ?? session.duration_minutes
+          const endTime = new Date(startTime)
+          endTime.setMinutes(endTime.getMinutes() + effectiveDuration)
+          events.push({
+            id: `${session.id}-${d.id}`,
+            title: `${format(startTime, 'h:mm a')} – ${format(endTime, 'h:mm a')}: ${session.name}`,
+            start: startTime,
+            end: endTime,
+            resource: session
+          })
+        })
       }
     }
 
@@ -365,10 +362,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
         case "name":
           aVal = a.name.toLowerCase()
           bVal = b.name.toLowerCase()
-          break
-        case "duration":
-          aVal = a.duration_minutes
-          bVal = b.duration_minutes
           break
         case "capacity":
           aVal = a.capacity
@@ -538,7 +531,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
             <TableRow>
               <SortableHeader column="name">Name</SortableHeader>
               <TableHead className="min-w-[200px]">Schedule</TableHead>
-              <SortableHeader column="duration">Duration</SortableHeader>
               <SortableHeader column="capacity">Capacity</SortableHeader>
               <SortableHeader column="status">Status</SortableHeader>
               <TableHead className="w-[100px]"></TableHead>
@@ -568,37 +560,33 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                               const shortDay = day.slice(0, 3).toLowerCase()
                               return shortDay.charAt(0).toUpperCase() + shortDay.slice(1)
                             }).join(', ')
+                            const duration = schedule.duration_minutes ?? template.duration_minutes
                             return (
                               <div key={idx}>
-                                {schedule.time} {days}
+                                {schedule.time} — {duration}min — {days}
                               </div>
                             )
                           })}
                         </div>
                       </div>
-                    ) : template.one_off_date && template.one_off_start_time ? (
+                    ) : template.one_off_dates && template.one_off_dates.length > 0 ? (
                       <div className="text-sm flex items-start gap-2">
                         <Calendar className="h-4 w-4 mt-1 flex-shrink-0" />
                         <div>
-                          {format(new Date(`${template.one_off_date}T${template.one_off_start_time}`), 'd MMM')} at {format(new Date(`${template.one_off_date}T${template.one_off_start_time}`), 'HH:mm')}
-                        </div>
-                      </div>
-                    ) : template.instances && template.instances.length > 0 ? (
-                      <div className="text-sm flex items-start gap-2">
-                        <Calendar className="h-4 w-4 mt-1 flex-shrink-0" />
-                        <div>
-                          {template.instances.map((instance, idx) => (
-                            <div key={idx}>
-                              {format(new Date(instance.start_time), 'd MMM')} at {format(new Date(instance.start_time), 'HH:mm')}
-                            </div>
-                          ))}
+                          {template.one_off_dates.map((d, idx) => {
+                            const duration = d.duration_minutes ?? template.duration_minutes
+                            return (
+                              <div key={idx}>
+                                {format(new Date(d.date + 'T00:00:00'), 'd MMM')} at {d.time.slice(0, 5)} — {duration}min
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     ) : (
                       "No schedule"
                     )}
                   </TableCell>
-                  <TableCell>{template.duration_minutes} minutes</TableCell>
                   <TableCell>{template.capacity}</TableCell>
                   <TableCell>
                     <Badge

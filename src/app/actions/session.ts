@@ -7,6 +7,8 @@ import { ensureClerkUser } from "./clerk"
 import { Booking } from "@/types/booking"
 import { createSupabaseServerClient, getUserContextWithClient, UserContext } from "@/lib/supabase"
 import Stripe from "stripe"
+import { parseISO, set, addMinutes, formatISO } from "date-fns"
+import { localToUTC, SAUNA_TIMEZONE } from "@/lib/time-utils"
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -27,6 +29,35 @@ async function getAuthenticatedUser() {
 // Alias for backward compatibility within this file
 const createSupabaseClient = createSupabaseServerClient;
 
+interface OneOffDateParam {
+  date: string            // YYYY-MM-DD
+  time: string            // HH:MM
+  duration_minutes: number | null
+}
+
+// Build session_instances rows for date-type (non-recurring) templates
+function buildInstancesFromOneOffDates(
+  templateId: string,
+  organizationId: string,
+  templateDurationMinutes: number,
+  dates: OneOffDateParam[]
+) {
+  return dates.map(d => {
+    const [hours, mins] = d.time.split(':').map(Number)
+    const localDate = set(parseISO(d.date), { hours, minutes: mins, seconds: 0, milliseconds: 0 })
+    const startUTC = localToUTC(localDate, SAUNA_TIMEZONE)
+    const effectiveDuration = d.duration_minutes ?? templateDurationMinutes
+    const endUTC = addMinutes(startUTC, effectiveDuration)
+    return {
+      template_id: templateId,
+      organization_id: organizationId,
+      start_time: formatISO(startUTC),
+      end_time: formatISO(endUTC),
+      status: 'scheduled',
+    }
+  })
+}
+
 interface CreateSessionTemplateParams {
   name: string
   description: string | null
@@ -34,8 +65,7 @@ interface CreateSessionTemplateParams {
   duration_minutes: number
   visibility: 'open' | 'hidden' | 'closed'
   is_recurring: boolean
-  one_off_start_time: string | null
-  one_off_date: string | null
+  one_off_dates?: OneOffDateParam[]
   recurrence_start_date: string | null
   recurrence_end_date: string | null
   created_by: string
@@ -92,8 +122,6 @@ interface UpdateSessionTemplateParams {
   duration_minutes?: number
   visibility?: 'open' | 'hidden' | 'closed'
   is_recurring?: boolean
-  one_off_start_time?: string | null
-  one_off_date?: string | null
   recurrence_start_date?: string | null
   recurrence_end_date?: string | null
   // Pricing fields
@@ -174,6 +202,14 @@ interface DBSessionInstance {
   }[];
 }
 
+interface DBSessionOneOffDate {
+  id: string;
+  template_id: string;
+  date: string;
+  time: string;
+  duration_minutes: number | null;
+}
+
 interface DBSessionTemplate {
   id: string;
   name: string;
@@ -182,8 +218,6 @@ interface DBSessionTemplate {
   duration_minutes: number;
   visibility: 'open' | 'hidden' | 'closed';
   is_recurring: boolean;
-  one_off_start_time: string | null;
-  one_off_date: string | null;
   recurrence_start_date: string | null;
   recurrence_end_date: string | null;
   created_at: string;
@@ -260,8 +294,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         duration_minutes: params.duration_minutes,
         visibility: params.visibility,
         is_recurring: params.is_recurring,
-        one_off_start_time: params.one_off_start_time,
-        one_off_date: params.one_off_date,
         recurrence_start_date: params.recurrence_start_date,
         recurrence_end_date: params.recurrence_end_date,
         created_by: userData.id,
@@ -324,11 +356,38 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
       }
     }
 
-    // Trigger instance generation for recurring templates
-    if (params.is_recurring) {
+    // Create one-off dates and their instances synchronously (for non-recurring templates)
+    if (!params.is_recurring && params.one_off_dates && params.one_off_dates.length > 0) {
+      const { error: datesError } = await supabase
+        .from("session_one_off_dates")
+        .insert(params.one_off_dates.map(d => ({
+          template_id: data.id,
+          organization_id: organizationId,
+          date: d.date,
+          time: d.time,
+          duration_minutes: d.duration_minutes,
+        })))
+
+      if (datesError) {
+        return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
+      }
+
+      // Create instances synchronously so they're available immediately
+      const instanceRows = buildInstancesFromOneOffDates(
+        data.id,
+        organizationId,
+        params.duration_minutes,
+        params.one_off_dates
+      )
+      await supabase.from("session_instances").insert(instanceRows)
+    }
+
+    // Trigger instance generation for all templates (recurring and date-type)
+    const shouldGenerate = params.is_recurring || (!params.is_recurring && params.one_off_dates && params.one_off_dates.length > 0)
+    if (shouldGenerate) {
       try {
         const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
-        const functionUrl = IS_DEVELOPMENT 
+        const functionUrl = IS_DEVELOPMENT
           ? 'http://localhost:54321/functions/v1/generate-instances'
           : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`;
 
@@ -618,8 +677,6 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         duration_minutes,
         visibility,
         is_recurring,
-        one_off_start_time,
-        one_off_date,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -664,6 +721,17 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
       return { data: null, error: schedulesError.message }
     }
 
+    // Get one-off dates for all non-recurring templates
+    const { data: oneOffDates, error: oneOffDatesError } = await supabase
+      .from("session_one_off_dates")
+      .select(`id, template_id, date, time, duration_minutes`)
+      .in('template_id', templateIds)
+      .order('date', { ascending: true })
+
+    if (oneOffDatesError) {
+      return { data: null, error: oneOffDatesError.message }
+    }
+
     // Get instances with bookings
     const { data: instances, error: instancesError } = await supabase
       .from("session_instances")
@@ -694,6 +762,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
     const transformedData = (templates as DBSessionTemplate[]).map(template => {
       const templateSchedules = schedules?.filter(s => s.session_template_id === template.id) || []
       const templateInstances = (instances as unknown as DBSessionInstance[])?.filter(i => i.template_id === template.id) || []
+      const templateOneOffDates = (oneOffDates as DBSessionOneOffDate[])?.filter(d => d.template_id === template.id) || []
 
       // Group schedules by time
       const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups, schedule) => {
@@ -746,8 +815,13 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         duration_minutes: template.duration_minutes,
         visibility: template.visibility,
         is_recurring: template.is_recurring ?? false,
-        one_off_start_time: template.one_off_start_time,
-        one_off_date: template.one_off_date,
+        one_off_dates: templateOneOffDates.map(d => ({
+          id: d.id,
+          template_id: d.template_id,
+          date: d.date,
+          time: d.time.substring(0, 5),
+          duration_minutes: d.duration_minutes,
+        })),
         recurrence_start_date: template.recurrence_start_date,
         recurrence_end_date: template.recurrence_end_date,
         created_at: template.created_at,
@@ -772,9 +846,9 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
 
     return { data: transformedData, error: null }
   } catch (error) {
-    return { 
-      data: null, 
-      error: error instanceof Error ? error.message : "Unknown error occurred" 
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
@@ -821,8 +895,6 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         duration_minutes,
         visibility,
         is_recurring,
-        one_off_start_time,
-        one_off_date,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -865,17 +937,21 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
       return { data: null, error: schedulesError.message };
     }
 
-    // Finally get the instances
-    const { data: instances, error: instancesError } = await supabase
-      .from("session_instances")
-      .select(`
-        id,
-        template_id,
-        start_time,
-        end_time,
-        status
-      `)
-      .eq("template_id", id);
+    // Get instances and one-off dates in parallel
+    const [
+      { data: instances, error: instancesError },
+      { data: oneOffDates, error: oneOffDatesError }
+    ] = await Promise.all([
+      supabase
+        .from("session_instances")
+        .select(`id, template_id, start_time, end_time, status`)
+        .eq("template_id", id),
+      supabase
+        .from("session_one_off_dates")
+        .select(`id, template_id, date, time, duration_minutes`)
+        .eq("template_id", id)
+        .order('date', { ascending: true })
+    ])
 
     if (instancesError) {
       return { data: null, error: instancesError.message };
@@ -905,6 +981,13 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
     const transformedData = {
       ...template,
       is_recurring: template.is_recurring ?? false,
+      one_off_dates: (oneOffDates || []).map(d => ({
+        id: d.id,
+        template_id: d.template_id,
+        date: d.date,
+        time: d.time.substring(0, 5),
+        duration_minutes: d.duration_minutes,
+      })),
       schedules: Object.values(scheduleGroups),
       instances: instances?.map(instance => ({
         id: instance.id,
@@ -1089,6 +1172,7 @@ export async function updateSessionWithSchedules(params: {
   template: Omit<UpdateSessionTemplateParams, 'id'>
   schedules: Array<{ time: string; days: string[]; duration_minutes?: number | null }>
   isRecurring: boolean
+  one_off_dates?: OneOffDateParam[]
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await getAuthenticatedUser()
@@ -1124,17 +1208,23 @@ export async function updateSessionWithSchedules(params: {
       return { success: false, error: "Unauthorized: Admin access required" }
     }
 
-    // Update template + delete schedules + delete instances in parallel
+    // Update template + delete schedules + delete instances + delete one_off_dates in parallel
     const updateFields = { ...params.template, updated_at: new Date().toISOString() }
     const results = await Promise.all([
       supabase.from("session_templates").update(updateFields).eq("id", params.templateId),
       supabase.from("session_schedules").delete().eq("session_template_id", params.templateId),
       supabase.from("session_instances").delete().eq("template_id", params.templateId),
+      supabase.from("session_one_off_dates").delete().eq("template_id", params.templateId),
     ])
 
     if (results[0].error) {
       return { success: false, error: results[0].error.message }
     }
+
+    const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
+    const functionUrl = IS_DEVELOPMENT
+      ? 'http://localhost:54321/functions/v1/generate-instances'
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
 
     // Batch insert new schedules (if recurring)
     if (params.isRecurring && params.schedules.length > 0) {
@@ -1159,11 +1249,6 @@ export async function updateSessionWithSchedules(params: {
       }
 
       // Fire-and-forget instance generation
-      const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
-      const functionUrl = IS_DEVELOPMENT
-        ? 'http://localhost:54321/functions/v1/generate-instances'
-        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
-
       fetch(functionUrl, {
         method: 'POST',
         headers: {
@@ -1172,6 +1257,40 @@ export async function updateSessionWithSchedules(params: {
         },
         body: JSON.stringify({ template_id_to_process: params.templateId }),
       }).catch(() => {})
+    }
+
+    // Insert new one-off dates (if date-type template)
+    if (!params.isRecurring && params.one_off_dates && params.one_off_dates.length > 0) {
+      // Fetch the template's org id for the new rows
+      const { data: tpl } = await supabase
+        .from("session_templates")
+        .select("organization_id")
+        .eq("id", params.templateId)
+        .single()
+
+      const { error: datesError } = await supabase
+        .from("session_one_off_dates")
+        .insert(params.one_off_dates.map(d => ({
+          template_id: params.templateId,
+          organization_id: tpl?.organization_id,
+          date: d.date,
+          time: d.time,
+          duration_minutes: d.duration_minutes,
+        })))
+
+      if (datesError) {
+        return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
+      }
+
+      // Create instances synchronously so they're available immediately
+      // (instances for this template were already deleted in the parallel step above)
+      const instanceRows = buildInstancesFromOneOffDates(
+        params.templateId,
+        tpl?.organization_id ?? '',
+        params.template.duration_minutes ?? 75,
+        params.one_off_dates
+      )
+      await supabase.from("session_instances").insert(instanceRows)
     }
 
     return { success: true }
@@ -1479,8 +1598,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         duration_minutes,
         visibility,
         is_recurring,
-        one_off_start_time,
-        one_off_date,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -1511,9 +1628,9 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       // Provide more helpful error message
       const errorMessage = templatesError.message || 'Unknown error';
       if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
-        return { 
-          data: null, 
-          error: `Cannot connect to Supabase. Please check that NEXT_PUBLIC_SUPABASE_URL is set correctly in your Vercel environment variables. Error: ${errorMessage}` 
+        return {
+          data: null,
+          error: `Cannot connect to Supabase. Please check that NEXT_PUBLIC_SUPABASE_URL is set correctly in your Vercel environment variables. Error: ${errorMessage}`
         }
       }
       return { data: null, error: `Templates query failed: ${errorMessage}` }
@@ -1527,26 +1644,26 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
     // Get schedules for all templates
     const templateIds = templates.map(t => t.id)
 
-    const { data: schedules, error: schedulesError } = await supabase
-      .from("session_schedules")
-      .select(`
-        id,
-        session_template_id,
-        day_of_week,
-        is_active,
-        created_at,
-        updated_at,
-        time,
-        duration_minutes
-      `)
-      .in('session_template_id', templateIds)
+    const [
+      { data: schedules, error: schedulesError },
+      { data: oneOffDates, error: oneOffDatesError }
+    ] = await Promise.all([
+      supabase
+        .from("session_schedules")
+        .select(`id, session_template_id, day_of_week, is_active, created_at, updated_at, time, duration_minutes`)
+        .in('session_template_id', templateIds),
+      supabase
+        .from("session_one_off_dates")
+        .select(`id, template_id, date, time, duration_minutes`)
+        .in('template_id', templateIds)
+        .order('date', { ascending: true })
+    ])
 
     if (schedulesError) {
       return { data: null, error: `Schedules query failed: ${schedulesError.message}` }
     }
 
-    // Check for recurring templates that need instances generated
-    // Generate instances for templates that have no instances in the next 3 months
+    // Check for templates that need instances generated
     const threeMonthsFromNow = new Date()
     threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
 
@@ -1555,6 +1672,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
     // Build a Set of template IDs that have schedules for O(1) lookup
     const templatesWithSchedules = new Set(schedules?.map(s => s.session_template_id) || [])
+    const templatesWithOneOffDates = new Set((oneOffDates || []).map(d => d.template_id))
 
     // Single batch query to check which templates have instances (instead of N queries)
     let templatesWithInstances = new Set<string>()
@@ -1569,15 +1687,31 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       templatesWithInstances = new Set(existingInstances?.map(i => i.template_id) || [])
     }
 
-    // Find templates that need generation: recurring + has schedules + no instances
-    const templatesNeedingGeneration = recurringTemplateIds.filter(
+    // Find recurring templates that need generation: has schedules + no instances
+    const recurringNeedingGeneration = recurringTemplateIds.filter(
       id => templatesWithSchedules.has(id) && !templatesWithInstances.has(id)
     )
+
+    // Find date-type templates that need generation: has one_off_dates + no instances
+    const dateTypeTemplateIds = templates.filter(t => !t.is_recurring).map(t => t.id)
+    let dateTypeWithInstances = new Set<string>()
+    if (dateTypeTemplateIds.length > 0) {
+      const { data: existingDateInstances } = await supabase
+        .from("session_instances")
+        .select("template_id")
+        .in("template_id", dateTypeTemplateIds)
+      dateTypeWithInstances = new Set(existingDateInstances?.map(i => i.template_id) || [])
+    }
+    const dateTypeNeedingGeneration = dateTypeTemplateIds.filter(
+      id => templatesWithOneOffDates.has(id) && !dateTypeWithInstances.has(id)
+    )
+
+    const templatesNeedingGeneration = [...recurringNeedingGeneration, ...dateTypeNeedingGeneration]
 
     // Trigger generation for templates that need it (in parallel, but don't wait)
     if (templatesNeedingGeneration.length > 0) {
       const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
-      const functionUrl = IS_DEVELOPMENT 
+      const functionUrl = IS_DEVELOPMENT
         ? 'http://localhost:54321/functions/v1/generate-instances'
         : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
 
@@ -1591,12 +1725,10 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
               'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE_KEY
             },
             body: JSON.stringify({ template_id_to_process: templateId }),
-          }).catch(err => {
-          })
+          }).catch(() => {})
         )
-      ).catch(err => {
-      })
-      
+      ).catch(() => {})
+
       // Wait a short time for generation to start (instances may be available on next fetch)
       await new Promise(resolve => setTimeout(resolve, 500))
     }
@@ -1678,6 +1810,15 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       return {
         ...template,
         is_recurring: template.is_recurring ?? false,
+        one_off_dates: (oneOffDates || [])
+          .filter(d => d.template_id === template.id)
+          .map(d => ({
+            id: d.id,
+            template_id: d.template_id,
+            date: d.date,
+            time: d.time.substring(0, 5),
+            duration_minutes: d.duration_minutes,
+          })),
         schedules: Object.values(scheduleGroups),
         instances: transformedInstances
       } as SessionTemplate
@@ -1685,9 +1826,9 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
     return { data: transformedData, error: null }
   } catch (error) {
-    return { 
-      data: null, 
-      error: error instanceof Error ? error.message : "Unknown error occurred" 
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
@@ -1727,8 +1868,6 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         duration_minutes,
         visibility,
         is_recurring,
-        one_off_start_time,
-        one_off_date,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -1779,21 +1918,18 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
 
     const [
       { data: schedules, error: schedulesError },
+      { data: oneOffDates, error: oneOffDatesError },
       { data: instances, error: instancesError }
     ] = await Promise.all([
       supabase
         .from("session_schedules")
-        .select(`
-          id,
-          session_template_id,
-          day_of_week,
-          is_active,
-          created_at,
-          updated_at,
-          time,
-          duration_minutes
-        `)
+        .select(`id, session_template_id, day_of_week, is_active, created_at, updated_at, time, duration_minutes`)
         .in('session_template_id', templateIds),
+      supabase
+        .from("session_one_off_dates")
+        .select(`id, template_id, date, time, duration_minutes`)
+        .in('template_id', templateIds)
+        .order('date', { ascending: true }),
       supabase
         .from("session_instances")
         .select(`
@@ -1825,14 +1961,20 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
       return { data: null, error: `Instances query failed: ${instancesError.message}` }
     }
 
-    // Determine which recurring templates need instance generation (using already-fetched instances)
+    // Determine which templates need instance generation
     const recurringTemplateIds = templates.filter(t => t.is_recurring).map(t => t.id)
+    const dateTypeTemplateIds = templates.filter(t => !t.is_recurring).map(t => t.id)
     const templatesWithSchedules = new Set(schedules?.map(s => s.session_template_id) || [])
+    const templatesWithOneOffDates = new Set((oneOffDates || []).map(d => d.template_id))
     const templatesWithInstances = new Set(instances?.map(i => i.template_id) || [])
 
-    const templatesNeedingGeneration = recurringTemplateIds.filter(
+    const recurringNeedingGeneration = recurringTemplateIds.filter(
       id => templatesWithSchedules.has(id) && !templatesWithInstances.has(id)
     )
+    const dateTypeNeedingGeneration = dateTypeTemplateIds.filter(
+      id => templatesWithOneOffDates.has(id) && !templatesWithInstances.has(id)
+    )
+    const templatesNeedingGeneration = [...recurringNeedingGeneration, ...dateTypeNeedingGeneration]
 
     if (templatesNeedingGeneration.length > 0) {
       const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
@@ -1858,6 +2000,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
     const transformedData = (templates as DBSessionTemplate[]).map(template => {
       const templateSchedules = schedules?.filter(s => s.session_template_id === template.id) || []
       const templateInstances = (instances as unknown as DBSessionInstance[])?.filter(i => i.template_id === template.id) || []
+      const templateOneOffDates = (oneOffDates as DBSessionOneOffDate[] || []).filter(d => d.template_id === template.id)
 
       const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups, schedule) => {
         const time = schedule.time?.substring(0, 5)
@@ -1903,6 +2046,13 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
       return {
         ...template,
         is_recurring: template.is_recurring ?? false,
+        one_off_dates: templateOneOffDates.map(d => ({
+          id: d.id,
+          template_id: d.template_id,
+          date: d.date,
+          time: d.time.substring(0, 5),
+          duration_minutes: d.duration_minutes,
+        })),
         schedules: Object.values(scheduleGroups),
         instances: transformedInstances
       } as SessionTemplate
