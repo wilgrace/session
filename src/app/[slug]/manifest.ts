@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next"
 import { getOrganizationBySlug } from "@/lib/tenant-utils"
+import { getBaseUrl } from "@/lib/site-config"
 
 export default async function manifest({
   params,
@@ -8,12 +9,14 @@ export default async function manifest({
 }): Promise<MetadataRoute.Manifest> {
   const { slug } = await params
   const org = await getOrganizationBySlug(slug)
+  const baseUrl = getBaseUrl()
 
   return {
     name: org?.name ?? "Sawna",
     short_name: org?.name?.slice(0, 12) ?? "Sawna",
     description: "Book your sessions",
-    start_url: `/${slug}`,
+    start_url: `${baseUrl}/${slug}`,
+    scope: `${baseUrl}/${slug}`,
     display: "standalone",
     background_color: "#ffffff",
     theme_color: org?.brandColor ?? "#0ea5e9",
