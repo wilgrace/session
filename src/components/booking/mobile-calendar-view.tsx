@@ -179,7 +179,7 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
                       <div
                         key={index}
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: isSessionFullOnDay(session, day) ? '#9CA3AF' : getEventColorValues(session.event_color).color500 }}
+                        style={{ backgroundColor: isSessionFullOnDay(session, day) ? '#FFF' : getEventColorValues(session.event_color).color500 }}
                       />
                     ))}
                   </div>
