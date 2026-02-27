@@ -15,6 +15,21 @@ export function SessionDetails({
   startTime,
   currentUserSpots = 0,
 }: SessionDetailsProps) {
+  // Resolve duration from the matching instance (which has schedule-level override applied),
+  // falling back to the template-level duration_minutes.
+  const durationMinutes = (() => {
+    if (startTime && session.instances?.length) {
+      const match = session.instances.find(i =>
+        new Date(i.start_time).getTime() === startTime.getTime()
+      )
+      if (match) {
+        const ms = new Date(match.end_time).getTime() - new Date(match.start_time).getTime()
+        return Math.round(ms / 60000)
+      }
+    }
+    return session.duration_minutes
+  })()
+
   // Calculate total spots booked, including current user's spots
   const totalSpotsBooked =
     (session.instances?.reduce((total, instance) => {
@@ -38,7 +53,7 @@ export function SessionDetails({
           />
         </div>
       )}
-      <div className="py-6 space-y-4">
+      <div className="pt-4 space-y-4">
         <div>
           {startTime && (
             <h2 className="text-2xl font-bold">
@@ -51,7 +66,7 @@ export function SessionDetails({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <h3 className="text-sm font-medium text-muted-foreground">Duration</h3>
-            <p className="font-medium">{session.duration_minutes} minutes</p>
+            <p className="font-medium">{durationMinutes} minutes</p>
           </div>
           <div>
             <h3 className="text-sm font-medium text-muted-foreground">Availability</h3>

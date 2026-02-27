@@ -54,7 +54,7 @@ export function WaiversList({
             New users must agree to the active waiver when signing up.
           </p>
         </div>
-        <Button onClick={onCreate} className="gap-2">
+        <Button onClick={onCreate} className="gap-2" variant="outline">
           <Plus className="h-4 w-4" />
           Create Waiver
         </Button>

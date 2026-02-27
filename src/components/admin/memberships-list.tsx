@@ -102,11 +102,14 @@ export function MembershipsList({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-500">
-            Create membership tiers to offer subscribers discounted session pricing.
+          <p className="text-sm font-medium">
+            Membership
           </p>
+          <p className="text-xs text-gray-500">
+          Create membership tiers to offer subscribers discounted session pricing.
+              </p>
         </div>
-        <Button onClick={onCreate} className="gap-2">
+        <Button onClick={onCreate} className="gap-2" variant="outline">
           <Plus className="h-4 w-4" />
           Create Membership
         </Button>

@@ -80,6 +80,7 @@ const config: Config = {
 		  boxShadow: {
 			'subtle': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
 			'modal': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+			'input': '0px 0px 0px 1px rgba(10, 10, 46, 0.16) inset, 0px 1px 1px rgba(10, 10, 11, 0.06)',
 		  },
   		keyframes: {
   			'accordion-down': {

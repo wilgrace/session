@@ -7,8 +7,8 @@ import { ensureClerkUser } from "./clerk"
 import { Booking } from "@/types/booking"
 import { createSupabaseServerClient, getUserContextWithClient, UserContext } from "@/lib/supabase"
 import Stripe from "stripe"
-import { parseISO, set, addMinutes, formatISO } from "date-fns"
-import { localToUTC, SAUNA_TIMEZONE } from "@/lib/time-utils"
+import { parseISO, set, addMinutes, formatISO, format, getDay } from "date-fns"
+import { localToUTC, utcToLocal, SAUNA_TIMEZONE } from "@/lib/time-utils"
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -2335,6 +2335,12 @@ export async function getBookingDetails(bookingId: string) {
     }
 
 
+    // Compute actual duration from the instance (reflects schedule-level overrides, not template default)
+    const instanceDurationMinutes = Math.round(
+      (new Date(bookingData.session_instance.end_time).getTime() -
+        new Date(bookingData.session_instance.start_time).getTime()) / 60000
+    )
+
     // Transform the response to match the expected format
     const response = {
       success: true,
@@ -2359,7 +2365,10 @@ export async function getBookingDetails(bookingId: string) {
             clerk_user_id: userData.clerk_user_id
           }
         },
-        session: bookingData.session_instance.template,
+        session: {
+          ...bookingData.session_instance.template,
+          duration_minutes: instanceDurationMinutes,
+        },
         startTime: new Date(bookingData.session_instance.start_time)
       }
     };
@@ -2804,6 +2813,7 @@ export async function getPublicSessionById(
         duration_minutes,
         visibility,
         is_recurring,
+        timezone,
         created_at,
         updated_at,
         created_by,
@@ -2876,10 +2886,61 @@ export async function getPublicSessionById(
       }
     }
 
+    // Resolve duration from the authoritative source (schedule/one-off-date), with instance
+    // end_time as fallback. Never rely on session_templates.duration_minutes for display.
+    let effectiveDurationMinutes: number | null = null;
+
+    if (startTime) {
+      const tz = (sessionData as any).timezone as string || SAUNA_TIMEZONE;
+      const localDate = utcToLocal(new Date(startTime), tz);
+      const localTimeStr = format(localDate, 'HH:mm');
+
+      if (sessionData.is_recurring) {
+        // Find the matching schedule by day-of-week and time in the session's timezone
+        const localDayOfWeek = getDay(localDate); // 0=Sunday … 6=Saturday
+        const { data: schedules } = await supabase
+          .from('session_schedules')
+          .select('day_of_week, time, duration_minutes')
+          .eq('session_template_id', sessionId)
+          .eq('is_active', true)
+          .eq('day_of_week', localDayOfWeek);
+
+        const matchingSchedule = schedules?.find(
+          s => s.time.substring(0, 5) === localTimeStr
+        );
+        if (matchingSchedule?.duration_minutes != null) {
+          effectiveDurationMinutes = matchingSchedule.duration_minutes;
+        }
+      } else {
+        // Find the matching one-off date by local date and time
+        const localDateStr = format(localDate, 'yyyy-MM-dd');
+        const { data: oneOffDates } = await supabase
+          .from('session_one_off_dates')
+          .select('date, time, duration_minutes')
+          .eq('template_id', sessionId)
+          .eq('date', localDateStr);
+
+        const matchingOneOff = oneOffDates?.find(
+          d => d.time.substring(0, 5) === localTimeStr
+        );
+        if (matchingOneOff?.duration_minutes != null) {
+          effectiveDurationMinutes = matchingOneOff.duration_minutes;
+        }
+      }
+
+      // Fall back to instance end_time if no schedule duration found
+      if (effectiveDurationMinutes === null && instances.length > 0) {
+        effectiveDurationMinutes = Math.round(
+          (new Date(instances[0].end_time).getTime() - new Date(instances[0].start_time).getTime()) / 60000
+        );
+      }
+    }
+
     return {
       success: true,
       data: {
         ...sessionData,
+        ...(effectiveDurationMinutes !== null && { duration_minutes: effectiveDurationMinutes }),
         instances
       } as unknown as SessionTemplate
     };

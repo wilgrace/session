@@ -14,9 +14,10 @@ const CalendarView = dynamic(
 interface CalendarPageProps {
   initialSessions: SessionTemplate[]
   defaultSessionImageUrl?: string | null
+  defaultDropinPrice?: number | null
 }
 
-export function CalendarPage({ initialSessions, defaultSessionImageUrl }: CalendarPageProps) {
+export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultDropinPrice }: CalendarPageProps) {
   const [sessions, setSessions] = useState(initialSessions)
   const [showSessionForm, setShowSessionForm] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionTemplate | null>(null)
@@ -63,6 +64,7 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl }: Calend
         template={selectedSession}
         initialTimeSlot={selectedTimeSlot}
         defaultSessionImageUrl={defaultSessionImageUrl}
+        defaultDropinPrice={defaultDropinPrice}
         onSuccess={() => {
           // Refresh the page to get new data
           window.location.reload()

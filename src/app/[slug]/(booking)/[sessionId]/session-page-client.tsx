@@ -307,7 +307,7 @@ export function SessionPageClient({
           "flex justify-center",
           (checkoutStep === "checkout" || mode !== "new") && "hidden md:flex"
         )}>
-          <div className="w-full max-w-[550px] px-4 md:px-8 pt-4 md:pt-[60px]">
+          <div className="w-full max-w-[550px] px-4 md:px-8 md:pt-[60px]">
             {/* Desktop-only nav row */}
           <div className="hidden md:flex items-center justify-between h-20">
             <Link
@@ -342,7 +342,7 @@ export function SessionPageClient({
             />
           </div>
         )}
-        <div className="w-full max-w-[550px] mx-auto px-4 md:px-8 pt-4 md:pt-[60px] pb-6">
+        <div className="w-full max-w-[550px] mx-auto px-4 md:px-8 pt-4 md:pt-[60px] pb-8">
           {/* Desktop-only auth row */}
           <div className="hidden md:flex justify-end h-20">
             <SessionAuthControls isAdmin={isAdmin} slug={slug} />

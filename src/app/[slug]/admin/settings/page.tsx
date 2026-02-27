@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { usePageHeaderAction } from "@/hooks/use-page-header-action"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -44,6 +45,10 @@ function SettingsPageContent() {
   const router = useRouter()
   const slug = params.slug as string
 
+  const { setAction } = usePageHeaderAction()
+  const handleSaveRef = useRef<() => void>(() => {})
+  handleSaveRef.current = handleSave
+
   const [settings, setSettings] = useState<OrganizationSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -79,6 +84,11 @@ function SettingsPageContent() {
   useEffect(() => {
     loadSettings()
   }, [])
+
+  useEffect(() => {
+    setAction({ label: "Save Changes", onClick: () => handleSaveRef.current(), loading: saving })
+    return () => setAction(null)
+  }, [saving])
 
   async function loadSettings() {
     setLoading(true)
@@ -537,13 +547,6 @@ function SettingsPageContent() {
       </div>
       </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving} className="min-w-[120px]">
-          {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          Save Changes
-        </Button>
-      </div>
     </div>
   )
 }

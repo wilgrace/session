@@ -637,24 +637,31 @@ export function PreCheckoutForm({
           </div>
         </div>
 
+        {/* Spacer so content isn't hidden behind fixed button on mobile when logged in */}
+        {isLoggedIn && <div className="h-20 sm:hidden" />}
+
         {/* Proceed Button */}
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canProceed}
-          className="w-full h-14 text-lg rounded-xl hover:opacity-90"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Loading checkout...
-            </>
-          ) : guestNeedsAccountForMembership ? (
-            "Create Account"
-          ) : (
-            "Continue"
-          )}
-        </Button>
+        <div className={cn(
+          isLoggedIn && "fixed bottom-0 left-0 right-0 z-50 p-4 bg-background border-t sm:static sm:p-0 sm:bg-transparent sm:border-0 sm:z-auto"
+        )}>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canProceed}
+            className="w-full h-14 text-lg rounded-xl hover:opacity-90"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Loading checkout...
+              </>
+            ) : guestNeedsAccountForMembership ? (
+              "Create Account"
+            ) : (
+              "Continue"
+            )}
+          </Button>
+        </div>
     </div>
   )
 }

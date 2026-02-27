@@ -66,7 +66,6 @@ function ChangeDateBody({
   dateOptions,
   selectedOption,
   setSelectedOption,
-  session,
   movingDate,
   handleConfirmDateChange,
 }: {
@@ -74,7 +73,6 @@ function ChangeDateBody({
   dateOptions: DateOption[]
   selectedOption: DateOption | null
   setSelectedOption: (o: DateOption | null) => void
-  session: SessionTemplate
   movingDate: boolean
   handleConfirmDateChange: () => void
 }) {
@@ -127,7 +125,7 @@ function ChangeDateBody({
             </div>
             <div className="text-sm text-muted-foreground">
               {format(new Date(selectedOption.start_time), "HH:mm")}
-              {session.duration_minutes ? ` · ${session.duration_minutes} minutes` : ""}
+              {` · ${Math.round((new Date(selectedOption.end_time).getTime() - new Date(selectedOption.start_time).getTime()) / 60000)} minutes`}
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -401,7 +399,6 @@ export function BookingPanel({
               dateOptions={dateOptions}
               selectedOption={selectedOption}
               setSelectedOption={setSelectedOption}
-              session={session}
               movingDate={movingDate}
               handleConfirmDateChange={handleConfirmDateChange}
             />
@@ -427,7 +424,6 @@ export function BookingPanel({
               dateOptions={dateOptions}
               selectedOption={selectedOption}
               setSelectedOption={setSelectedOption}
-              session={session}
               movingDate={movingDate}
               handleConfirmDateChange={handleConfirmDateChange}
             />

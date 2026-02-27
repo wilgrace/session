@@ -70,6 +70,7 @@ export async function generateMetadata({
     title,
     description,
     icons,
+    robots: { index: false, follow: false },
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",

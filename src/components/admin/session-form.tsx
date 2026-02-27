@@ -63,6 +63,7 @@ interface SessionFormProps {
   template: SessionTemplate | null
   initialTimeSlot?: { start: Date; end: Date } | null
   defaultSessionImageUrl?: string | null
+  defaultDropinPrice?: number | null
   onSuccess: () => void
 }
 
@@ -101,7 +102,7 @@ function getDefaultMembershipPrice(membership: Membership, dropInPricePence: num
   return ''
 }
 
-export function SessionForm({ open, onClose, template, initialTimeSlot, defaultSessionImageUrl, onSuccess }: SessionFormProps) {
+export function SessionForm({ open, onClose, template, initialTimeSlot, defaultSessionImageUrl, defaultDropinPrice, onSuccess }: SessionFormProps) {
   const { toast } = useToast()
   const { user } = useUser()
   const { getToken } = useAuth()
@@ -121,7 +122,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   )
   const [recurrenceStartDate, setRecurrenceStartDate] = useState<Date | undefined>(undefined)
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>(undefined)
-  const [generalExpanded, setGeneralExpanded] = useState(true)
+  const [startDateOpen, setStartDateOpen] = useState(false)
+  const [endDateOpen, setEndDateOpen] = useState(false)
+  const [openOneOffDateId, setOpenOneOffDateId] = useState<string | null>(null)
+  const [generalExpanded, setGeneralExpanded] = useState(!template)
   const [scheduleExpanded, setScheduleExpanded] = useState(true)
   const [paymentExpanded, setPaymentExpanded] = useState(true)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -175,6 +179,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: 75 }])
       // Pre-populate image with org default for new sessions
       setImageUrl(defaultSessionImageUrl || '')
+      // Pre-populate drop-in price with org default for new sessions
+      if (defaultDropinPrice != null) {
+        setDropInPrice((defaultDropinPrice / 100).toFixed(2))
+      }
     }
   }, [template])
 
@@ -203,6 +211,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
   useEffect(() => {
     if (template) {
+      setGeneralExpanded(false)
 
       setName(template.name)
       setDescription(template.description || "")
@@ -316,12 +325,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             setMembershipPrices(priceMap)
           }
         } else {
-          // New session: all enabled, pre-populate fixed-price memberships
+          // New session: all enabled, pre-populate prices using the org default drop-in price
           const enabledMap: Record<string, boolean> = {}
           const priceMap: Record<string, string> = {}
+          const defaultDropinPricePence = defaultDropinPrice ?? 0
           activeMemberships.forEach((m) => {
             enabledMap[m.id] = true
-            const defaultPrice = getDefaultMembershipPrice(m, 0)
+            const defaultPrice = getDefaultMembershipPrice(m, defaultDropinPricePence)
             if (defaultPrice) priceMap[m.id] = defaultPrice
           })
           setMembershipEnabled(enabledMap)
@@ -336,9 +346,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     loadMembershipsData()
   }, [open, template?.id])
 
-  // When drop-in price changes, update pre-populated prices for discount-type memberships
-  // (only if the current value is blank or matches the previously auto-calculated price)
-  useEffect(() => {
+  // When drop-in price input loses focus, update pre-populated prices for discount-type memberships
+  // (only if the membership price is still blank — don't override anything the user has set)
+  const handleDropInPriceBlur = () => {
     if (!dropInPrice || memberships.length === 0) return
     const dropInPricePence = Math.round(parseFloat(dropInPrice) * 100)
     if (isNaN(dropInPricePence) || dropInPricePence <= 0) return
@@ -353,8 +363,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       })
       return updated
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dropInPrice])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -712,12 +721,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </SheetHeader>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           {/* General Section */}
-          <div className="rounded-lg overflow-hidden">
+          <div className="overflow-hidden">
             <button
               type="button"
-              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
+              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg "
               onClick={() => setGeneralExpanded(!generalExpanded)}
             >
               <span>General</span>
@@ -773,7 +782,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     <Label htmlFor="description" className="text-sm font-medium">
                       Description
                     </Label>
-                    <span className="text-sm text-gray-500">0</span>
                   </div>
                   <Textarea
                     id="description"
@@ -842,10 +850,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </div>
 
           {/* Schedule Section - Moved to top */}
-          <div className="rounded-lg overflow-hidden">
+          <div className="overflow-hidden">
             <button
               type="button"
-              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
+              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg"
               onClick={() => setScheduleExpanded(!scheduleExpanded)}
             >
               <span>Schedule</span>
@@ -869,7 +877,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                           <RefreshCw className="h-4 w-4 text-gray-500" />
                           <div className="flex flex-col">
                             <span className="font-medium text-sm">Repeat</span>
-                            <span className="text-xs text-gray-500">Recurring on days</span>
+                            <span className="text-xs text-gray-500">Every day or week</span>
                           </div>
                         </div>
                         {scheduleType === "repeat" && (
@@ -903,7 +911,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                         <CalendarDays className="h-4 w-4 text-gray-500" />
                         <div className="flex flex-col">
                             <span className="font-medium text-sm">Event</span>
-                            <span className="text-xs text-gray-500">One or more dates</span>
+                            <span className="text-xs text-gray-500">On one or more dates</span>
                           </div>
                           </div>
                         {scheduleType === "date" && (
@@ -945,7 +953,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             </Button>
                           )}
                         </div>
-                        <Popover>
+                        <Popover open={openOneOffDateId === item.id} onOpenChange={(open) => setOpenOneOffDateId(open ? item.id : null)}>
                           <PopoverTrigger asChild>
                             <Button
                               id={`one-off-date-${item.id}`}
@@ -969,6 +977,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                                 if (newDate) {
                                   updateOneOffDate(item.id, "date", startOfDay(newDate))
                                   clearError(`one-off-date-${item.id}`)
+                                  setOpenOneOffDateId(null)
                                 }
                               }}
                               initialFocus
@@ -1029,7 +1038,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Start Date <span className="text-red-500">*</span></Label>
-                        <Popover>
+                        <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -1046,7 +1055,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             <Calendar
                               mode="single"
                               selected={recurrenceStartDate}
-                              onSelect={(newDate) => newDate && setRecurrenceStartDate(startOfDay(newDate))}
+                              onSelect={(newDate) => { if (newDate) { setRecurrenceStartDate(startOfDay(newDate)); setStartDateOpen(false) } }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -1055,7 +1064,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
                       <div className="space-y-2">
                         <Label>End Date (Optional)</Label>
-                        <Popover>
+                        <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -1072,7 +1081,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             <Calendar
                               mode="single"
                               selected={recurrenceEndDate}
-                              onSelect={(newDate) => newDate && setRecurrenceEndDate(startOfDay(newDate))}
+                              onSelect={(newDate) => { if (newDate) { setRecurrenceEndDate(startOfDay(newDate)); setEndDateOpen(false) } }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -1163,10 +1172,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </div>
 
           {/* Payment Section */}
-          <div className="rounded-lg overflow-hidden">
+          <div className="overflow-hidden">
             <button
               type="button"
-              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50"
+              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg"
               onClick={() => setPaymentExpanded(!paymentExpanded)}
             >
               <span>Pricing</span>
@@ -1174,7 +1183,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             </button>
 
             {paymentExpanded && (
-              <div className="px-4 pb-4 space-y-4">
+              <div className="px-4 pb-4">
                 {/* Pricing Type Toggle */}
                 <div className="space-y-2 py-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -1255,9 +1264,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                       <p className="text-sm text-red-500">{fieldErrors.pricingOptions}</p>
                     )}
 
-                    <div className="space-y-px rounded-lg border overflow-hidden">
+                    <div className="space-y-px overflow-hidden">
                       {/* Drop-in row */}
-                      <div className="space-y-2 bg-gray-50 p-3">
+                      <div className="space-y-2 p-3 border-b">
                         <div className="flex items-center gap-3">
                           <Checkbox
                             id="dropInEnabled"
@@ -1283,6 +1292,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                                 placeholder="0.00"
                                 value={dropInPrice}
                                 onChange={(e) => { setDropInPrice(e.target.value); clearError("dropInPrice") }}
+                                onBlur={handleDropInPriceBlur}
                                 className={cn("pl-7", fieldErrors.dropInPrice && "border-red-500 focus-visible:ring-red-500")}
                               />
                             </div>
@@ -1299,7 +1309,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                         const isPriceEditing = membershipPriceEditing[membership.id] ?? false
                         const currentPrice = membershipPrices[membership.id] || ''
                         return (
-                          <div key={membership.id} className="bg-gray-50 p-3 space-y-2">
+                          <div key={membership.id} className="p-3 space-y-2 ">
                             <div className="flex items-center gap-3">
                               <Checkbox
                                 id={`membership-${membership.id}`}
@@ -1358,7 +1368,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                       })}
 
                       {memberships.filter(m => m.isActive).length === 0 && !loadingMemberships && (
-                        <div className="bg-gray-50 p-3">
+                        <div className="p-3">
                           <p className="text-sm text-gray-500 italic">
                             No memberships configured. Create memberships in Billing settings to offer member pricing.
                           </p>
@@ -1372,9 +1382,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </div>
 
           {/* Status Section */}
-          <div className="rounded-lg overflow-hidden border">
+          <div className="rounded-lg overflow-hidden">
             <div className="px-4 py-3 bg-gray-50">
-              <span className="font-medium">Status</span>
+              <span className="font-medium text-sm">Visibility</span>
             </div>
             <div className="px-4 py-4 space-y-4">
               <Select value={visibility} onValueChange={(value: 'open' | 'hidden' | 'closed') => setVisibility(value)}>
@@ -1465,7 +1475,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           )}
 
           {/* Sticky Footer */}
-          <div className="sticky bottom-0 bg-white border-t px-6 py-4 -mx-6 -mb-4">
+          <div className="sticky bottom-0 bg-gray-50 border-t px-6 py-4 -mx-6 -mb-4">
             <div className="flex justify-between w-full">
               <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
                 Cancel

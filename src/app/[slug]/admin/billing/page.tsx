@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,12 +16,14 @@ import {
   StripeConnectStatus,
   PromotionCodeInfo,
 } from "@/app/actions/stripe"
+import { getOrganizationSettings, updateDefaultDropinPrice } from "@/app/actions/organization"
 import { getMemberships } from "@/app/actions/memberships"
 import type { Membership } from "@/lib/db/schema"
 import { MembershipsList } from "@/components/admin/memberships-list"
 import { MembershipForm } from "@/components/admin/membership-form"
-import { CheckCircle, AlertCircle, ExternalLink, Loader2, CreditCard, Unlink, Users, Tag, Copy, Check } from "lucide-react"
+import { CheckCircle, AlertCircle, ExternalLink, Loader2, CreditCard, Unlink, Ticket, Tag, Copy, Check } from "lucide-react"
 import { toast } from "sonner"
+import { usePageHeaderAction } from "@/hooks/use-page-header-action"
 
 export default function BillingPage() {
   return (
@@ -51,6 +53,15 @@ function BillingPageContent() {
   const [membershipFormOpen, setMembershipFormOpen] = useState(false)
   const [editingMembership, setEditingMembership] = useState<Membership | null>(null)
 
+  // Default drop-in price state
+  const [defaultDropinPrice, setDefaultDropinPrice] = useState('10.00')
+  const [orgId, setOrgId] = useState<string | null>(null)
+  const [savingDropinPrice, setSavingDropinPrice] = useState(false)
+
+  const { setAction } = usePageHeaderAction()
+  const handleSaveDropinPriceRef = useRef<() => void>(() => {})
+  handleSaveDropinPriceRef.current = handleSaveDropinPrice
+
   const success = searchParams.get("success")
   const refresh = searchParams.get("refresh")
 
@@ -58,14 +69,21 @@ function BillingPageContent() {
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (!status?.chargesEnabled) return
+    setAction({ label: "Save Changes", onClick: () => handleSaveDropinPriceRef.current(), loading: savingDropinPrice })
+    return () => setAction(null)
+  }, [status?.chargesEnabled, savingDropinPrice])
+
   async function loadData() {
     setLoading(true)
     setError(null)
 
-    const [statusResult, membershipsResult, promoCodesResult] = await Promise.all([
+    const [statusResult, membershipsResult, promoCodesResult, orgSettingsResult] = await Promise.all([
       getStripeConnectStatus(),
       getMemberships(),
       getPromotionCodes(),
+      getOrganizationSettings(),
     ])
 
     if (statusResult.success && statusResult.data) {
@@ -80,6 +98,18 @@ function BillingPageContent() {
 
     if (promoCodesResult.success && promoCodesResult.data) {
       setPromotionCodes(promoCodesResult.data)
+    }
+
+    if (orgSettingsResult.success && orgSettingsResult.data) {
+      const orgId = orgSettingsResult.data.id
+      setOrgId(orgId)
+      if (orgSettingsResult.data.defaultDropinPrice != null) {
+        setDefaultDropinPrice((orgSettingsResult.data.defaultDropinPrice / 100).toFixed(2))
+      } else {
+        // No default set yet — persist £10 so new sessions get pre-populated correctly
+        setDefaultDropinPrice('10.00')
+        updateDefaultDropinPrice(orgId, 1000).catch(() => {})
+      }
     }
 
     setLoading(false)
@@ -106,6 +136,19 @@ function BillingPageContent() {
     if (result.success && result.data) {
       setMemberships(result.data)
     }
+  }
+
+  async function handleSaveDropinPrice() {
+    if (!orgId) return
+    setSavingDropinPrice(true)
+    const pence = Math.round(parseFloat(defaultDropinPrice) * 100)
+    const result = await updateDefaultDropinPrice(orgId, isNaN(pence) ? null : pence)
+    if (result.success) {
+      toast.success("Default drop-in price saved")
+    } else {
+      toast.error(result.error || "Failed to save")
+    }
+    setSavingDropinPrice(false)
   }
 
   async function loadStatus() {
@@ -329,13 +372,35 @@ function BillingPageContent() {
       {/* CONNECTED: Show Memberships, Coupons, then Stripe at bottom */}
       {status?.chargesEnabled && (
         <>
-          {/* Memberships */}
+          {/* Session Pricing */}
           <div className="border-b border-gray-200 bg-white p-6 space-y-4">
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-gray-400" />
+              <Ticket className="h-5 w-5 text-gray-400" />
               <h3 className="text-base font-medium text-gray-900">
-                Memberships
+                Session Pricing
               </h3>
+            </div>
+
+            {/* Default Drop-in Price */}
+            <div className="space-y-1.5 flex justify-between">
+              <div className="">
+              <Label htmlFor="default-dropin-price">Default Drop-in Price</Label>
+              <p className="text-xs text-gray-500 max-w-[400px]">
+                Pre-fills the price when creating new sessions. Can be overridden per session or with membership pricing.
+              </p>
+              </div>
+              <div className="relative w-48">
+                <span className="absolute left-3 top-5 -translate-y-1/2 text-sm text-gray-500">£</span>
+                <Input
+                  id="default-dropin-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={defaultDropinPrice}
+                  onChange={e => setDefaultDropinPrice(e.target.value)}
+                  className="pl-7"
+                />
+              </div>
             </div>
 
             <MembershipsList

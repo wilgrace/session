@@ -8,7 +8,8 @@ import { useBookingsView } from "@/hooks/use-bookings-view"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { CalendarView } from "@/components/admin/calendar-view"
 import { BookingsSearch } from "@/components/admin/bookings-search"
-import { List, Calendar, Plus, Search, X } from "lucide-react"
+import { List, Calendar, Plus, Search, X, Loader2 } from "lucide-react"
+import { usePageHeaderAction } from "@/hooks/use-page-header-action"
 
 interface HeaderProps {
   slug: string
@@ -19,6 +20,7 @@ export function Header({ slug }: HeaderProps) {
   const { view: sessionsView, setView: setSessionsView } = useCalendarView()
   const { view: bookingsView, setView: setBookingsView, searchQuery, setSearchQuery } = useBookingsView()
   const isMobile = useIsMobile()
+  const { action: pageAction } = usePageHeaderAction()
   const [searchExpanded, setSearchExpanded] = useState(false)
 
   // Get the current page title based on the pathname
@@ -119,6 +121,17 @@ export function Header({ slug }: HeaderProps) {
               {isMobile ? <Plus className="h-4 w-4" /> : "New Session"}
             </Button>
           </div>
+        )}
+
+        {pageAction && !isBookingsPage && !isSessionsPage && (
+          <Button
+            onClick={pageAction.onClick}
+            disabled={pageAction.loading}
+            size="sm"
+          >
+            {pageAction.loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {pageAction.label}
+          </Button>
         )}
       </div>
     </header>
