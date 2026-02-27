@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createClient } from "@supabase/supabase-js"
+import { sendBookingConfirmationEmail, sendMembershipConfirmationEmail } from "@/lib/email"
 
 // Lazy initialization to avoid build-time errors
 function getStripe() {
@@ -99,6 +100,15 @@ export async function POST(req: NextRequest) {
             console.error("Error confirming booking:", error)
           } else {
             console.log(`Booking ${bookingId} confirmed successfully`)
+            // Look up organizationId for the booking to send confirmation email
+            const { data: bookingRow } = await supabase
+              .from("bookings")
+              .select("organization_id")
+              .eq("id", bookingId)
+              .single()
+            if (bookingRow?.organization_id) {
+              await sendBookingConfirmationEmail(bookingId, bookingRow.organization_id)
+            }
           }
           break
         }
@@ -248,6 +258,7 @@ export async function POST(req: NextRequest) {
           console.error("Error creating booking:", bookingError)
         } else {
           console.log(`Booking ${newBooking.id} created and confirmed`)
+          await sendBookingConfirmationEmail(newBooking.id, organizationId)
         }
 
         // Note: Membership creation is handled by customer.subscription.created webhook
@@ -341,6 +352,7 @@ export async function POST(req: NextRequest) {
           console.error("Error creating membership:", membershipError)
         } else {
           console.log(`Membership created/updated for user ${subInternalUserId}${subMembershipId ? ` with membership_id ${subMembershipId}` : ""}`)
+          await sendMembershipConfirmationEmail(subInternalUserId, subOrgId, subscription.id)
         }
         break
       }

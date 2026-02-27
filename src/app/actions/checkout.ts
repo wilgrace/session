@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { createSupabaseServerClient } from "@/lib/supabase"
 import Stripe from "stripe"
+import { sendBookingConfirmationEmail } from "@/lib/email"
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -1083,6 +1084,8 @@ async function createDirectBooking(params: {
     if (bookingError || !booking) {
       return { success: false, error: "Failed to create booking" }
     }
+
+    await sendBookingConfirmationEmail(booking.id, params.organizationId)
 
     return { success: true, bookingId: booking.id }
   } catch (error) {

@@ -31,6 +31,7 @@ export const organizations = pgTable('organizations', {
   memberFixedPrice: integer('member_fixed_price'), // fixed price in pence (if type='fixed')
   defaultDropinPrice: integer('default_dropin_price'), // default drop-in price in pence for new sessions
   communitySurveyEnabled: boolean('community_survey_enabled').notNull().default(true),
+  notificationFromEmail: text('notification_from_email'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -295,4 +296,23 @@ export type SessionVisibility = 'open' | 'hidden' | 'closed';
 export type Waiver = typeof waivers.$inferSelect;
 export type NewWaiver = typeof waivers.$inferInsert;
 export type WaiverAgreement = typeof waiverAgreements.$inferSelect;
-export type NewWaiverAgreement = typeof waiverAgreements.$inferInsert; 
+export type NewWaiverAgreement = typeof waiverAgreements.$inferInsert;
+
+// Email notification type
+export type EmailTemplateType = 'booking_confirmation' | 'membership_confirmation' | 'waiting_list';
+
+// Per-org email notification templates
+export const orgEmailTemplates = pgTable('org_email_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(), // EmailTemplateType
+  subject: text('subject').notNull(),
+  content: text('content').notNull(), // Editable HTML/text with {{variable}} placeholders
+  replyTo: text('reply_to'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type OrgEmailTemplate = typeof orgEmailTemplates.$inferSelect;
+export type NewOrgEmailTemplate = typeof orgEmailTemplates.$inferInsert;

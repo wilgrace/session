@@ -17,14 +17,16 @@ import {
   OrganizationSettings,
 } from "@/app/actions/organization"
 import { getWaivers } from "@/app/actions/waivers"
+import { getEmailTemplates } from "@/app/actions/email-templates"
 import { Loader2, Upload, X, Check, AlertCircle, Copy } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { WaiversList } from "@/components/admin/waivers-list"
 import { WaiverForm } from "@/components/admin/waiver-form"
+import { EmailTemplatesList } from "@/components/admin/email-templates-list"
 import { CommunitySurveySection } from "@/components/admin/community-survey-section"
 import { CommunityProfileOverlay } from "@/components/auth/community-profile-overlay"
-import type { Waiver } from "@/lib/db/schema"
+import type { Waiver, OrgEmailTemplate } from "@/lib/db/schema"
 
 export default function SettingsPage() {
   return (
@@ -72,6 +74,9 @@ function SettingsPageContent() {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
   const [checkingSlug, setCheckingSlug] = useState(false)
 
+  // Email templates state
+  const [emailTemplates, setEmailTemplates] = useState<OrgEmailTemplate[]>([])
+
   // Waivers state
   const [waivers, setWaivers] = useState<Waiver[]>([])
   const [waiverFormOpen, setWaiverFormOpen] = useState(false)
@@ -114,10 +119,16 @@ function SettingsPageContent() {
       setFacebookUrl(result.data.facebookUrl || "")
       setCommunitySurveyEnabled(result.data.communitySurveyEnabled)
 
-      // Load waivers
-      const waiversResult = await getWaivers()
+      // Load waivers and email templates in parallel
+      const [waiversResult, emailTemplatesResult] = await Promise.all([
+        getWaivers(),
+        getEmailTemplates(),
+      ])
       if (waiversResult.success && waiversResult.data) {
         setWaivers(waiversResult.data)
+      }
+      if (emailTemplatesResult.success && emailTemplatesResult.data) {
+        setEmailTemplates(emailTemplatesResult.data)
       }
     } else {
       setError(result.error || "Failed to load settings")
@@ -131,6 +142,13 @@ function SettingsPageContent() {
     const result = await getWaivers()
     if (result.success && result.data) {
       setWaivers(result.data)
+    }
+  }
+
+  async function handleEmailTemplatesRefresh() {
+    const result = await getEmailTemplates()
+    if (result.success && result.data) {
+      setEmailTemplates(result.data)
     }
   }
 
@@ -391,6 +409,24 @@ function SettingsPageContent() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Emails */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Emails</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Configure notification emails sent to your users automatically.
+          </p>
+        </div>
+        <EmailTemplatesList
+          templates={emailTemplates}
+          orgName={settings?.name || ""}
+          orgLogoUrl={settings?.logoUrl || null}
+          brandColor={brandColor}
+          brandTextColor={brandTextColor}
+          onRefresh={handleEmailTemplatesRefresh}
+        />
       </div>
 
       {/* Waivers */}
