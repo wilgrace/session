@@ -69,6 +69,15 @@ interface BookingCalendarProps {
   isAdmin?: boolean
 }
 
+function isEventFull(event: CalendarEvent): boolean {
+  const instance = event.resource.instances?.find(i =>
+    new Date(i.start_time).getTime() === event.start.getTime()
+  )
+  if (!instance) return false // schedule-based, assume available
+  const totalSpotsBooked = instance.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+  return totalSpotsBooked >= (event.resource.capacity || 10)
+}
+
 // Add the CustomEvent component with proper typing
 const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   const totalCapacity = event.resource.capacity || 10
@@ -289,9 +298,16 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
     [events, weekStart, weekEnd]
   )
 
-  const nextEventAfterWeek = useMemo(
-    () => events.filter(e => e.start > weekEnd).sort((a, b) => a.start.getTime() - b.start.getTime())[0] ?? null,
+  const nextAvailableEventAfterWeek = useMemo(
+    () => events
+      .filter(e => e.start > weekEnd && !isEventFull(e))
+      .sort((a, b) => a.start.getTime() - b.start.getTime())[0] ?? null,
     [events, weekEnd]
+  )
+
+  const allEventsInWeekFull = useMemo(
+    () => eventsInCurrentWeek.length > 0 && eventsInCurrentWeek.every(isEventFull),
+    [eventsInCurrentWeek]
   )
 
   const handleSelectEvent = (event: CalendarEvent) => {
@@ -396,19 +412,21 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
           <div className="text-lg font-semibold shrink-0">
             {format(currentDate, 'MMMM yyyy')}
           </div>
-          {eventsInCurrentWeek.length === 0 && (
+          {(eventsInCurrentWeek.length === 0 || allEventsInWeekFull) && (
             <div className="flex flex-col items-center text-sm text-muted-foreground">
               {sessions.length === 0 ? (
                 <span>No sessions available</span>
               ) : (
                 <>
-                  <span>No sessions this week</span>
-                  {nextEventAfterWeek && (
+                  <span>
+                    {allEventsInWeekFull ? 'All sessions this week are full' : 'No sessions this week'}
+                  </span>
+                  {nextAvailableEventAfterWeek && (
                     <button
-                      onClick={() => setCurrentDate(nextEventAfterWeek.start)}
+                      onClick={() => setCurrentDate(nextAvailableEventAfterWeek.start)}
                       className="text-primary underline-offset-4 hover:underline"
                     >
-                      Skip to the next session →
+                      Skip to the next available session →
                     </button>
                   )}
                 </>

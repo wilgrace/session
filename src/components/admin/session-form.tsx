@@ -691,8 +691,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     if (type === "date") {
       setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: durationMinutes || 75 }])
     } else {
-      // Initialize with default recurring schedule
-      setSchedules([{ id: "1", time: "09:00", days: ["mon", "thu", "fri"], durationMinutes: null }])
+      // Only reset to default if there are no existing schedules to preserve
+      if (schedules.length === 0) {
+        setSchedules([{ id: "1", time: "09:00", days: ["mon", "thu", "fri"], durationMinutes: null }])
+      }
     }
   }
 

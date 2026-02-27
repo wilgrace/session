@@ -18,7 +18,12 @@ interface MobileSessionListProps {
   onDateSelect?: (date: Date) => void
 }
 
-function findNextSessionDate(sessions: SessionTemplate[], afterDate: Date): Date | null {
+function isInstanceAvailable(instance: SessionInstance, capacity: number): boolean {
+  const totalSpotsBooked = instance.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+  return totalSpotsBooked < capacity
+}
+
+function findNextAvailableSessionDate(sessions: SessionTemplate[], afterDate: Date): Date | null {
   // Compare date strings to avoid timezone ambiguity
   const afterStr = format(afterDate, 'yyyy-MM-dd')
   let nextDateStr: string | null = null
@@ -28,7 +33,7 @@ function findNextSessionDate(sessions: SessionTemplate[], afterDate: Date): Date
       // Use timezone-aware date string for instance comparison (same as MobileCalendarView)
       for (const instance of template.instances) {
         const instanceStr = formatLocalDate(new Date(instance.start_time), SAUNA_TIMEZONE)
-        if (instanceStr > afterStr && (!nextDateStr || instanceStr < nextDateStr)) {
+        if (instanceStr > afterStr && (!nextDateStr || instanceStr < nextDateStr) && isInstanceAvailable(instance, template.capacity || 10)) {
           nextDateStr = instanceStr
         }
       }
@@ -135,8 +140,15 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
     router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}`)
   }
 
+  const allFull = visibleSessionsForDay.length > 0 && visibleSessionsForDay.every(({ template, instance }) => {
+    if (!instance) return false // schedule-based, assume available
+    const totalCapacity = template.capacity || 10
+    const totalSpotsBooked = instance.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+    return totalSpotsBooked >= totalCapacity
+  })
+
   if (visibleSessionsForDay.length === 0) {
-    const nextDate = findNextSessionDate(sessions, selectedDate)
+    const nextDate = findNextAvailableSessionDate(sessions, selectedDate)
     return (
       <div className="p-4 text-center text-muted-foreground space-y-1">
         {nextDate ? (
@@ -144,9 +156,9 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
             <p className="text-sm">No sessions on this day</p>
             <button
               onClick={() => onDateSelect?.(nextDate)}
-              className="text-primary nderline-offset-4 hover:underline"
+              className="text-primary underline-offset-4 hover:underline"
             >
-              Skip to the next session →
+              Skip to the next available session →
             </button>
           </>
         ) : (
@@ -156,8 +168,21 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
     )
   }
 
+  const nextAvailableDate = allFull ? findNextAvailableSessionDate(sessions, selectedDate) : null
+
   return (
     <div className="space-y-0 ">
+      {allFull && nextAvailableDate && (
+        <div className="p-4 text-center text-muted-foreground space-y-1 border-b">
+          <p className="text-sm">All sessions today are full</p>
+          <button
+            onClick={() => onDateSelect?.(nextAvailableDate)}
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Skip to the next available session →
+          </button>
+        </div>
+      )}
       {visibleSessionsForDay.map(({ template, startTime, endTime, key, instance, isBooked, bookingId }) => {
         const isFreeSession = template.pricing_type === 'free'
         const isHidden = template.visibility === 'hidden'
