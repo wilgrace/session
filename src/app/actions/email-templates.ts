@@ -6,6 +6,21 @@ import { getUserRoleForOrg, getTenantFromHeaders } from '@/lib/tenant-utils';
 import { EMAIL_TEMPLATE_DEFAULTS, ALL_EMAIL_TYPES } from '@/lib/email-defaults';
 import type { OrgEmailTemplate, EmailTemplateType } from '@/lib/db/schema';
 
+/** Map raw Supabase snake_case row → camelCase OrgEmailTemplate */
+function mapTemplate(row: Record<string, unknown>): OrgEmailTemplate {
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    type: row.type as string,
+    subject: row.subject as string,
+    content: row.content as string,
+    replyTo: row.reply_to as string | null,
+    isActive: row.is_active as boolean,
+    createdAt: row.created_at as unknown as Date,
+    updatedAt: row.updated_at as unknown as Date,
+  };
+}
+
 /**
  * Get all email templates for an organization.
  * Returns all 3 types; seeds defaults if none exist.
@@ -52,10 +67,10 @@ export async function getEmailTemplates(organizationId?: string): Promise<{
         .select('*')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: true });
-      return { success: true, data: (seeded || []) as OrgEmailTemplate[] };
+      return { success: true, data: (seeded || []).map(mapTemplate) };
     }
 
-    return { success: true, data: data as OrgEmailTemplate[] };
+    return { success: true, data: data.map(mapTemplate) };
   } catch (error) {
     console.error('[getEmailTemplates] Error:', error);
     return { success: false, error: 'Failed to fetch email templates' };
