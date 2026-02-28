@@ -192,7 +192,7 @@ export function Sidebar({ slug }: SidebarProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-4 left-1 z-50"
+          className="fixed top-4 left-1 z-50"
           onClick={() => setIsMobileOpen(true)}
         >
           <Menu className="h-6 w-6" />

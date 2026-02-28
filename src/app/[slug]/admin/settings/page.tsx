@@ -82,6 +82,8 @@ function SettingsPageContent() {
   const [waiverFormOpen, setWaiverFormOpen] = useState(false)
   const [editingWaiver, setEditingWaiver] = useState<Waiver | null>(null)
 
+  const [adminNotificationEmail, setAdminNotificationEmail] = useState("")
+
   // Community survey state
   const [communitySurveyEnabled, setCommunitySurveyEnabled] = useState(true)
   const [surveyPreviewOpen, setSurveyPreviewOpen] = useState(false)
@@ -117,6 +119,7 @@ function SettingsPageContent() {
       setHomepageUrl(result.data.homepageUrl || "")
       setInstagramUrl(result.data.instagramUrl || "")
       setFacebookUrl(result.data.facebookUrl || "")
+      setAdminNotificationEmail(result.data.adminNotificationEmail || "")
       setCommunitySurveyEnabled(result.data.communitySurveyEnabled)
 
       // Load waivers and email templates in parallel
@@ -232,6 +235,7 @@ function SettingsPageContent() {
       homepageUrl: homepageUrl.trim() || null,
       instagramUrl: instagramUrl.trim() || null,
       facebookUrl: facebookUrl.trim() || null,
+      adminNotificationEmail: adminNotificationEmail.trim() || null,
     })
 
     if (result.success) {
@@ -419,6 +423,21 @@ function SettingsPageContent() {
             Configure notification emails sent to your users automatically.
           </p>
         </div>
+
+        <div className="space-y-2 max-w-xl">
+          <Label htmlFor="adminNotificationEmail">Admin Notification Email (optional)</Label>
+          <Input
+            id="adminNotificationEmail"
+            type="email"
+            value={adminNotificationEmail}
+            onChange={(e) => setAdminNotificationEmail(e.target.value)}
+            placeholder="admin@example.com"
+          />
+          <p className="text-sm text-gray-500">
+            When a user cancels a booking, a notification is sent to this address.
+          </p>
+        </div>
+
         <EmailTemplatesList
           templates={emailTemplates}
           orgName={settings?.name || ""}

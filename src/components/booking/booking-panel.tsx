@@ -189,7 +189,7 @@ export function BookingPanel({
   const handleCancel = async () => {
     setLoading(true)
     try {
-      const result = await cancelBookingWithRefund(booking.id)
+      const result = await cancelBookingWithRefund(booking.id, { notifyAdmin: true })
 
       if (!result.success) {
         throw new Error(result.error || "Failed to cancel booking")

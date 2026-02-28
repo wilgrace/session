@@ -16,6 +16,7 @@ export {
   renderTemplate,
   buildBookingConfirmationPreview,
   buildBookingCancellationPreview,
+  buildBookingCancellationNotificationPreview,
   buildMembershipConfirmationPreview,
   buildWaitingListPreview,
 } from './email-html';
@@ -170,7 +171,7 @@ export async function sendBookingConfirmationEmail(
       : 'Free';
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.bookasession.org';
-    const bookingLink = `${appUrl}/${org.slug}/${sessionTemplate.id}?confirmed=true&bookingId=${booking.id}`;
+    const bookingLink = `${appUrl}/${org.slug}/${sessionTemplate.id}?edit=true&bookingId=${booking.id}&start=${encodeURIComponent(instance.start_time)}`;
 
     const brandColor = org.button_color || '#6c47ff';
     const brandTextColor = org.button_text_color || '#ffffff';
@@ -545,5 +546,164 @@ export async function sendBookingCancellationEmail(
     });
   } catch (err) {
     console.error('[sendBookingCancellationEmail] Error:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Booking cancellation — admin notification
+// ---------------------------------------------------------------------------
+
+export async function sendBookingCancellationNotification(
+  bookingId: string,
+  organizationId: string,
+  refunded: boolean
+): Promise<void> {
+  try {
+    const supabase = createSupabaseServerClient();
+
+    const { data: template } = await supabase
+      .from('org_email_templates')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('type', 'booking_cancellation_notification')
+      .single();
+
+    if (!template || !template.is_active) {
+      return;
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name, logo_url, button_color, button_text_color, admin_notification_email')
+      .eq('id', organizationId)
+      .single();
+
+    if (!org || !org.admin_notification_email) {
+      return;
+    }
+
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        number_of_spots,
+        amount_paid,
+        session_instance_id,
+        session_instances (
+          id,
+          start_time,
+          end_time,
+          session_templates (
+            id,
+            name,
+            timezone
+          )
+        ),
+        clerk_users (
+          email,
+          first_name,
+          last_name
+        )
+      `)
+      .eq('id', bookingId)
+      .single();
+
+    if (!booking) {
+      console.error('[sendBookingCancellationNotification] Booking not found:', bookingId);
+      return;
+    }
+
+    const user = booking.clerk_users as unknown as { email: string; first_name: string | null; last_name: string | null } | null;
+    const instance = booking.session_instances as unknown as {
+      id: string;
+      start_time: string;
+      end_time: string;
+      session_templates: {
+        id: string;
+        name: string;
+        timezone: string;
+      } | null;
+    } | null;
+
+    if (!user || !instance || !instance.session_templates) {
+      console.error('[sendBookingCancellationNotification] Missing related data for booking:', bookingId);
+      return;
+    }
+
+    const sessionTemplate = instance.session_templates;
+    const timezone = sessionTemplate.timezone || 'Europe/London';
+    const startTime = new Date(instance.start_time);
+    const endTime = new Date(instance.end_time);
+
+    const dateStr = formatInTimeZone(startTime, timezone, 'EEEE d MMMM yyyy');
+    const timeStr = formatInTimeZone(startTime, timezone, 'HH:mm');
+    const endTimeStr = formatInTimeZone(endTime, timezone, 'HH:mm');
+
+    const brandColor = org.button_color || '#6c47ff';
+    const brandTextColor = org.button_text_color || '#ffffff';
+
+    const userName = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Unknown';
+    const renderedContent = renderTemplate(template.content, {
+      user_name: userName,
+      user_email: user.email,
+      session_name: sessionTemplate.name,
+      org_name: org.name,
+    });
+
+    const refundHtml = refunded
+      ? `<tr>
+          <td style="padding:12px 20px;background:#fafafa;border-top:1px solid #f0f0f0">
+            <p style="margin:0;font-size:13px;color:#71717a">A refund has been processed and should appear in their account within 5–10 business days.</p>
+          </td>
+        </tr>`
+      : '';
+
+    const detailsCard = `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden">
+        <tr>
+          <td style="padding:16px 20px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              ${buildDetailRow('Session', escapeHtml(sessionTemplate.name))}
+              ${buildDetailRow('Date', dateStr)}
+              ${buildDetailRow('Time', `${timeStr} – ${endTimeStr}`)}
+            </table>
+          </td>
+        </tr>
+        ${refundHtml}
+      </table>
+    `;
+
+    const body = `
+      <div style="font-size:15px;line-height:1.6;color:#333">
+        ${renderedContent}
+      </div>
+      ${detailsCard}
+    `;
+
+    const html = buildEmailWrapper({
+      orgName: org.name,
+      orgLogoUrl: org.logo_url,
+      brandColor,
+      brandTextColor,
+      body,
+    });
+
+    const subject = renderTemplate(template.subject, {
+      session_name: sessionTemplate.name,
+      org_name: org.name,
+    });
+
+    const fromAddress = `${org.name} <${process.env.RESEND_FROM_EMAIL ?? 'notifications@bookasession.org'}>`;
+
+    await sendEmail({
+      from: fromAddress,
+      to: org.admin_notification_email,
+      subject,
+      html,
+      replyTo: template.reply_to,
+      idempotencyKey: `booking-cancellation-notification/${bookingId}`,
+    });
+  } catch (err) {
+    console.error('[sendBookingCancellationNotification] Error:', err);
   }
 }

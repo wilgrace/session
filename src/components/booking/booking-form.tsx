@@ -4,12 +4,10 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { SessionTemplate } from "@/types/session"
 import { useUser } from "@clerk/nextjs"
-import { createBooking, updateBooking, deleteBooking } from "@/app/actions/session"
+import { createBooking } from "@/app/actions/session"
 import { getClerkUser } from "@/app/actions/clerk"
 import { createClerkUser } from "@/app/actions/clerk"
 import { createEmbeddedCheckoutSession } from "@/app/actions/checkout"
@@ -20,17 +18,6 @@ import { BookingPanel } from "./booking-panel"
 import { WaiverAgreementOverlay } from "@/components/auth/waiver-agreement-overlay"
 import type { Waiver } from "@/lib/db/schema"
 import { Loader2 } from "lucide-react"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 
 type BookingMode = 'new' | 'edit' | 'confirmation'
 
@@ -103,8 +90,6 @@ export function BookingForm({
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState(bookingDetails?.notes || "")
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
   const [numberOfSpots, setNumberOfSpots] = useState(bookingDetails?.number_of_spots || 1)
   const [isEditMode, setIsEditMode] = useState(!!bookingDetails)
   const [bookingId, setBookingId] = useState<string | null>(bookingDetails?.id || null)
@@ -123,6 +108,7 @@ export function BookingForm({
   const [showWaiverOverlay, setShowWaiverOverlay] = useState(false)
   const [pendingCheckoutData, setPendingCheckoutData] = useState<CheckoutFormData | null>(null)
   const [pendingFreeSubmit, setPendingFreeSubmit] = useState(false)
+  const [pendingFreeFormData, setPendingFreeFormData] = useState<CheckoutFormData | null>(null)
 
   // Determine if this is a paid session (not in edit mode)
   // Note: drop_in_price being null/0 does NOT mean the session is free — it may be membership-only
@@ -267,22 +253,22 @@ export function BookingForm({
   }
 
   // Perform free session booking (extracted so waiver completion can call it)
-  const performFreeBooking = useCallback(async () => {
+  const performFreeBooking = useCallback(async (opts?: { email?: string; spots?: number }) => {
     if (!startTime) return
+
+    const guestEmail = opts?.email ?? ''
+    const spotsToBook = opts?.spots ?? numberOfSpots
 
     setLoading(true)
     try {
       let clerkUserId: string
 
       if (!user) {
-        const nameParts = name.trim().split(" ")
-        const firstName = nameParts[0] || ""
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined
         const result = await createClerkUser({
           clerk_user_id: `guest_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
-          email: email,
-          first_name: firstName,
-          last_name: lastName,
+          email: guestEmail,
+          first_name: '',
+          last_name: undefined,
         })
 
         if (!result.success || !result.id) {
@@ -319,7 +305,7 @@ export function BookingForm({
         user_id: clerkUserId,
         start_time: startTime.toISOString(),
         notes: notes || undefined,
-        number_of_spots: numberOfSpots,
+        number_of_spots: spotsToBook,
       })
 
       if (!result.success) {
@@ -336,7 +322,7 @@ export function BookingForm({
     } finally {
       setLoading(false)
     }
-  }, [startTime, user, name, email, session.id, notes, numberOfSpots, slug, router, toast])
+  }, [startTime, user, session.id, notes, numberOfSpots, slug, router, toast])
 
   // Waiver interception for paid checkout flow
   const handleProceedToCheckoutWithWaiver = useCallback((formData: CheckoutFormData) => {
@@ -378,118 +364,26 @@ export function BookingForm({
     } else if (pendingFreeSubmit) {
       // Free session flow - proceed to booking
       setPendingFreeSubmit(false)
-      performFreeBooking()
+      performFreeBooking({ email: pendingFreeFormData?.email, spots: pendingFreeFormData?.numberOfSpots })
+      setPendingFreeFormData(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingCheckoutData, pendingFreeSubmit, performFreeBooking])
+  }, [pendingCheckoutData, pendingFreeSubmit, pendingFreeFormData, performFreeBooking])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!startTime) {
-      toast({
-        title: "Error",
-        description: "Please select a session time",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // If waiver is needed and this is a new booking (not edit), show waiver first
-    if (waiverNeeded && activeWaiver && !isEditMode) {
+  // Handle free session proceed from PreCheckoutForm (with waiver check)
+  const handleFreeSessionProceed = useCallback((formData: CheckoutFormData) => {
+    if (waiverNeeded && activeWaiver) {
+      setPendingFreeFormData(formData)
       setPendingFreeSubmit(true)
       setShowWaiverOverlay(true)
       return
     }
-
-    if (isEditMode && bookingId) {
-      // Update existing booking
-      setLoading(true)
-      try {
-        const result = await updateBooking({
-          booking_id: bookingId,
-          notes: notes || undefined,
-          number_of_spots: numberOfSpots,
-        })
-
-        if (!result.success) {
-          throw new Error(result.error || "Failed to update booking")
-        }
-
-        if (user) {
-          const updateDetails = {
-            type: "update",
-            sessionName: session.name,
-            date: startTime?.toISOString() || new Date().toISOString(),
-            numberOfSpots,
-          }
-          if (typeof window !== "undefined") {
-            localStorage.setItem("bookingAction", JSON.stringify(updateDetails))
-          }
-          router.push(`/${slug}`)
-          return
-        }
-
-        toast({
-          title: "Success",
-          description: "Booking updated successfully",
-        })
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to manage booking. Please try again.",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
-    } else {
-      // New free booking
-      performFreeBooking()
-    }
-  }
-
-  const handleCancel = async () => {
-    if (!bookingId) return
-
-    setLoading(true)
-    try {
-      const result = await deleteBooking(bookingId)
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to cancel booking")
-      }
-
-      // Save delete details to localStorage for toast on /booking
-      if (user) {
-        const deleteDetails = {
-          type: "delete",
-          sessionName: session.name,
-          date: startTime?.toISOString() || new Date().toISOString(),
-          numberOfSpots,
-        }
-        if (typeof window !== "undefined") {
-          localStorage.setItem("bookingAction", JSON.stringify(deleteDetails))
-        }
-        router.push(`/${slug}`)
-        return
-      }
-      toast({
-        title: "Success",
-        description: "Booking cancelled successfully",
-      })
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to cancel booking. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+    performFreeBooking({ email: formData.email, spots: formData.numberOfSpots })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiverNeeded, activeWaiver, performFreeBooking])
 
   // Determine guest email for waiver overlay
-  const guestEmailForWaiver = !user ? (pendingCheckoutData?.email || email) : undefined
+  const guestEmailForWaiver = !user ? (pendingCheckoutData?.email || pendingFreeFormData?.email) : undefined
 
   // Render waiver overlay if needed
   if (showWaiverOverlay && activeWaiver) {
@@ -577,112 +471,20 @@ export function BookingForm({
     return null
   }
 
-  // Free sessions or edit mode: render standard form
+  // Free sessions: use PreCheckoutForm with isFreeSession styling
   return (
-    <Card className="border-0 shadow-none p-0">
-      <CardContent className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!user && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                />
-              </div>
-            </>
-          )}
-
-          {/* Number of spots for free sessions */}
-          <div className="space-y-2">
-            <Label htmlFor="numberOfSpots">Number of Spots</Label>
-            <div className="flex items-center space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setNumberOfSpots(Math.max(1, numberOfSpots - 1))}
-                disabled={numberOfSpots <= 1}
-              >
-                -
-              </Button>
-              <div className="w-12 text-center font-medium">{numberOfSpots}</div>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setNumberOfSpots(Math.min(session.capacity, numberOfSpots + 1))}
-                disabled={numberOfSpots >= session.capacity}
-              >
-                +
-              </Button>
-            </div>
-          </div>
-
-          {/* Total for free sessions */}
-          {!isEditMode && (
-            <div className="flex items-center justify-between pt-2 border-t">
-              <span className="text-lg font-semibold">Total</span>
-              <span className="text-xl font-bold text-primary">£0.00</span>
-            </div>
-          )}
-
-          <div className="flex flex-col space-y-2">
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading || !startTime || (!user && (!name || !email))}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : isEditMode ? (
-                "Update Booking"
-              ) : (
-                "Book Now"
-              )}
-            </Button>
-
-            {isEditMode && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button type="button" variant="destructive" className="w-full" disabled={loading}>
-                    Cancel Booking
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently cancel your booking.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>No, keep booking</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+    <PreCheckoutForm
+      session={session}
+      startTime={startTime!}
+      spotsRemaining={spotsRemaining}
+      userEmail={user?.primaryEmailAddress?.emailAddress}
+      isLoggedIn={!!user}
+      slug={slug}
+      organizationId={session.organization_id}
+      onProceedToCheckout={handleFreeSessionProceed}
+      isLoading={loading}
+      memberships={[]}
+      isFreeSession={true}
+    />
   )
 }

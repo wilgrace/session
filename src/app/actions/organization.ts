@@ -28,6 +28,7 @@ export interface OrganizationSettings {
   memberFixedPrice: number | null;
   defaultDropinPrice: number | null;
   communitySurveyEnabled: boolean;
+  adminNotificationEmail: string | null;
 }
 
 /**
@@ -84,7 +85,8 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         member_discount_percent,
         member_fixed_price,
         default_dropin_price,
-        community_survey_enabled
+        community_survey_enabled,
+        admin_notification_email
       `)
       .eq('id', orgId)
       .single();
@@ -115,6 +117,7 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         memberFixedPrice: data.member_fixed_price,
         defaultDropinPrice: data.default_dropin_price,
         communitySurveyEnabled: data.community_survey_enabled ?? true,
+        adminNotificationEmail: data.admin_notification_email ?? null,
       },
     };
   } catch (error) {
@@ -141,6 +144,7 @@ export async function updateOrganizationSettings(params: {
   homepageUrl?: string | null;
   instagramUrl?: string | null;
   facebookUrl?: string | null;
+  adminNotificationEmail?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const { userId } = await auth();
@@ -210,6 +214,7 @@ export async function updateOrganizationSettings(params: {
     if (params.homepageUrl !== undefined) updateData.homepage_url = params.homepageUrl;
     if (params.instagramUrl !== undefined) updateData.instagram_url = params.instagramUrl;
     if (params.facebookUrl !== undefined) updateData.facebook_url = params.facebookUrl;
+    if (params.adminNotificationEmail !== undefined) updateData.admin_notification_email = params.adminNotificationEmail;
 
     const { error } = await supabase
       .from('organizations')

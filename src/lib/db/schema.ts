@@ -32,6 +32,7 @@ export const organizations = pgTable('organizations', {
   defaultDropinPrice: integer('default_dropin_price'), // default drop-in price in pence for new sessions
   communitySurveyEnabled: boolean('community_survey_enabled').notNull().default(true),
   notificationFromEmail: text('notification_from_email'),
+  adminNotificationEmail: text('admin_notification_email'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -299,7 +300,7 @@ export type WaiverAgreement = typeof waiverAgreements.$inferSelect;
 export type NewWaiverAgreement = typeof waiverAgreements.$inferInsert;
 
 // Email notification type
-export type EmailTemplateType = 'booking_confirmation' | 'booking_cancellation' | 'membership_confirmation' | 'waiting_list';
+export type EmailTemplateType = 'booking_confirmation' | 'booking_cancellation' | 'booking_cancellation_notification' | 'membership_confirmation' | 'waiting_list';
 
 // Per-org email notification templates
 export const orgEmailTemplates = pgTable('org_email_templates', {

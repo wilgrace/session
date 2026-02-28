@@ -14,6 +14,7 @@ export interface EmailTemplateDefault {
 export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateType, string> = {
   booking_confirmation: 'Booking Confirmation',
   booking_cancellation: 'Booking Cancellation',
+  booking_cancellation_notification: 'Cancellation (Admin)',
   membership_confirmation: 'Membership Confirmation',
   waiting_list: 'Waiting List',
 };
@@ -66,6 +67,20 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
       'Refund note (if applicable)',
     ],
   },
+  booking_cancellation_notification: {
+    type: 'booking_cancellation_notification',
+    label: 'Cancellation (Admin)',
+    subject: 'Booking cancelled – {{session_name}}',
+    content: `<p>Hi there,</p>
+<p><strong>{{user_name}}</strong> ({{user_email}}) has cancelled their booking for <strong>{{session_name}}</strong>.</p>`,
+    editableVariables: ['{{user_name}}', '{{user_email}}', '{{session_name}}', '{{org_name}}'],
+    injectedFields: [
+      'Session name',
+      'Date',
+      'Time',
+      'Refund note (if applicable)',
+    ],
+  },
   waiting_list: {
     type: 'waiting_list',
     label: 'Waiting List',
@@ -84,6 +99,7 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
 export const ALL_EMAIL_TYPES: EmailTemplateType[] = [
   'booking_confirmation',
   'booking_cancellation',
+  'booking_cancellation_notification',
   'membership_confirmation',
   'waiting_list',
 ];

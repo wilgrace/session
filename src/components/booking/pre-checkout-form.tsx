@@ -54,6 +54,8 @@ interface PreCheckoutFormProps {
   // User has an active membership that is not enabled for this session
   userMembershipDisabled?: boolean
   userMembershipName?: string | null
+  // Free session — show a single "Free" pricing button, hide coupon/price summary
+  isFreeSession?: boolean
 }
 
 interface AppliedCoupon {
@@ -89,6 +91,7 @@ export function PreCheckoutForm({
   dropInEnabled = true,
   userMembershipDisabled = false,
   userMembershipName = null,
+  isFreeSession = false,
 }: PreCheckoutFormProps) {
   const { openSignUp, openSignIn } = useAuthOverlay()
 
@@ -326,6 +329,22 @@ export function PreCheckoutForm({
       )}
       {/* Pricing Options */}
       <div className="space-y-3">
+        {/* Free session — single always-selected option */}
+        {isFreeSession ? (
+          <div className="w-full flex items-start justify-between rounded-xl border-2 border-primary bg-black/5 p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary text-primary-foreground">
+                <Check className="h-3 w-3" />
+              </div>
+              <div>
+                <div className="font-medium">Free</div>
+                <div className="text-sm text-muted-foreground">There is no charge for this session</div>
+              </div>
+            </div>
+            <div className="text-xl font-bold">£0</div>
+          </div>
+        ) : (
+        <>
         {/* User's Current Membership - show first if they have one */}
         {userMembership && (
           <button
@@ -446,6 +465,8 @@ export function PreCheckoutForm({
             </button>
           )
         })}
+        </>
+        )}
       </div>
 
         {/* Number of People */}
@@ -535,7 +556,7 @@ export function PreCheckoutForm({
         )}
 
         {/* Coupon Code */}
-        <div className="space-y-2">
+        {!isFreeSession && <div className="space-y-2">
           <button
             type="button"
             className="flex items-center gap-1 text-base font-semibold hover:opacity-70 transition-opacity"
@@ -601,10 +622,10 @@ export function PreCheckoutForm({
               )}
             </>
           )}
-        </div>
+        </div>}
 
         {/* Price Summary */}
-        <div className="bg-muted/30 rounded-xl p-4 space-y-3">
+        {!isFreeSession && <div className="bg-muted/30 rounded-xl p-4 space-y-3">
           {/* Session pricing */}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">
@@ -635,7 +656,7 @@ export function PreCheckoutForm({
             <span className="text-lg font-semibold">Total</span>
             <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
           </div>
-        </div>
+        </div>}
 
         {/* Spacer so content isn't hidden behind fixed button on mobile when logged in */}
         {isLoggedIn && <div className="h-20 sm:hidden" />}

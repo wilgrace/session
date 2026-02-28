@@ -324,3 +324,54 @@ export function buildBookingCancellationPreview({
 
   return buildEmailWrapper({ orgName, orgLogoUrl, brandColor, brandTextColor, body });
 }
+
+export function buildBookingCancellationNotificationPreview({
+  templateContent,
+  orgName,
+  orgLogoUrl,
+  brandColor,
+  brandTextColor,
+}: {
+  templateContent: string;
+  orgName: string;
+  orgLogoUrl: string | null;
+  brandColor: string;
+  brandTextColor: string;
+}): string {
+  const sampleVars: Record<string, string> = {
+    user_name: 'Alex Johnson',
+    user_email: 'alex@example.com',
+    session_name: 'Hot Sauna Session',
+    org_name: orgName,
+  };
+
+  const renderedContent = renderTemplate(templateContent, sampleVars);
+
+  const detailsCard = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden">
+      <tr>
+        <td style="padding:16px 20px">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${buildDetailRow('Session', 'Hot Sauna Session')}
+            ${buildDetailRow('Date', 'Saturday 15 March 2026')}
+            ${buildDetailRow('Time', '14:00 – 15:00')}
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:12px 20px;background:#fafafa;border-top:1px solid #f0f0f0">
+          <p style="margin:0;font-size:13px;color:#71717a">A refund has been processed and should appear in their account within 5–10 business days.</p>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  const body = `
+    <div style="font-size:15px;line-height:1.6;color:#333">
+      ${renderedContent}
+    </div>
+    ${detailsCard}
+  `;
+
+  return buildEmailWrapper({ orgName, orgLogoUrl, brandColor, brandTextColor, body });
+}
