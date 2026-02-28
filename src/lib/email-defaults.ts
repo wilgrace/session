@@ -13,6 +13,7 @@ export interface EmailTemplateDefault {
 
 export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateType, string> = {
   booking_confirmation: 'Booking Confirmation',
+  booking_cancellation: 'Booking Cancellation',
   membership_confirmation: 'Membership Confirmation',
   waiting_list: 'Waiting List',
 };
@@ -51,6 +52,20 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
       'Manage membership link',
     ],
   },
+  booking_cancellation: {
+    type: 'booking_cancellation',
+    label: 'Booking Cancellation',
+    subject: 'Your booking for {{session_name}} has been cancelled',
+    content: `<p>Hi {{first_name}},</p>
+<p>Your booking for <strong>{{session_name}}</strong> has been cancelled.</p>`,
+    editableVariables: ['{{first_name}}', '{{session_name}}', '{{org_name}}'],
+    injectedFields: [
+      'Session name',
+      'Date',
+      'Time',
+      'Refund note (if applicable)',
+    ],
+  },
   waiting_list: {
     type: 'waiting_list',
     label: 'Waiting List',
@@ -68,6 +83,7 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
 
 export const ALL_EMAIL_TYPES: EmailTemplateType[] = [
   'booking_confirmation',
+  'booking_cancellation',
   'membership_confirmation',
   'waiting_list',
 ];

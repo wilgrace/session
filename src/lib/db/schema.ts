@@ -299,7 +299,7 @@ export type WaiverAgreement = typeof waiverAgreements.$inferSelect;
 export type NewWaiverAgreement = typeof waiverAgreements.$inferInsert;
 
 // Email notification type
-export type EmailTemplateType = 'booking_confirmation' | 'membership_confirmation' | 'waiting_list';
+export type EmailTemplateType = 'booking_confirmation' | 'booking_cancellation' | 'membership_confirmation' | 'waiting_list';
 
 // Per-org email notification templates
 export const orgEmailTemplates = pgTable('org_email_templates', {

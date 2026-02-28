@@ -9,6 +9,7 @@ import { createSupabaseServerClient, getUserContextWithClient, UserContext } fro
 import Stripe from "stripe"
 import { parseISO, set, addMinutes, formatISO, format, getDay } from "date-fns"
 import { localToUTC, utcToLocal, SAUNA_TIMEZONE } from "@/lib/time-utils"
+import { sendBookingCancellationEmail } from "@/lib/email"
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -2241,7 +2242,10 @@ export async function cancelBookingWithRefund(bookingId: string): Promise<{
       }
     }
 
-    // 3. Delete the booking using the existing deleteBooking function
+    // 3. Send cancellation email before deleting (booking record must still exist)
+    await sendBookingCancellationEmail(bookingId, booking.organization_id, refunded);
+
+    // 4. Delete the booking using the existing deleteBooking function
     const deleteResult = await deleteBooking(bookingId);
 
     if (!deleteResult.success) {

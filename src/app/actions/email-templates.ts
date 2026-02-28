@@ -59,8 +59,10 @@ export async function getEmailTemplates(organizationId?: string): Promise<{
       return { success: false, error: 'Failed to fetch email templates' };
     }
 
-    // Seed defaults if templates don't exist yet
-    if (!data || data.length === 0) {
+    // Seed defaults for any missing types (handles new types added after initial seed)
+    const existingTypes = new Set((data || []).map((r) => r.type));
+    const missingTypes = ALL_EMAIL_TYPES.filter((t) => !existingTypes.has(t));
+    if (missingTypes.length > 0) {
       await seedDefaultEmailTemplates(orgId);
       const { data: seeded } = await supabase
         .from('org_email_templates')

@@ -7,6 +7,7 @@ import type { EmailTemplateType } from "@/lib/db/schema"
 import { EMAIL_TEMPLATE_LABELS } from "@/lib/email-defaults"
 import {
   buildBookingConfirmationPreview,
+  buildBookingCancellationPreview,
   buildMembershipConfirmationPreview,
   buildWaitingListPreview,
 } from "@/lib/email-html"
@@ -90,6 +91,11 @@ function buildPreviewHtml({
       return buildBookingConfirmationPreview({
         templateContent: template.content,
         templateSubject: template.subject,
+        ...shared,
+      })
+    case "booking_cancellation":
+      return buildBookingCancellationPreview({
+        templateContent: template.content,
         ...shared,
       })
     case "membership_confirmation":

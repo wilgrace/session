@@ -203,6 +203,8 @@ Required in `.env.local`:
 - `STRIPE_SECRET_KEY` - Stripe API secret key (sk_test_... or sk_live_...)
 - `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret (whsec_...)
 - `NEXT_PUBLIC_APP_URL` - App base URL for Stripe redirects (http://localhost:3000 locally)
+- `RESEND_API_KEY` - Resend API key for transactional email
+- `RESEND_FROM_EMAIL` - Optional override for sender address (default: `notifications@bookasession.org`)
 
 ## Key Patterns
 
@@ -445,6 +447,40 @@ The account page (`/{slug}/account`) allows authenticated users to view and mana
 - `getUserMembership(organizationId)` - Get user's membership status
 - `getUserBillingHistory(organizationId)` - Fetch payment history from Stripe
 - `createBillingPortalSession(organizationId)` - Generate Stripe billing portal URL
+
+### Email Notifications
+
+Transactional emails are sent via the **Resend** SDK. Three email types are supported, each configurable per-org from admin settings.
+
+**Email Types**:
+| Type | Trigger |
+|------|---------|
+| `booking_confirmation` | After paid booking (Stripe webhook `checkout.session.completed`) or free booking (`createDirectBooking`) |
+| `membership_confirmation` | After new subscription (Stripe webhook `customer.subscription.created`) |
+| `waiting_list` | Not yet triggered — template exists ready for when the feature ships |
+
+**Key Files**:
+- `src/lib/email-html.ts` — Pure HTML builders, **no server deps** — safe to import in client components (used for admin preview). Functions: `renderTemplate`, `buildEmailWrapper`, `buildCtaButton`, `buildOutlineCtaButton`, `buildDetailRow`, `buildBookingConfirmationPreview`, etc.
+- `src/lib/email.ts` — Server-only. Resend client, `sendEmail`, `sendBookingConfirmationEmail`, `sendMembershipConfirmationEmail`
+- `src/lib/email-defaults.ts` — Default subjects, HTML content, and variable lists for each type. `EMAIL_TEMPLATE_DEFAULTS`, `EMAIL_TEMPLATE_LABELS`, `ALL_EMAIL_TYPES`
+- `src/app/actions/email-templates.ts` — Server actions: `getEmailTemplates`, `updateEmailTemplate`, `toggleEmailTemplateActive`, `seedDefaultEmailTemplates`
+- `src/components/admin/email-templates-list.tsx` — Admin table UI
+- `src/components/admin/email-template-form.tsx` — Edit sheet (subject, HTML content, reply-to, active toggle)
+- `src/components/admin/email-template-preview-modal.tsx` — Preview iframe using sample data
+
+**Database**: `org_email_templates` table — one row per org per type, seeded automatically on first load. Unique constraint on `(organization_id, type)`.
+
+**From Address**: Always sent as `{Org Name} <notifications@bookasession.org>`. The `bookasession.org` domain must be verified in Resend (Domains tab). Override the address with `RESEND_FROM_EMAIL` env var if needed. The `notification_from_email` column on `organizations` is no longer used.
+
+**Template Variables**: Content uses `{{variable}}` placeholders substituted at send time via `renderTemplate()`. Per-type available variables are listed in `EMAIL_TEMPLATE_DEFAULTS[type].editableVariables`. Non-editable injected fields (session image, event dot, booking details card, CTA buttons) are always appended in `sendBookingConfirmationEmail`.
+
+**Critical — snake_case mapping**: Supabase returns snake_case column names (`is_active`, `reply_to`, `organization_id`) but `OrgEmailTemplate` from Drizzle `$inferSelect` expects camelCase (`isActive`, `replyTo`, `organizationId`). The `mapTemplate()` function in `email-templates.ts` handles this conversion. **Any new Supabase query returning `org_email_templates` rows must use `mapTemplate()`** — a bare `as OrgEmailTemplate[]` cast will silently break `isActive` and all other camelCase fields.
+
+**Admin UI Location**: Settings page (`/{slug}/admin/settings`) → "Emails" section (above Waivers).
+
+**Idempotency Keys**: `booking-confirmation/{bookingId}`, `membership-confirmation/{subscriptionId}` — prevents duplicate sends on webhook retries.
+
+**Error handling**: All email functions catch and log errors but never throw, so webhook/booking flow is never broken by email failures. Check Resend dashboard (resend.com/emails) or server logs for `[sendBookingConfirmationEmail]` / `[sendMembershipConfirmationEmail]` prefixed entries.
 
 ## RLS & Authorization
 
