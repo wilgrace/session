@@ -163,7 +163,7 @@ export function PreCheckoutForm({
   const selectedMonthlyPrice = selectedMembership ? getMonthlyPrice(selectedMembership.membership) : (legacyMonthlyMembershipPrice ?? 0)
 
   // Determine if this is a new membership signup
-  const isNewMembership = pricingType === "membership" && !isActiveMember && selectedMonthlyPrice > 0
+  const isNewMembership = pricingType === "membership" && !isActiveMember && selectedMonthlyPrice >= 0
 
   // Check if guest is trying to purchase membership (needs to create account first)
   const guestNeedsAccountForMembership = !isLoggedIn && isNewMembership
