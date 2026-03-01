@@ -270,6 +270,7 @@ export function buildWaitingListPreview({
       ${renderedContent}
     </div>
     ${detailsCard}
+    ${buildCtaButton('#', 'Book your spot', brandColor, brandTextColor)}
   `;
 
   return buildEmailWrapper({ orgName, orgLogoUrl, brandColor, brandTextColor, body });

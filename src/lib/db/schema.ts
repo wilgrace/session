@@ -337,3 +337,21 @@ export const orgEmailTemplates = pgTable('org_email_templates', {
 
 export type OrgEmailTemplate = typeof orgEmailTemplates.$inferSelect;
 export type NewOrgEmailTemplate = typeof orgEmailTemplates.$inferInsert;
+
+// Waiting list entries for full session instances
+export const waitingListEntries = pgTable('waiting_list_entries', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  sessionInstanceId: uuid('session_instance_id').notNull().references(() => sessionInstances.id, { onDelete: 'cascade' }),
+  sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => clerkUsers.id, { onDelete: 'set null' }),
+  email: text('email').notNull(),
+  firstName: text('first_name'),
+  requestedSpots: integer('requested_spots').notNull().default(1),
+  status: text('status').notNull().default('waiting'), // 'waiting' | 'notified' | 'removed'
+  addedAt: timestamp('added_at', { withTimezone: true }).defaultNow().notNull(),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+}, (table) => ({
+  uniqueInstanceEmail: unique().on(table.sessionInstanceId, table.email),
+}));
+export type WaitingListEntry = typeof waitingListEntries.$inferSelect;

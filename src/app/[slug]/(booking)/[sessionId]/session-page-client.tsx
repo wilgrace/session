@@ -363,6 +363,7 @@ export function SessionPageClient({
               bookingDetails={bookingDetails}
               slug={slug}
               sessionId={sessionId}
+              sessionInstanceId={session.instances?.[0]?.id}
               spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
               memberships={pricingData?.memberships}
               userMembershipId={pricingData?.userMembershipId}

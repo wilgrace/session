@@ -891,3 +891,150 @@ export async function sendSessionCancellationEmail(
     console.error('[sendSessionCancellationEmail] Error:', err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Waiting list — spot available notification
+// ---------------------------------------------------------------------------
+
+export async function sendWaitingListSpotAvailableEmail(
+  entryId: string,
+  organizationId: string,
+  slug: string
+): Promise<void> {
+  try {
+    const supabase = createSupabaseServerClient();
+
+    const { data: template } = await supabase
+      .from('org_email_templates')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('type', 'waiting_list')
+      .single();
+
+    if (!template || !template.is_active) {
+      return;
+    }
+
+    const { data: entry } = await supabase
+      .from('waiting_list_entries')
+      .select(`
+        id,
+        email,
+        first_name,
+        session_instance_id,
+        session_instances (
+          id,
+          start_time,
+          end_time,
+          session_templates (
+            id,
+            name,
+            timezone
+          )
+        )
+      `)
+      .eq('id', entryId)
+      .single();
+
+    if (!entry) {
+      console.error('[sendWaitingListSpotAvailableEmail] Entry not found:', entryId);
+      return;
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name, logo_url, button_color, button_text_color')
+      .eq('id', organizationId)
+      .single();
+
+    if (!org) {
+      return;
+    }
+
+    const instance = entry.session_instances as unknown as {
+      id: string;
+      start_time: string;
+      end_time: string;
+      session_templates: {
+        id: string;
+        name: string;
+        timezone: string;
+      } | null;
+    } | null;
+
+    if (!instance || !instance.session_templates) {
+      console.error('[sendWaitingListSpotAvailableEmail] Missing session data for entry:', entryId);
+      return;
+    }
+
+    const sessionTemplate = instance.session_templates;
+    const timezone = sessionTemplate.timezone || 'Europe/London';
+    const startTime = new Date(instance.start_time);
+    const endTime = new Date(instance.end_time);
+
+    const dateStr = formatInTimeZone(startTime, timezone, 'EEEE d MMMM yyyy');
+    const timeStr = formatInTimeZone(startTime, timezone, 'HH:mm');
+    const endTimeStr = formatInTimeZone(endTime, timezone, 'HH:mm');
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.bookasession.org';
+    const bookingUrl = `${appUrl}/${slug}/${sessionTemplate.id}?start=${encodeURIComponent(instance.start_time)}`;
+
+    const brandColor = org.button_color || '#6c47ff';
+    const brandTextColor = org.button_text_color || '#ffffff';
+
+    const firstName = entry.first_name || 'there';
+    const renderedContent = renderTemplate(template.content, {
+      first_name: firstName,
+      session_name: sessionTemplate.name,
+      org_name: org.name,
+    });
+
+    const detailsCard = `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden">
+        <tr>
+          <td style="padding:16px 20px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              ${buildDetailRow('Session', escapeHtml(sessionTemplate.name))}
+              ${buildDetailRow('Date', dateStr)}
+              ${buildDetailRow('Time', `${timeStr} – ${endTimeStr}`)}
+            </table>
+          </td>
+        </tr>
+      </table>
+      ${buildCtaButton(bookingUrl, 'Book your spot', brandColor, brandTextColor)}
+    `;
+
+    const body = `
+      <div style="font-size:15px;line-height:1.6;color:#333">
+        ${renderedContent}
+      </div>
+      ${detailsCard}
+    `;
+
+    const html = buildEmailWrapper({
+      orgName: org.name,
+      orgLogoUrl: org.logo_url,
+      brandColor,
+      brandTextColor,
+      body,
+    });
+
+    const subject = renderTemplate(template.subject, {
+      session_name: sessionTemplate.name,
+      org_name: org.name,
+    });
+
+    const fromAddress = `${org.name} <${process.env.RESEND_FROM_EMAIL ?? 'notifications@bookasession.org'}>`;
+
+    await sendEmail({
+      from: fromAddress,
+      to: entry.email,
+      subject,
+      html,
+      replyTo: template.reply_to,
+      idempotencyKey: `waiting-list-notification/${entryId}`,
+    });
+  } catch (err) {
+    console.error('[sendWaitingListSpotAvailableEmail] Error:', err);
+  }
+}

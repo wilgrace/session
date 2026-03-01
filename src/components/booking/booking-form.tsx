@@ -15,6 +15,7 @@ import { getActiveWaiver, checkWaiverAgreement } from "@/app/actions/waivers"
 import { PreCheckoutForm, CheckoutFormData, MembershipPricingOption } from "./pre-checkout-form"
 import { CheckoutStep } from "./checkout-step"
 import { BookingPanel } from "./booking-panel"
+import { WaitingListForm } from "./waiting-list-form"
 import { WaiverAgreementOverlay } from "@/components/auth/waiver-agreement-overlay"
 import type { Waiver } from "@/lib/db/schema"
 import { Loader2 } from "lucide-react"
@@ -33,7 +34,8 @@ interface BookingFormProps {
     discount_amount?: number | null
   }
   slug: string
-  sessionId?: string // Session instance ID for sharing links
+  sessionId?: string // Session template ID for sharing links
+  sessionInstanceId?: string // Session instance ID (needed for waiting list)
   spotsRemaining?: number
   // Multi-membership pricing props
   memberships?: MembershipPricingOption[]
@@ -69,6 +71,7 @@ export function BookingForm({
   bookingDetails,
   slug,
   sessionId,
+  sessionInstanceId,
   spotsRemaining = session.capacity,
   memberships = [],
   userMembershipId,
@@ -394,6 +397,22 @@ export function BookingForm({
         onComplete={handleWaiverComplete}
         guestEmail={guestEmailForWaiver}
         organizationId={!user ? session.organization_id : undefined}
+      />
+    )
+  }
+
+  // When session is full (mode='new'), show waiting list instead of booking options
+  if (mode === 'new' && spotsRemaining <= 0 && startTime && sessionInstanceId) {
+    return (
+      <WaitingListForm
+        sessionInstanceId={sessionInstanceId}
+        sessionTemplateId={session.id}
+        organizationId={session.organization_id}
+        startTime={startTime}
+        sessionCapacity={session.capacity}
+        userEmail={user?.primaryEmailAddress?.emailAddress}
+        userFirstName={user?.firstName ?? undefined}
+        isLoggedIn={!!user}
       />
     )
   }

@@ -231,6 +231,7 @@ All database operations use React 19 server actions in `src/app/actions/`:
 - `createBooking()` - Create user booking
 - `createSessionTemplate()` - Admin creates template
 - `updateCurrentUserProfile()` - Update logged-in user's community profile (dob, gender, ethnicity)
+- `getSessions(organizationId)` - Admin fetch of all templates with full instance data. Instances include `cancelled_at`, `cancellation_reason`, `status`; bookings include `status`. This data is required for `InstancePanel` and delete confirmation to work correctly.
 
 ### Timezone Handling
 - Templates store timezone (default: Europe/London)
@@ -238,6 +239,8 @@ All database operations use React 19 server actions in `src/app/actions/`:
 - Instances stored in UTC with pre-calculated `start_time` and `end_time`
 - Display converts back to template timezone
 - Calendar views use schedule/template duration when instances aren't yet generated
+
+**Critical — date+time string parsing**: `new Date('2024-03-01')` (date-only string) is parsed by JS as **UTC midnight**, causing display one hour early in UTC+1 timezones. Always use `new Date(\`${date}T${time}:00\`)` (ISO local datetime without timezone suffix) when constructing dates from separate date and time strings — browsers parse this as local time.
 
 ### Authentication Flow
 1. User signs up via Clerk (through Auth Overlay or dedicated pages)
@@ -301,6 +304,17 @@ The session detail page (`/{slug}/{sessionId}`) handles all booking states using
 - Session page shows a toast notification on arrival
 - Guest users see a callout prompting account creation
 
+### Admin Sessions Page
+
+The sessions page (`/{slug}/admin/sessions`) uses `CalendarView` with a two-mode toggle:
+
+- **Templates** (list view, `view = "list"`): table of all session templates with schedule summary
+- **Instances** (calendar view, `view = "calendar"`): `react-big-calendar` showing all generated instances
+
+In the **Instances/calendar view**, clicking a session event opens the `InstancePanel` sheet (not the template edit form). This is wired via the `onSelectInstance` prop on `CalendarView` — the handler in `calendar-page.tsx` finds the matching `SessionInstance` by comparing `new Date(i.start_time).getTime() === event.start.getTime()`, then opens the panel.
+
+**Schedule column in Templates list**: for mixed templates (both recurring schedules and one-off dates), both types are listed in the same cell — recurring schedules shown with a `RefreshCw` icon, one-off dates with a `Calendar` icon.
+
 ### Session Configuration
 
 The Create/Edit Session form (`src/components/admin/session-form.tsx`) is organized into sections:
@@ -320,6 +334,11 @@ The Create/Edit Session form (`src/components/admin/session-form.tsx`) is organi
 - Pricing Type: Free or Paid
 - Drop-in Price (for non-members)
 - Membership Pricing overrides
+
+**Form Behaviour Notes**:
+- **New sessions**: the schedule section starts collapsed — only "Repeat" / "Add Dates" buttons shown initially
+- **Edit mode**: X buttons to remove individual schedules/dates are always shown (even when only one exists); section-level X to remove all recurring or all one-off is also always shown
+- **SheetContent close button**: `SheetContent`'s built-in close button is `absolute right-4 top-4` and gets hidden behind a sticky header with `z-10`. Fix: raise sticky header to `z-20`, add `pr-12` padding, and place an explicit `<SheetClose>` inside the sticky header instead of relying on the built-in one.
 
 ### Session Generation
 1. Admin creates template with recurring schedules and/or one-off dates

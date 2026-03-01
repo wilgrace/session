@@ -161,7 +161,7 @@ export async function seedDefaultEmailTemplates(
         type,
         subject: defaults.subject,
         content: defaults.content,
-        is_active: type !== 'waiting_list', // waiting_list inactive until feature ships
+        is_active: true,
       };
     });
 

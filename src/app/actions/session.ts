@@ -9,7 +9,7 @@ import { createSupabaseServerClient, createSupabaseClient as createSupabaseAnonC
 import Stripe from "stripe"
 import { parseISO, set, addMinutes, formatISO, format, getDay } from "date-fns"
 import { localToUTC, utcToLocal, SAUNA_TIMEZONE } from "@/lib/time-utils"
-import { sendBookingCancellationEmail, sendBookingCancellationNotification, sendSessionCancellationEmail } from "@/lib/email"
+import { sendBookingCancellationEmail, sendBookingCancellationNotification, sendSessionCancellationEmail, sendWaitingListSpotAvailableEmail } from "@/lib/email"
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -1788,6 +1788,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         bookings (
           id,
           number_of_spots,
+          cancelled_at,
           user:clerk_users!user_id (
             id,
             clerk_user_id
@@ -1828,7 +1829,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
       // Transform instances to include bookings
       const transformedInstances = templateInstances.map(instance => {
-        const bookings = instance.bookings?.map(booking => {
+        const bookings = instance.bookings?.filter(b => !b.cancelled_at).map(booking => {
           const user = booking.user;
           return {
             id: booking.id,
@@ -1986,6 +1987,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
           bookings (
             id,
             number_of_spots,
+            cancelled_at,
             user:clerk_users!user_id (
               id,
               clerk_user_id
@@ -2066,7 +2068,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
       }, {} as Record<string, SessionSchedule>)
 
       const transformedInstances = templateInstances.map(instance => {
-        const bookings = instance.bookings?.map(booking => {
+        const bookings = instance.bookings?.filter(b => !b.cancelled_at).map(booking => {
           const user = booking.user;
           return {
             id: booking.id,
@@ -2225,10 +2227,12 @@ export async function cancelBookingWithRefund(
     notifyAdmin = false,
     cancelledByUserId,
     cancellationReason,
+    skipWaitingList = false,
   }: {
     notifyAdmin?: boolean
     cancelledByUserId?: string
     cancellationReason?: string
+    skipWaitingList?: boolean
   } = {}
 ): Promise<{
   success: boolean
@@ -2242,7 +2246,7 @@ export async function cancelBookingWithRefund(
     // 1. Fetch booking with payment details
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('id, payment_status, stripe_payment_intent_id, amount_paid, organization_id')
+      .select('id, payment_status, stripe_payment_intent_id, amount_paid, organization_id, session_instance_id')
       .eq('id', bookingId)
       .single();
 
@@ -2329,6 +2333,12 @@ export async function cancelBookingWithRefund(
     }
 
     console.log('[cancelBookingWithRefund] Booking cancelled successfully, refunded:', refunded);
+
+    // Notify the next eligible waiting list entry (skip if called from whole-instance cancellation)
+    if (!skipWaitingList && booking.session_instance_id) {
+      await notifyNextWaitingListEntry(booking.session_instance_id, booking.organization_id)
+    }
+
     return { success: true, refunded };
   } catch (error: any) {
     console.error('[cancelBookingWithRefund] Exception:', error);
@@ -3488,6 +3498,7 @@ export async function cancelSessionInstance(
       const result = await cancelBookingWithRefund(booking.id, {
         cancelledByUserId: userId,
         cancellationReason,
+        skipWaitingList: true,
       })
       if (result.success) {
         await sendSessionCancellationEmail(booking.id, instance.organization_id, result.refunded ?? false, cancellationReason)
@@ -3599,5 +3610,184 @@ export async function endSessionSchedule(
     return { success: true }
   } catch (error: any) {
     return { success: false, error: error.message }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Waiting list
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal helper — finds the first waiting list entry whose requested_spots
+ * can be accommodated by the current availability, then sends the spot-available email.
+ * Errors are caught and logged; this must never break the booking cancellation flow.
+ */
+async function notifyNextWaitingListEntry(
+  sessionInstanceId: string,
+  organizationId: string
+): Promise<void> {
+  try {
+    const supabase = createSupabaseServerClient()
+
+    // Re-calculate available spots at the moment of notification
+    const { data: instance } = await supabase
+      .from('session_instances')
+      .select('session_templates(capacity)')
+      .eq('id', sessionInstanceId)
+      .single()
+
+    const capacity = (instance?.session_templates as { capacity?: number } | null)?.capacity ?? 0
+
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('number_of_spots')
+      .eq('session_instance_id', sessionInstanceId)
+      .in('status', ['confirmed', 'completed'])
+
+    const totalBooked = (bookings || []).reduce((sum, b) => sum + (b.number_of_spots || 1), 0)
+    const availableSpots = capacity - totalBooked
+
+    if (availableSpots <= 0) return
+
+    // Find the earliest-queued entry whose requested quantity can be filled
+    const { data: entries } = await supabase
+      .from('waiting_list_entries')
+      .select('id, email, requested_spots')
+      .eq('session_instance_id', sessionInstanceId)
+      .eq('status', 'waiting')
+      .lte('requested_spots', availableSpots)
+      .order('added_at', { ascending: true })
+      .limit(1)
+
+    const entry = entries?.[0]
+    if (!entry) return
+
+    // Mark as notified
+    await supabase
+      .from('waiting_list_entries')
+      .update({ status: 'notified', notified_at: new Date().toISOString() })
+      .eq('id', entry.id)
+
+    // Fetch org slug for the booking link
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('slug')
+      .eq('id', organizationId)
+      .single()
+
+    if (!org?.slug) return
+
+    await sendWaitingListSpotAvailableEmail(entry.id, organizationId, org.slug)
+  } catch (err) {
+    console.error('[notifyNextWaitingListEntry] Error:', err)
+  }
+}
+
+export async function joinWaitingList({
+  sessionInstanceId,
+  sessionTemplateId,
+  organizationId,
+  email,
+  firstName,
+  userId,
+  requestedSpots,
+}: {
+  sessionInstanceId: string
+  sessionTemplateId: string
+  organizationId: string
+  email: string
+  firstName?: string
+  userId?: string
+  requestedSpots: number
+}): Promise<{ success: boolean; position?: number; error?: string }> {
+  try {
+    const supabase = createSupabaseServerClient()
+
+    // Upsert — if the email already exists for this instance, do nothing (return existing position)
+    const { data: existing } = await supabase
+      .from('waiting_list_entries')
+      .select('id, added_at, requested_spots')
+      .eq('session_instance_id', sessionInstanceId)
+      .eq('email', email)
+      .maybeSingle()
+
+    let entryAddedAt: string
+
+    if (existing) {
+      entryAddedAt = existing.added_at
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from('waiting_list_entries')
+        .insert({
+          session_instance_id: sessionInstanceId,
+          session_template_id: sessionTemplateId,
+          organization_id: organizationId,
+          email,
+          first_name: firstName ?? null,
+          user_id: userId ?? null,
+          requested_spots: requestedSpots,
+          status: 'waiting',
+        })
+        .select('id, added_at')
+        .single()
+
+      if (insertError || !inserted) {
+        return { success: false, error: insertError?.message || 'Failed to join waiting list' }
+      }
+
+      entryAddedAt = inserted.added_at
+    }
+
+    // Calculate queue position
+    const { count } = await supabase
+      .from('waiting_list_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_instance_id', sessionInstanceId)
+      .eq('status', 'waiting')
+      .lte('added_at', entryAddedAt)
+
+    return { success: true, position: count ?? 1 }
+  } catch (err: any) {
+    console.error('[joinWaitingList] Error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+export async function checkWaitingListEntry(
+  sessionInstanceId: string,
+  email: string
+): Promise<{ success: boolean; data?: { position: number; status: string; requestedSpots: number } }> {
+  try {
+    const supabase = createSupabaseServerClient()
+
+    const { data: entry } = await supabase
+      .from('waiting_list_entries')
+      .select('id, added_at, status, requested_spots')
+      .eq('session_instance_id', sessionInstanceId)
+      .eq('email', email)
+      .maybeSingle()
+
+    if (!entry) {
+      return { success: true }
+    }
+
+    const { count } = await supabase
+      .from('waiting_list_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_instance_id', sessionInstanceId)
+      .eq('status', 'waiting')
+      .lte('added_at', entry.added_at)
+
+    return {
+      success: true,
+      data: {
+        position: count ?? 1,
+        status: entry.status,
+        requestedSpots: entry.requested_spots,
+      },
+    }
+  } catch (err: any) {
+    console.error('[checkWaitingListEntry] Error:', err)
+    return { success: false }
   }
 }

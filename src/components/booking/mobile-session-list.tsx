@@ -205,10 +205,10 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
               <div className="flex items-start gap-3">
                 <div
                   className="mt-2 ml-2 h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: isFull ? '#9CA3AF' : eventColor.color500 }}
+                  style={{ backgroundColor: (isFull && !isBooked) ? '#9CA3AF' : eventColor.color500 }}
                 />
                 <div className="flex-1 min-w-0">
-                  <h3 className={`font-medium text-lg flex items-center gap-1 ${isFull ? 'text-gray-300 text-muted-foreground' : ''}`}>
+                  <h3 className={`font-medium text-lg flex items-center gap-1 ${(isFull && !isBooked) ? 'text-gray-300 text-muted-foreground' : ''}`}>
                     {isFreeSession && <span className="text-[10px] font-semibold uppercase text-muted-foreground">Free</span>}
                     {isHidden && <EyeOff className="h-3 w-3 text-gray-400" />}
                     {template.name}
@@ -218,7 +218,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
                     <span className="text-gray-300">·</span>
                     <span className="flex items-center gap-1">
                       <Users className="h-3 w-3" />
-                      {isFull ? 'Waiting List' : availableSpots}
+                      {isBooked ? 'Booked' : isFull ? 'Waiting List' : availableSpots}
                     </span>
                   </div>
                 </div>

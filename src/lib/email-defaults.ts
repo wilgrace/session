@@ -85,14 +85,15 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
   waiting_list: {
     type: 'waiting_list',
     label: 'Waiting List',
-    subject: "You're on the waiting list for {{session_name}}",
+    subject: "A spot has opened up for {{session_name}}!",
     content: `<p>Hi {{first_name}},</p>
-<p>You've been added to the waiting list for <strong>{{session_name}}</strong>. We'll let you know if a spot becomes available!</p>`,
+<p>Great news — a spot has just become available for <strong>{{session_name}}</strong>. Book now before it fills up again!</p>`,
     editableVariables: ['{{first_name}}', '{{session_name}}', '{{org_name}}'],
     injectedFields: [
       'Session name',
       'Date',
       'Time',
+      '"Book your spot" button',
     ],
   },
   session_cancellation: {
