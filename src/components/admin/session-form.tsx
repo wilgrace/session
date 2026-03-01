@@ -167,12 +167,30 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     return format(date, 'EEE').toLowerCase()
   }
 
-  // Initialize dates after component mounts
+  // Reset all state when switching to new session (template becomes null)
   useEffect(() => {
     if (!template) {
       const today = new Date()
+      // General fields
+      setName("")
+      setDescription("")
+      setCapacity("10")
+      setDurationMinutes(75)
+      setVisibility('open')
+      setBookingInstructions("")
+      setEventColor(DEFAULT_EVENT_COLOR)
+      setGeneralExpanded(true)
+      setFieldErrors({})
+      // Pricing fields
+      setPricingType('paid')
+      setDropInEnabled(true)
+      setMemberPrice("")
+      setDropInPrice(defaultDropinPrice != null ? (defaultDropinPrice / 100).toFixed(2) : '')
+      // Image
+      setImageUrl(defaultSessionImageUrl || '')
+      // Schedule fields
       setRecurrenceStartDate(startOfDay(today))
-      // Start with both sections collapsed — user picks Repeat or Add Dates
+      setRecurrenceEndDate(undefined)
       setShowRepeatSection(false)
       setShowDatesSection(false)
       setSchedules([{
@@ -182,12 +200,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         durationMinutes: null
       }])
       setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: 75 }])
-      // Pre-populate image with org default for new sessions
-      setImageUrl(defaultSessionImageUrl || '')
-      // Pre-populate drop-in price with org default for new sessions
-      if (defaultDropinPrice != null) {
-        setDropInPrice((defaultDropinPrice / 100).toFixed(2))
-      }
+      // Confirmation state
+      setPendingDeleteRepeat(false)
+      setPendingDeleteScheduleId(null)
+      setPendingDeleteDateId(null)
     }
   }, [template])
 

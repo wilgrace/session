@@ -750,6 +750,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         )
       `)
       .in('template_id', templateIds)
+      .neq('status', 'cancelled')
       .gte('start_time', new Date().toISOString())
       .order('start_time', { ascending: true })
 
@@ -3205,6 +3206,7 @@ export async function getAdminSessionsForDateRange(
         )
       `)
       .eq('organization_id', orgId)
+      .neq('status', 'cancelled')
       .gte('start_time', startDate)
       .lte('start_time', endDate)
       .order('start_time', { ascending: true });
