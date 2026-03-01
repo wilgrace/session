@@ -76,6 +76,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async rewrites() {
+    return [
+      {
+        // Serve per-tenant PWA manifests from the API route handler
+        source: "/:slug/manifest.webmanifest",
+        destination: "/api/manifest/:slug",
+      },
+    ]
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

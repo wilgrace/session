@@ -70,6 +70,7 @@ export async function generateMetadata({
     title,
     description,
     icons,
+    manifest: `/${slug}/manifest.webmanifest`,
     robots: { index: false, follow: false },
     appleWebApp: {
       capable: true,

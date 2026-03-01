@@ -1,17 +1,16 @@
-import type { MetadataRoute } from "next"
+import { NextResponse } from "next/server"
 import { getOrganizationBySlug } from "@/lib/tenant-utils"
 import { getBaseUrl } from "@/lib/site-config"
 
-export default async function manifest({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}): Promise<MetadataRoute.Manifest> {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ slug: string }> }
+) {
   const { slug } = await params
   const org = await getOrganizationBySlug(slug)
   const baseUrl = getBaseUrl()
 
-  return {
+  const manifest = {
     name: org?.name ?? "Sawna",
     short_name: org?.name?.slice(0, 12) ?? "Sawna",
     description: "Book your sessions",
@@ -40,4 +39,10 @@ export default async function manifest({
       },
     ],
   }
+
+  return NextResponse.json(manifest, {
+    headers: {
+      "Content-Type": "application/manifest+json",
+    },
+  })
 }
