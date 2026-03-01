@@ -13,8 +13,6 @@ import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
-import { useUser } from "@clerk/nextjs"
-import { getInternalUserId } from "@/app/actions/session"
 import { getEventColorValues } from "@/lib/event-colors"
 import { SessionFilter } from "./session-filter"
 
@@ -67,6 +65,7 @@ interface BookingCalendarProps {
   sessions: SessionTemplate[]
   slug: string
   isAdmin?: boolean
+  bookedInstances?: Record<string, string>
 }
 
 function isEventFull(event: CalendarEvent): boolean {
@@ -120,27 +119,13 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   )
 }
 
-export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCalendarProps) {
+export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {} }: BookingCalendarProps) {
   const router = useRouter()
-  const { user } = useUser()
   const isMobile = useIsMobile()
   const [currentView, setCurrentView] = useState<View>('week')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [internalUserId, setInternalUserId] = useState<string | null>(null)
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
-  // isAdmin is now passed as a prop from the server component
-
-  useEffect(() => {
-    const fetchInternalUserId = async () => {
-      if (!user?.id) return
-      const result = await getInternalUserId(user.id)
-      if (result.success && result.userId) {
-        setInternalUserId(result.userId)
-      }
-    }
-    fetchInternalUserId()
-  }, [user])
 
   // Update view based on screen size
   useEffect(() => {
@@ -163,9 +148,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
         const formattedStartTime = format(startTime, 'h:mm a');
         const formattedEndTime = format(endTime, 'h:mm a');
 
-        const userBooking = instance.bookings?.find(booking => {
-          return booking.user && booking.user.clerk_user_id === user?.id;
-        });
+        const bookingId = bookedInstances[instance.id]
 
         return {
           id: instance.id,
@@ -173,8 +156,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
           start: startTime,
           end: endTime,
           resource: template,
-          isBooked: !!userBooking,
-          bookingId: userBooking?.id
+          isBooked: !!bookingId,
+          bookingId,
         }
       })
     }
@@ -242,7 +225,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
     }
 
     return []
-  }), [filteredSessions, user?.id])
+  }), [filteredSessions, bookedInstances])
 
   // Calculate time range based on sessions
   const calculateTimeRange = () => {
@@ -397,6 +380,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
             slug={slug}
             isAdmin={isAdmin}
             onDateSelect={handleDateSelect}
+            bookedInstances={bookedInstances}
           />
         </div>
       </div>

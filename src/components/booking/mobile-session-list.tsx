@@ -7,7 +7,6 @@ import { SessionTemplate, SessionInstance } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 import { Users, EyeOff } from "lucide-react"
-import { useUser } from "@clerk/nextjs"
 import { getEventColorValues } from "@/lib/event-colors"
 
 interface MobileSessionListProps {
@@ -16,6 +15,7 @@ interface MobileSessionListProps {
   slug: string
   isAdmin?: boolean
   onDateSelect?: (date: Date) => void
+  bookedInstances?: Record<string, string>
 }
 
 function isInstanceAvailable(instance: SessionInstance, capacity: number): boolean {
@@ -62,9 +62,8 @@ function findNextAvailableSessionDate(sessions: SessionTemplate[], afterDate: Da
   return nextDateStr ? startOfDay(new Date(nextDateStr)) : null
 }
 
-export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }: MobileSessionListProps) {
+export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, bookedInstances = {} }: MobileSessionListProps) {
   const router = useRouter()
-  const { user } = useUser()
   // Build a flat list of all sessions for the selected day directly from sessions
   const sessionsForDay = sessions.flatMap((template) => {
     const results: { template: SessionTemplate; startTime: Date; endTime: Date; key: string; instance?: SessionInstance; isBooked: boolean; bookingId?: string }[] = []
@@ -74,15 +73,15 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
       template.instances.forEach(instance => {
         const instanceDate = new Date(instance.start_time)
         if (formatLocalDate(instanceDate, SAUNA_TIMEZONE) === format(selectedDate, 'yyyy-MM-dd')) {
-          const userBooking = instance.bookings?.find(b => b.user?.clerk_user_id === user?.id)
+          const bookingId = bookedInstances[instance.id]
           results.push({
             template,
             startTime: instanceDate,
             endTime: new Date(instance.end_time),
             key: instance.id,
             instance,
-            isBooked: !!userBooking,
-            bookingId: userBooking?.id,
+            isBooked: !!bookingId,
+            bookingId,
           })
         }
       })

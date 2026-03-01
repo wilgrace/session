@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import Image from "next/image"
 import { notFound } from "next/navigation"
-import { getPublicSessionsByOrg, getUserUpcomingBookings } from "@/app/actions/session"
+import { getPublicSessionsByOrg, getUserUpcomingBookings, getUserBookedInstances } from "@/app/actions/session"
 import { getPublicMembershipsForListing } from "@/app/actions/memberships"
 import { LazyBookingCalendar } from "@/components/booking/lazy-booking-calendar"
 import { UpcomingBookings } from "@/components/booking/upcoming-bookings"
@@ -21,13 +21,18 @@ async function CalendarSection({
   organizationId,
   slug,
   isAdmin,
+  userId,
 }: {
   organizationId: string
   slug: string
   isAdmin: boolean
+  userId?: string | null
 }) {
-  const { data: sessions } = await getPublicSessionsByOrg(organizationId)
-  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} />
+  const [{ data: sessions }, bookedResult] = await Promise.all([
+    getPublicSessionsByOrg(organizationId),
+    userId ? getUserBookedInstances(userId, organizationId) : Promise.resolve({ data: {}, error: null }),
+  ])
+  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} />
 }
 
 // Async server component — streams in upcoming bookings
@@ -134,6 +139,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
                     organizationId={tenant.organizationId}
                     slug={slug}
                     isAdmin={isAdmin}
+                    userId={userId}
                   />
                 </Suspense>
               </div>

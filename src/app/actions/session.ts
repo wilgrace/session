@@ -2584,6 +2584,63 @@ export async function getUserUpcomingBookings(userId: string, organizationId?: s
   }
 }
 
+/**
+ * Returns a map of sessionInstanceId → bookingId for the user's active upcoming bookings
+ * in the given organisation. Used to mark calendar events as "booked" without exposing
+ * other users' Clerk IDs in the page HTML.
+ */
+export async function getUserBookedInstances(
+  clerkUserId: string,
+  organizationId: string
+): Promise<{ data: Record<string, string>; error: string | null }> {
+  try {
+    const supabase = createSupabaseServerClient()
+    const now = new Date().toISOString()
+
+    const { data: userData, error: userError } = await supabase
+      .from('clerk_users')
+      .select('id')
+      .eq('clerk_user_id', clerkUserId)
+      .single()
+
+    if (userError || !userData) {
+      return { data: {}, error: null }
+    }
+
+    const { data: bookings, error } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        session_instance:session_instances!inner (
+          id,
+          start_time,
+          template_id,
+          session_templates!inner (
+            organization_id
+          )
+        )
+      `)
+      .eq('user_id', userData.id)
+      .is('cancelled_at', null)
+      .gte('session_instance.start_time', now)
+      .eq('session_instance.session_templates.organization_id', organizationId)
+
+    if (error || !bookings) {
+      return { data: {}, error: error?.message ?? null }
+    }
+
+    const result: Record<string, string> = {}
+    for (const booking of bookings as any[]) {
+      if (booking.session_instance?.id) {
+        result[booking.session_instance.id] = booking.id
+      }
+    }
+    return { data: result, error: null }
+  } catch (err: any) {
+    return { data: {}, error: err.message }
+  }
+}
+
 export async function getUserBookings(userId: string) {
   try {
     const supabase = createSupabaseClient();
