@@ -5,7 +5,7 @@ import { auth, currentUser } from "@clerk/nextjs/server"
 import { mapDayStringToInt, mapIntToDayString } from "@/lib/day-utils"
 import { ensureClerkUser } from "./clerk"
 import { Booking } from "@/types/booking"
-import { createSupabaseServerClient, getUserContextWithClient, UserContext } from "@/lib/supabase"
+import { createSupabaseServerClient, createSupabaseClient as createSupabaseAnonClient, getUserContextWithClient, UserContext } from "@/lib/supabase"
 import Stripe from "stripe"
 import { parseISO, set, addMinutes, formatISO, format, getDay } from "date-fns"
 import { localToUTC, utcToLocal, SAUNA_TIMEZONE } from "@/lib/time-utils"
@@ -1611,13 +1611,16 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
 export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
   try {
-    const supabase = createSupabaseClient()
+    // Use anon client for public data queries (respects RLS visibility policies).
+    // Use service-role client only for the admin role check against clerk_users.
+    const supabase = createSupabaseAnonClient()
+    const supabaseAdmin = createSupabaseServerClient()
 
     // Check if the current user is an admin or superadmin
     let isAdmin = false
     const { userId } = await auth()
     if (userId) {
-      const { data: userData } = await supabase
+      const { data: userData } = await supabaseAdmin
         .from("clerk_users")
         .select("role")
         .eq("clerk_user_id", userId)
@@ -1879,13 +1882,16 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
  */
 export async function getPublicSessionsByOrg(organizationId: string): Promise<{ data: SessionTemplate[] | null; error: string | null }> {
   try {
-    const supabase = createSupabaseClient()
+    // Use anon client for public data queries (respects RLS visibility policies).
+    // Use service-role client only for the admin role check against clerk_users.
+    const supabase = createSupabaseAnonClient()
+    const supabaseAdmin = createSupabaseServerClient()
 
     // Check if the current user is an admin or superadmin
     let isAdmin = false
     const { userId } = await auth()
     if (userId) {
-      const { data: userData } = await supabase
+      const { data: userData } = await supabaseAdmin
         .from("clerk_users")
         .select("role")
         .eq("clerk_user_id", userId)

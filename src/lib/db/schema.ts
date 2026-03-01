@@ -114,7 +114,7 @@ export const sessionTemplates = pgTable('session_templates', {
 
 export const sessionSchedules = pgTable('session_schedules', {
   id: uuid('id').defaultRandom().primaryKey(),
-  sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id),
+  sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
   dayOfWeek: integer('day_of_week').notNull(), // 0-6
   time: time('time').notNull(),
   durationMinutes: integer('duration_minutes'), // Optional per-schedule duration; falls back to template duration
@@ -139,7 +139,7 @@ export const sessionOneOffDates = pgTable('session_one_off_dates', {
 export const sessionInstances = pgTable('session_instances', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: text('organization_id').references(() => organizations.id),
-  templateId: uuid('template_id').notNull().references(() => sessionTemplates.id),
+  templateId: uuid('template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
   scheduleId: uuid('schedule_id').references(() => sessionSchedules.id), // which recurring schedule generated this (null for one-off)
   startTime: timestamp('start_time', { withTimezone: true }).notNull(),
   endTime: timestamp('end_time', { withTimezone: true }).notNull(),
@@ -165,7 +165,7 @@ export const sessionInstances = pgTable('session_instances', {
 export const bookings = pgTable('bookings', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: text('organization_id').references(() => organizations.id),
-  sessionInstanceId: uuid('session_instance_id').notNull().references(() => sessionInstances.id),
+  sessionInstanceId: uuid('session_instance_id').notNull().references(() => sessionInstances.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => clerkUsers.id),
   status: text('status').notNull().default('confirmed'), // 'pending_payment' | 'confirmed' | 'cancelled' | 'completed' | 'no_show'
   numberOfSpots: integer('number_of_spots').notNull().default(1),
