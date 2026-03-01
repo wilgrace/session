@@ -59,6 +59,26 @@ export interface BillingHistoryItem {
 // HELPER FUNCTIONS
 // ============================================
 
+// Supabase returns snake_case columns; map them to the camelCase UserMembership shape
+// that Drizzle's $inferSelect produces, so isMembershipActive() can safely access
+// currentPeriodEnd / cancelledAt without getting undefined.
+function mapUserMembership(data: Record<string, unknown>): UserMembership {
+  return {
+    id: data.id,
+    userId: data.user_id,
+    organizationId: data.organization_id,
+    membershipId: data.membership_id ?? null,
+    status: data.status,
+    stripeSubscriptionId: data.stripe_subscription_id ?? null,
+    stripeCustomerId: data.stripe_customer_id ?? null,
+    currentPeriodStart: data.current_period_start ? new Date(data.current_period_start as string) : null,
+    currentPeriodEnd: data.current_period_end ? new Date(data.current_period_end as string) : null,
+    cancelledAt: data.cancelled_at ? new Date(data.cancelled_at as string) : null,
+    createdAt: new Date(data.created_at as string),
+    updatedAt: new Date(data.updated_at as string),
+  } as UserMembership
+}
+
 async function getAuthenticatedUser(): Promise<
   | { userId: string; clerkUserId: string; internalUserId: string }
   | { error: string }
@@ -182,7 +202,7 @@ export async function getUserMembership(
       }
     }
 
-    const isActive = isMembershipActive(membership as UserMembership)
+    const isActive = isMembershipActive(mapUserMembership(membership as Record<string, unknown>))
 
     // Fetch membership tier details if user has a membership_id
     let membershipDetails: {
@@ -599,7 +619,7 @@ export async function getMembershipForUser(
     return null
   }
 
-  return data as UserMembership
+  return mapUserMembership(data as Record<string, unknown>)
 }
 
 /**
