@@ -12,6 +12,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
+    const supabase = createSupabaseServerClient()
+
+    const { data: currentUser, error: userError } = await supabase
+      .from("clerk_users")
+      .select("role")
+      .eq("clerk_user_id", userId)
+      .single()
+
+    if (userError || !currentUser) {
+      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 })
+    }
+
+    if (currentUser.role !== "admin" && currentUser.role !== "superadmin") {
+      return NextResponse.json({ success: false, error: "Forbidden: Admin access required" }, { status: 403 })
+    }
+
     const formData = await request.formData()
     const file = formData.get("file") as File
 
@@ -35,8 +51,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
-    const supabase = createSupabaseServerClient()
 
     // Generate unique filename
     const fileExt = file.name.split(".").pop()
