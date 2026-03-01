@@ -831,7 +831,8 @@ export interface MembershipWithOrganization extends Membership {
  * Only returns if the membership is active and has showOnMembershipPage enabled.
  */
 export async function getMembershipByIdPublic(
-  membershipId: string
+  membershipId: string,
+  organizationId: string
 ): Promise<ActionResult<MembershipWithOrganization>> {
   try {
     const supabase = createSupabaseServerClient()
@@ -840,6 +841,7 @@ export async function getMembershipByIdPublic(
       .from("memberships")
       .select("*, organizations(id, name, slug)")
       .eq("id", membershipId)
+      .eq("organization_id", organizationId)
       .single()
 
     if (error) {
@@ -915,12 +917,37 @@ export async function subscribeToFreeMembership(
     // Check for existing membership in this org
     const { data: existingMembership } = await supabase
       .from("user_memberships")
-      .select("id, status")
+      .select("id, status, stripe_subscription_id")
       .eq("user_id", authResult.internalUserId)
       .eq("organization_id", membership.organization_id)
       .maybeSingle()
 
     if (existingMembership) {
+      // Cancel any active Stripe subscription before switching to a free membership
+      if (existingMembership.stripe_subscription_id) {
+        const { data: stripeAccount } = await supabase
+          .from("stripe_connect_accounts")
+          .select("stripe_account_id")
+          .eq("organization_id", membership.organization_id)
+          .single()
+
+        if (stripeAccount?.stripe_account_id) {
+          try {
+            const stripe = getStripe()
+            await stripe.subscriptions.cancel(existingMembership.stripe_subscription_id, {
+              stripeAccount: stripeAccount.stripe_account_id,
+            })
+            console.log(`Cancelled Stripe subscription ${existingMembership.stripe_subscription_id} before switching to free membership`)
+          } catch (stripeError) {
+            console.error("Error cancelling Stripe subscription:", stripeError)
+            return { success: false, error: "Failed to cancel existing subscription. Please try again." }
+          }
+        } else {
+          console.error("Could not find Stripe Connect account to cancel subscription", existingMembership.stripe_subscription_id)
+          return { success: false, error: "Failed to cancel existing subscription: Stripe account not found." }
+        }
+      }
+
       // Update existing record
       const { error: updateError } = await supabase
         .from("user_memberships")

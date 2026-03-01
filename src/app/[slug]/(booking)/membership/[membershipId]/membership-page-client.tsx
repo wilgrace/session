@@ -80,7 +80,7 @@ export function MembershipPageClient({
       setLoading(true)
       setError(null)
 
-      const result = await getMembershipByIdPublic(membershipId)
+      const result = await getMembershipByIdPublic(membershipId, organizationId)
 
       if (result.success && result.data) {
         setMembership(result.data)
