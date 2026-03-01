@@ -153,7 +153,7 @@ export function BookingHeader({
           hasHeaderImage ? "-mt-[140px] md:-mt-[176px]" : "pt-2"
         )}>
           <Link href={`/${slug}`} className="block">
-            <div className="rounded-full bg-[#FFFFFF] md:bg-[#F6F2EF] p-1 ring-[4px] ring-[#FFFFFF] md:ring-[#F6F2EF] md:p-2 md:ring-[8px]">
+            <div className="rounded-full bg-[#FFFFFF] md:bg-[#F6F2EF] p-1 ring-[4px] ring-[#FFFFFF] md:ring-[#F6F2EF] md:p-1 md:ring-[8px]">
               <Image
                 src={logoUrl}
                 alt={organizationName || "Organization logo"}

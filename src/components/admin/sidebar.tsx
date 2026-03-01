@@ -136,7 +136,7 @@ export function Sidebar({ slug }: SidebarProps) {
       </div>
 
       <div className="flex flex-col flex-1 py-4">
-        <nav className="space-y-1 px-2">
+        <nav className="space-y-2 px-2">
           {navItems.map((item) => {
             const isActive = item.href === `/${slug}/admin`
               ? pathname === `/${slug}/admin` || pathname === `/${slug}/admin/home`
@@ -149,8 +149,8 @@ export function Sidebar({ slug }: SidebarProps) {
                 className={cn(
                   "flex items-center px-3 py-2 text-sm font-medium rounded-md",
                   isActive
-                    ? "bg-gray-100 text-gray-900"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    ? "bg-gray-100 text-primary"
+                    : "text-gray-800 hover:bg-gray-50 hover:text-gray-900",
                 )}
               >
                 <item.icon className="mr-3 h-5 w-5 opacity-50" />
@@ -182,7 +182,7 @@ export function Sidebar({ slug }: SidebarProps) {
     <>
       {/* Desktop Sidebar - Fixed position */}
       <div className="hidden md:block md:w-64 md:flex-shrink-0">
-        <div className="fixed top-0 left-0 h-screen w-64 flex flex-col border-r border-gray-200 bg-white">
+        <div className="fixed top-0 left-0 h-screen w-64 flex flex-col border-r border-gray-200 bg-gray-50">
           <SidebarContent />
         </div>
       </div>

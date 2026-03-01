@@ -2,9 +2,33 @@
 
 import { clerkClient } from "@clerk/clerk-sdk-node"
 import { createSupabaseServerClient } from "@/lib/supabase"
+import { auth } from "@clerk/nextjs/server"
 
 // Alias for backward compatibility within this file
 const createSupabaseClient = createSupabaseServerClient;
+
+// Authenticate the caller and verify they hold an admin or superadmin role.
+// Returns caller context on success, or { error } on failure.
+async function getCallerAdminContext(): Promise<
+  { callerClerkId: string; callerRole: string; callerOrgId: string } | { error: string }
+> {
+  const { userId } = await auth()
+  if (!userId) return { error: "Not authenticated" }
+
+  const supabase = createSupabaseClient()
+  const { data: caller } = await supabase
+    .from("clerk_users")
+    .select("role, organization_id")
+    .eq("clerk_user_id", userId)
+    .single()
+
+  if (!caller) return { error: "User not found" }
+  if (caller.role !== "admin" && caller.role !== "superadmin") {
+    return { error: "Forbidden: admin access required" }
+  }
+
+  return { callerClerkId: userId, callerRole: caller.role, callerOrgId: caller.organization_id }
+}
 
 async function getClerkUser(clerkUserId: string) {
   try {
@@ -192,11 +216,16 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
 
 async function listClerkUsers() {
   try {
+    const ctx = await getCallerAdminContext()
+    if ("error" in ctx) return { success: false, error: ctx.error }
+
     const supabase = createSupabaseClient()
 
-    const { data, error } = await supabase
-      .from("clerk_users")
-      .select("*")
+    let query = supabase.from("clerk_users").select("*")
+    if (ctx.callerRole !== "superadmin") {
+      query = query.eq("organization_id", ctx.callerOrgId)
+    }
+    const { data, error } = await query
 
     if (error) {
       return {
@@ -217,14 +246,17 @@ async function listClerkUsers() {
   }
 }
 
-async function updateClerkUser(id: string, data: any) {
+async function updateClerkUser(id: string, data: { email?: string; first_name?: string; last_name?: string; role?: string }) {
   try {
+    const ctx = await getCallerAdminContext()
+    if ("error" in ctx) return { success: false, error: ctx.error }
+
     const supabase = createSupabaseClient()
 
-    // Get the Clerk user ID first
+    // Get the Clerk user ID and org for the target user
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
-      .select("clerk_user_id")
+      .select("clerk_user_id, organization_id")
       .eq("id", id)
       .single()
 
@@ -234,6 +266,23 @@ async function updateClerkUser(id: string, data: any) {
         error: userError.message
       }
     }
+
+    // Org scoping: admins may only modify users in their own organisation
+    if (ctx.callerRole !== "superadmin" && userData.organization_id !== ctx.callerOrgId) {
+      return { success: false, error: "Forbidden: cannot modify users from another organization" }
+    }
+
+    // Prevent role escalation: only superadmins may assign the superadmin role
+    if (data.role === "superadmin" && ctx.callerRole !== "superadmin") {
+      return { success: false, error: "Forbidden: cannot assign superadmin role" }
+    }
+
+    // Build a whitelist-only update object — never pass raw `data` to the DB
+    const safeData: { email?: string; first_name?: string; last_name?: string; role?: string } = {}
+    if (data.email !== undefined) safeData.email = data.email
+    if (data.first_name !== undefined) safeData.first_name = data.first_name
+    if (data.last_name !== undefined) safeData.last_name = data.last_name
+    if (data.role !== undefined) safeData.role = data.role
 
     // Sync name and email to Clerk if they changed
     if (userData?.clerk_user_id && (data.first_name !== undefined || data.last_name !== undefined || data.email !== undefined)) {
@@ -278,7 +327,7 @@ async function updateClerkUser(id: string, data: any) {
     // Update user in Supabase (role is managed in DB, not Clerk)
     const { error } = await supabase
       .from("clerk_users")
-      .update(data)
+      .update(safeData)
       .eq("id", id)
 
     if (error) {
@@ -301,12 +350,15 @@ async function updateClerkUser(id: string, data: any) {
 
 async function deleteClerkUser(id: string) {
   try {
+    const ctx = await getCallerAdminContext()
+    if ("error" in ctx) return { success: false, error: ctx.error }
+
     const supabase = createSupabaseClient()
 
-    // First get the user's Clerk ID
+    // First get the user's Clerk ID and org
     const { data: userData, error: userError } = await supabase
       .from("clerk_users")
-      .select("clerk_user_id")
+      .select("clerk_user_id, organization_id")
       .eq("id", id)
       .single()
 
@@ -315,6 +367,11 @@ async function deleteClerkUser(id: string) {
         success: false,
         error: userError.message
       }
+    }
+
+    // Org scoping: admins may only delete users in their own organisation
+    if (ctx.callerRole !== "superadmin" && userData.organization_id !== ctx.callerOrgId) {
+      return { success: false, error: "Forbidden: cannot delete users from another organization" }
     }
 
     if (!userData?.clerk_user_id) {

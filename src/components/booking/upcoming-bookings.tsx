@@ -27,7 +27,7 @@ export function UpcomingBookings({ bookings, className, slug }: UpcomingBookings
   }
 
   return (
-    <div className={cn("mb-6 rounded-lg border border-gray-200 overflow-hidden md:mb-0 mx-4 md:mx-0 mt-4 md:mt-0", className)}>
+    <div className={cn("mb-6 rounded-lg border border-gray-200 overflow-hidden md:mb-0 mx-4 md:mx-0 mt-4 md:mt-1.5", className)}>
       <div className="bg-white px-6 py-3 flex items-center justify-between border-b border-gray-200">
         <h2 className="text-left text-xs uppercase tracking-wider font-medium text-muted-foreground">
           YOUR UPCOMING BOOKINGS
