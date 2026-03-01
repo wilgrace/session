@@ -320,8 +320,8 @@
 
   /* Booked by current user (uses brand colour via --primary) */
   --session-booked-border: hsl(var(--primary));
-  --session-booked-bg: color-mix(in srgb, hsl(var(--primary)) 10%, white);
-  --session-booked-text: color-mix(in srgb, hsl(var(--primary)) 80%, black);
+  --session-booked-bg: hsl(var(--primary) / 0.1);
+  --session-booked-text: hsl(var(--primary));
 }
 
 /* Base session event styling */
