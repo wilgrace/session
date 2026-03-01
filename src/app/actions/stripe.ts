@@ -300,15 +300,23 @@ export async function createOnboardingLink(): Promise<ActionResult<{ url: string
       return { success: false, error: "No Stripe account found. Create one first." }
     }
 
+    // Get the org slug for building correct multi-tenant URLs
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("slug")
+      .eq("id", orgId)
+      .single()
+
     // Determine base URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const billingPath = org?.slug ? `/${org.slug}/admin/billing` : "/admin/billing"
 
     // Create Account Link
     const stripe = getStripe()
     const accountLink = await stripe.accountLinks.create({
       account: account.stripe_account_id,
-      refresh_url: `${baseUrl}/admin/billing?refresh=true`,
-      return_url: `${baseUrl}/admin/billing?success=true`,
+      refresh_url: `${baseUrl}${billingPath}?refresh=true`,
+      return_url: `${baseUrl}${billingPath}?success=true`,
       type: "account_onboarding",
     })
 
