@@ -50,6 +50,7 @@ interface CalendarViewProps {
   onEditSession: (session: SessionTemplate) => void
   onCreateSession: (start: Date, end: Date) => void
   onDeleteSession?: (session: SessionTemplate) => void
+  onSelectInstance?: (instanceId: string, template: SessionTemplate, instanceStart: Date) => void
   showControls?: boolean
 }
 
@@ -100,7 +101,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
 type SortDirection = "asc" | "desc" | null
 type SortColumn = "name" | "schedule" | "capacity" | "status" | null
 
-export function CalendarView({ sessions, onEditSession, onCreateSession, onDeleteSession, showControls = true }: CalendarViewProps) {
+export function CalendarView({ sessions, onEditSession, onCreateSession, onDeleteSession, onSelectInstance, showControls = true }: CalendarViewProps) {
   const { view, setView, date, setDate } = useCalendarView()
   const [currentView, setCurrentView] = useState<View>('week')
   const [isMobile, setIsMobile] = useState(false)
@@ -137,7 +138,7 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
     const events: CalendarEvent[] = [];
 
     // Process recurring templates
-    if (session.is_recurring && session.schedules) {
+    if ((session.schedules?.length ?? 0) > 0 && session.schedules) {
       session.schedules.forEach((schedule) => {
         const [hours, minutes] = schedule.time.split(':').map(Number);
 
@@ -219,8 +220,8 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
       });
     }
 
-    // Process one-off instances
-    if (!session.is_recurring) {
+    // Process one-off instances (for templates with no schedules, or mixed templates with one-off dates)
+    if (!session.schedules?.length || (session.one_off_dates?.length ?? 0) > 0) {
       if (session.instances && session.instances.length > 0) {
         session.instances.forEach((instance) => {
           // Parse the ISO string and create a new Date object
@@ -243,9 +244,8 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
       } else if (session.one_off_dates && session.one_off_dates.length > 0) {
         // Fallback: render directly from one_off_dates (same approach as recurring from schedules)
         session.one_off_dates.forEach((d) => {
-          const [hours, minutes] = d.time.split(':').map(Number)
-          const startTime = new Date(d.date)
-          startTime.setHours(hours, minutes, 0, 0)
+          // Parse as local time (not UTC) by combining date + time string without timezone
+          const startTime = new Date(`${d.date}T${d.time}:00`)
           const effectiveDuration = d.duration_minutes ?? session.duration_minutes
           const endTime = new Date(startTime)
           endTime.setMinutes(endTime.getMinutes() + effectiveDuration)
@@ -312,7 +312,17 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
     onCreateSession(start, end)
   }
 
-  const handleSelectEvent = (event: any) => {
+  const handleSelectEvent = (event: CalendarEvent) => {
+    if (onSelectInstance) {
+      // Find the matching instance by comparing start times
+      const matchingInstance = event.resource.instances?.find(i =>
+        new Date(i.start_time).getTime() === event.start.getTime()
+      )
+      if (matchingInstance) {
+        onSelectInstance(matchingInstance.id, event.resource, event.start)
+        return
+      }
+    }
     onEditSession(event.resource)
   }
 
@@ -551,40 +561,45 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                 >
                   <TableCell className="font-medium">{template.name}</TableCell>
                   <TableCell>
-                    {template.is_recurring ? (
-                      <div className="text-sm flex items-start gap-2">
-                        <RefreshCw className="h-4 w-4 mt-1 flex-shrink-0" />
-                        <div>
-                          {template.schedules.map((schedule, idx) => {
-                            const days = schedule.days.map(day => {
-                              const shortDay = day.slice(0, 3).toLowerCase()
-                              return shortDay.charAt(0).toUpperCase() + shortDay.slice(1)
-                            }).join(', ')
-                            const duration = schedule.duration_minutes ?? template.duration_minutes
-                            return (
-                              <div key={idx}>
-                                {schedule.time} — {duration}min — {days}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ) : template.one_off_dates && template.one_off_dates.length > 0 ? (
-                      <div className="text-sm flex items-start gap-2">
-                        <Calendar className="h-4 w-4 mt-1 flex-shrink-0" />
-                        <div>
-                          {template.one_off_dates.map((d, idx) => {
-                            const duration = d.duration_minutes ?? template.duration_minutes
-                            return (
-                              <div key={idx}>
-                                {format(new Date(d.date + 'T00:00:00'), 'd MMM')} at {d.time.slice(0, 5)} — {duration}min
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ) : (
+                    {(template.schedules?.length ?? 0) === 0 && (template.one_off_dates?.length ?? 0) === 0 ? (
                       "No schedule"
+                    ) : (
+                      <div className="text-sm space-y-1">
+                        {(template.schedules?.length ?? 0) > 0 && (
+                          <div className="flex items-start gap-2">
+                            <RefreshCw className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                            <div>
+                              {template.schedules.map((schedule, idx) => {
+                                const days = schedule.days.map(day => {
+                                  const shortDay = day.slice(0, 3).toLowerCase()
+                                  return shortDay.charAt(0).toUpperCase() + shortDay.slice(1)
+                                }).join(', ')
+                                const duration = schedule.duration_minutes ?? template.duration_minutes
+                                return (
+                                  <div key={idx}>
+                                    {schedule.time} — {duration}min — {days}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {(template.one_off_dates?.length ?? 0) > 0 && (
+                          <div className="flex items-start gap-2">
+                            <Calendar className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                            <div>
+                              {template.one_off_dates!.map((d, idx) => {
+                                const duration = d.duration_minutes ?? template.duration_minutes
+                                return (
+                                  <div key={idx}>
+                                    {format(new Date(d.date + 'T00:00:00'), 'd MMM')} at {d.time.slice(0, 5)} — {duration}min
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>{template.capacity}</TableCell>
@@ -628,23 +643,35 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
 // Export the ViewToggle component
 CalendarView.Toggle = function ViewToggle() {
   const { view, setView } = useCalendarView()
-  
+
   return (
-    <div className="flex items-center space-x-2">
-      <Button 
-        variant={view === "list" ? "default" : "outline"} 
-        size="icon" 
+    <div className="inline-flex rounded-md border border-gray-200 text-sm overflow-hidden">
+      <button
+        type="button"
         onClick={() => setView("list")}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 border-r border-gray-200 transition-colors",
+          view === "list"
+            ? "bg-primary/5 text-primary font-medium"
+            : "bg-white text-gray-500 hover:bg-gray-50"
+        )}
       >
         <List className="h-4 w-4" />
-      </Button>
-      <Button 
-        variant={view === "calendar" ? "default" : "outline"} 
-        size="icon" 
+        Templates
+      </button>
+      <button
+        type="button"
         onClick={() => setView("calendar")}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 transition-colors",
+          view === "calendar"
+            ? "bg-primary/5 text-primary font-medium"
+            : "bg-white text-gray-500 hover:bg-gray-50"
+        )}
       >
         <Calendar className="h-4 w-4" />
-      </Button>
+        Instances
+      </button>
     </div>
   )
 }

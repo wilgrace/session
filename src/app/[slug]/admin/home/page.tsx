@@ -1,23 +1,28 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { DayPicker } from '@/components/admin/day-picker';
 import { useSessions } from '@/hooks/use-sessions';
 import { addDays, startOfDay, format, endOfDay } from 'date-fns';
 import { SessionDetails } from '@/components/admin/session-details';
 import { BookingsList } from '@/components/admin/bookings-list';
 import { BookingDetailsPanel } from '@/components/admin/booking-details-panel';
+import { InstancePanel } from '@/components/admin/instance-panel';
 import { BookingsListView } from '@/components/admin/bookings-list-view';
 import { useBookingsView } from '@/hooks/use-bookings-view';
 
 const NUM_DAYS = 14;
 
 export default function AdminHomePage() {
+  const params = useParams();
+  const slug = params.slug as string;
   const [today] = useState(() => startOfDay(new Date()));
   const [dayOffset, setDayOffset] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [instancePanelOpen, setInstancePanelOpen] = useState(false);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const [hasSetInitialSession, setHasSetInitialSession] = useState(false);
   const { view, searchQuery, setView, setSearchQuery } = useBookingsView();
@@ -203,6 +208,7 @@ export default function AdminHomePage() {
                   setSelectedSessionIndex((i) => Math.min(sessionsForDay.length - 1, i + 1));
                   setSelectedBooking(null);
                 }}
+                onManage={() => setInstancePanelOpen(true)}
               />
               <div className="p-6">
                 <BookingsList
@@ -230,6 +236,13 @@ export default function AdminHomePage() {
         onClose={() => setSelectedBooking(null)}
         onCancel={() => setSelectedBooking(null)}
         onCheckIn={handleCheckIn}
+      />
+      <InstancePanel
+        open={instancePanelOpen}
+        session={currentSession}
+        slug={slug}
+        onClose={() => setInstancePanelOpen(false)}
+        onCancelled={() => setInstancePanelOpen(false)}
       />
     </main>
   );

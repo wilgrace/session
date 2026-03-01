@@ -17,7 +17,6 @@ export interface SessionSchedule {
   session_id: string
   time: string
   days: string[]
-  is_recurring: boolean
   date?: string
   duration_minutes?: number | null
   created_at: string
@@ -39,7 +38,7 @@ export interface SessionTemplate {
   capacity: number
   duration_minutes: number
   visibility: SessionVisibility
-  is_recurring: boolean
+  is_recurring?: boolean
   one_off_dates?: SessionOneOffDate[]
   recurrence_start_date?: string | null
   recurrence_end_date?: string | null
@@ -68,9 +67,12 @@ export interface SessionInstance {
   start_time: string
   end_time: string
   status: string
+  cancelled_at?: string | null
+  cancellation_reason?: string | null
   bookings?: {
     id: string
     number_of_spots: number
+    status?: string
     user: {
       clerk_user_id: string
     }

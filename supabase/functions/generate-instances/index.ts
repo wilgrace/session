@@ -44,6 +44,7 @@ interface SessionSchedule {
   start_time_local: string;
   is_active: boolean;
   duration_minutes?: number | null;
+  ended_at?: string | null;
 }
 
 interface SessionOneOffDate {
@@ -56,7 +57,6 @@ interface SessionOneOffDate {
 interface SessionTemplate {
   id: string;
   name: string;
-  is_recurring: boolean;
   visibility: string;
   session_schedules: SessionSchedule[];
   session_one_off_dates: SessionOneOffDate[];
@@ -222,7 +222,6 @@ serveWithoutAuth(async (req) => {
       .select(`
         id,
         name,
-        is_recurring,
         visibility,
         recurrence_start_date,
         recurrence_end_date,
@@ -233,6 +232,7 @@ serveWithoutAuth(async (req) => {
           time,
           day_of_week,
           is_active,
+          ended_at,
           duration_minutes
         ),
         session_one_off_dates (
@@ -245,7 +245,7 @@ serveWithoutAuth(async (req) => {
       .eq("id", specificTemplateIdToProcess);
 
     const result = await query;
-    const templates = result.data as SessionTemplate[];
+    const templates = result.data as unknown as SessionTemplate[];
     const error = result.error;
 
     if (error) {
@@ -271,11 +271,11 @@ serveWithoutAuth(async (req) => {
       for (const template of templates) {
         console.log(`[Info] Processing specific template: ${template.id}. Handling future instances...`);
         console.log('Template details:', {
-          is_recurring: template.is_recurring,
           visibility: template.visibility,
           recurrence_start_date: template.recurrence_start_date,
           recurrence_end_date: template.recurrence_end_date,
           schedules: template.session_schedules,
+          one_off_dates: template.session_one_off_dates,
           duration_minutes: template.duration_minutes
         });
 
@@ -297,19 +297,15 @@ serveWithoutAuth(async (req) => {
         // Collect all instances to create
         const instancesToInsert: Array<{
           template_id: string;
+          schedule_id: string | null;
           start_time: string;
           end_time: string;
           status: string;
           organization_id: string;
         }> = [];
 
-        if (template.is_recurring) {
-          // Recurring: generate one instance per matching weekday in the date range
-          if (!template.session_schedules || template.session_schedules.length === 0) {
-            console.log(`Recurring template ${template.id} has no schedules.`);
-            continue;
-          }
-
+        // Process recurring schedules (if any exist and are active)
+        if (template.session_schedules && template.session_schedules.length > 0) {
           const generationStartDate = template.recurrence_start_date
             ? parseISO(template.recurrence_start_date)
             : new Date();
@@ -317,15 +313,16 @@ serveWithoutAuth(async (req) => {
             ? parseISO(template.recurrence_end_date)
             : addMonths(new Date(), 3);
 
-          console.log('Generation date range:', {
+          console.log('Recurring generation date range:', {
             start: formatISO(generationStartDate),
             end: formatISO(generationEndDate),
-            daysToGenerate: Math.ceil((generationEndDate.getTime() - generationStartDate.getTime()) / (1000 * 60 * 60 * 24))
+            scheduleCount: template.session_schedules.length,
           });
 
           let currentDate = generationStartDate;
           const scheduleDays = template.session_schedules.map((s: SessionSchedule) => s.day_of_week);
 
+          // Advance to first matching weekday
           while (!scheduleDays.includes(getDay(currentDate))) {
             currentDate = addDays(currentDate, 1);
           }
@@ -334,16 +331,19 @@ serveWithoutAuth(async (req) => {
             const currentDayOfWeekInteger = getDay(currentDate);
 
             for (const schedule of template.session_schedules) {
+              // Skip schedules that have ended
+              if (schedule.ended_at && parseISO(schedule.ended_at) < currentDate) {
+                continue;
+              }
+
               if (schedule.day_of_week === currentDayOfWeekInteger) {
                 const [hours, minutes] = schedule.time.split(':').map(Number);
-
                 const localDateWithTime = set(currentDate, {
                   hours,
                   minutes,
                   seconds: 0,
-                  milliseconds: 0
+                  milliseconds: 0,
                 });
-
                 const instanceStartTimeUTC = localToUTC(localDateWithTime, SAUNA_TIMEZONE);
                 const effectiveDuration = schedule.duration_minutes || template.duration_minutes;
                 const instanceEndTimeUTC = addMinutes(instanceStartTimeUTC, effectiveDuration);
@@ -352,30 +352,28 @@ serveWithoutAuth(async (req) => {
                 if (!existingStartTimes.has(startTimeISO)) {
                   instancesToInsert.push({
                     template_id: template.id,
+                    schedule_id: schedule.id,
                     start_time: startTimeISO,
                     end_time: formatISO(instanceEndTimeUTC),
                     status: "scheduled",
-                    organization_id: template.organization_id
+                    organization_id: template.organization_id,
                   });
                 }
               }
             }
             currentDate = addDays(currentDate, 1);
           }
-        } else {
-          // Date-type (one-off): generate one instance per entry in session_one_off_dates
-          if (!template.session_one_off_dates || template.session_one_off_dates.length === 0) {
-            console.log(`Date-type template ${template.id} has no one-off dates.`);
-            continue;
-          }
+        }
 
+        // Process one-off dates (if any exist)
+        if (template.session_one_off_dates && template.session_one_off_dates.length > 0) {
           for (const entry of template.session_one_off_dates) {
             const [hours, mins] = entry.time.split(':').map(Number);
             const localDate = set(parseISO(entry.date), {
               hours,
               minutes: mins,
               seconds: 0,
-              milliseconds: 0
+              milliseconds: 0,
             });
             const instanceStartTimeUTC = localToUTC(localDate, SAUNA_TIMEZONE);
             const effectiveDuration = entry.duration_minutes ?? template.duration_minutes;
@@ -385,21 +383,27 @@ serveWithoutAuth(async (req) => {
             if (!existingStartTimes.has(startTimeISO)) {
               instancesToInsert.push({
                 template_id: template.id,
+                schedule_id: null,
                 start_time: startTimeISO,
                 end_time: formatISO(instanceEndTimeUTC),
                 status: "scheduled",
-                organization_id: template.organization_id
+                organization_id: template.organization_id,
               });
             }
           }
         }
 
-        // Bulk insert all new instances
+        if (instancesToInsert.length === 0 && (!template.session_schedules || template.session_schedules.length === 0) && (!template.session_one_off_dates || template.session_one_off_dates.length === 0)) {
+          console.log(`Template ${template.id} has no schedules or one-off dates to generate from.`);
+          continue;
+        }
+
+        // Bulk upsert all new instances (ignore conflicts on template_id + start_time)
         let instancesCreated = 0;
         if (instancesToInsert.length > 0) {
           const { error: insertError } = await supabaseClient
             .from("session_instances")
-            .insert(instancesToInsert);
+            .upsert(instancesToInsert, { onConflict: 'template_id,start_time', ignoreDuplicates: true });
 
           if (insertError) {
             console.error(`Error bulk inserting instances for template ${template.id}:`, insertError);

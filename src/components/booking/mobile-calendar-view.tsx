@@ -73,7 +73,7 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
         if (hasInstance) return true
         // No instance found for this day — fall through to recurring schedule check
       }
-      if (template.is_recurring && template.schedules) {
+      if ((template.schedules?.length ?? 0) > 0 && template.schedules) {
         const dayName = format(day, 'EEEE').toLowerCase()
         return template.schedules.some(schedule =>
           schedule.days.some(scheduleDay =>

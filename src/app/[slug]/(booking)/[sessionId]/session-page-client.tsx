@@ -278,6 +278,10 @@ export function SessionPageClient({
   const isGuest = bookingDetails?.user?.clerk_user_id?.startsWith('guest_') || false
   const guestEmail = bookingDetails?.user?.email
 
+  // Check if the specific instance being viewed is cancelled
+  const currentInstance = startTime ? session.instances?.[0] : null
+  const isInstanceCancelled = currentInstance?.status === 'cancelled'
+
   // Build user details for BookingPanel
   const userDetails = user && !isGuest ? {
     name: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown',
@@ -347,28 +351,35 @@ export function SessionPageClient({
           <div className="hidden md:flex justify-end h-20">
             <SessionAuthControls isAdmin={isAdmin} slug={slug} />
           </div>
-          <BookingForm
-            session={session}
-            startTime={startTime || undefined}
-            bookingDetails={bookingDetails}
-            slug={slug}
-            sessionId={sessionId}
-            spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
-            memberships={pricingData?.memberships}
-            userMembershipId={pricingData?.userMembershipId}
-            userMembershipDisabled={pricingData?.userMembershipDisabled}
-            userMembershipName={pricingData?.userMembershipName}
-            memberPrice={pricingData?.memberPrice}
-            monthlyMembershipPrice={pricingData?.monthlyMembershipPrice}
-            isActiveMember={pricingData?.isActiveMember}
-            defaultToMembership={searchParams.membership === "true"}
-            mode={mode}
-            userDetails={userDetails}
-            isGuest={isGuest}
-            guestEmail={guestEmail}
-            onStepChange={setCheckoutStep}
-            isAdmin={isAdmin}
-          />
+          {isInstanceCancelled ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center space-y-2">
+              <p className="font-semibold text-gray-900">This session has been cancelled</p>
+              <p className="text-sm text-gray-500">Sorry, this session is no longer available. Check back for future dates.</p>
+            </div>
+          ) : (
+            <BookingForm
+              session={session}
+              startTime={startTime || undefined}
+              bookingDetails={bookingDetails}
+              slug={slug}
+              sessionId={sessionId}
+              spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
+              memberships={pricingData?.memberships}
+              userMembershipId={pricingData?.userMembershipId}
+              userMembershipDisabled={pricingData?.userMembershipDisabled}
+              userMembershipName={pricingData?.userMembershipName}
+              memberPrice={pricingData?.memberPrice}
+              monthlyMembershipPrice={pricingData?.monthlyMembershipPrice}
+              isActiveMember={pricingData?.isActiveMember}
+              defaultToMembership={searchParams.membership === "true"}
+              mode={mode}
+              userDetails={userDetails}
+              isGuest={isGuest}
+              guestEmail={guestEmail}
+              onStepChange={setCheckoutStep}
+              isAdmin={isAdmin}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -80,16 +80,24 @@ The middleware validates the slug against the database and sets `x-organization-
 2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile)
 3. **user_memberships** - User subscription status per organization
 4. **saunas** - Sauna/facility definitions (legacy, may be unused)
-5. **session_templates** - Master templates (recurring or one-off), includes `event_color` for calendar display
-6. **session_schedules** - Days/times for recurring sessions, includes optional `duration_minutes` override
-7. **session_instances** - Individual bookable time slots (UTC), stores calculated `start_time` and `end_time`
-8. **bookings** - User reservations (includes `price_paid`, `member_price_applied` for price tracking)
+5. **session_templates** - Master templates, includes `event_color` for calendar display. Whether a template is recurring/one-off is **derived** from child records (not stored); `deleted_at` for soft-delete
+6. **session_schedules** - Days/times for recurring schedules, includes optional `duration_minutes` override and `ended_at` to stop a recurring schedule on a date
+7. **session_instances** - Individual bookable time slots (UTC), stores `start_time`, `end_time`, `status` (`active`/`cancelled`), `schedule_id`, and instance-level override columns (`name_override`, `description_override`, `pricing_type_override`, etc.)
+8. **bookings** - User reservations (includes `price_paid`, `member_price_applied` for price tracking, `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason`, `refund_amount`)
 9. **stripe_connect_accounts** - Stripe Connect account links per organization (includes membership product/price IDs)
 
 ### Key Relationships
-- Templates have many Schedules → generates Instances
+- Templates have many Schedules → generates Instances; Templates can also have one-off dates
 - Users create Bookings for Instances
 - All entities scoped to Organizations via `organization_id`
+
+### Mixed Schedule Types
+A single template can have **both** recurring schedules and one-off dates simultaneously. The `is_recurring` boolean column was removed from `session_templates` in migration `20260228000002`. Whether a template is recurring is now **derived**:
+- Recurring: `schedules.length > 0`
+- One-off: `one_off_dates.length > 0`
+- Mixed: both non-empty (fully supported)
+
+**Critical**: Never add back `is_recurring` to `session_templates`. All code that previously branched on `template.is_recurring` now uses `(template.schedules?.length ?? 0) > 0`.
 
 ### Session Duration Hierarchy
 Duration can be set at different levels with inheritance:
@@ -176,6 +184,8 @@ git push
 # Reset local DB to apply any new migrations
 supabase db reset
 ```
+
+> **Seed file caution**: `supabase db reset` runs migrations first, then executes `supabase/seed.sql` (configured in `config.toml`). If a migration drops a column, that column must also be removed from any `INSERT` statements in `seed.sql`. `CREATE TABLE IF NOT EXISTS` blocks in the seed file are harmless (skipped since the table already exists from migrations) — only fix the `INSERT` statements.
 
 ### Syncing remote changes to local
 If the remote DB has changes not in your local migrations:
@@ -302,8 +312,8 @@ The Create/Edit Session form (`src/components/admin/session-form.tsx`) is organi
 - Calendar Event Color (hex color picker, default: `#3b82f6` blue)
 
 **Schedule Section**:
-- Schedule Type: Repeat (recurring) or Once (one-off)
-- Start/End Dates (displayed inline for recurring)
+- Schedule Type: Repeat (recurring) or Once (one-off) — a template can have both
+- Start/End Dates (displayed inline for recurring schedules)
 - Time slots with per-schedule Duration (each schedule can have its own duration)
 
 **Payment Section**:
@@ -312,10 +322,33 @@ The Create/Edit Session form (`src/components/admin/session-form.tsx`) is organi
 - Membership Pricing overrides
 
 ### Session Generation
-1. Admin creates template with schedules (each schedule has time, days, and optional duration)
+1. Admin creates template with recurring schedules and/or one-off dates
 2. `generate-instances` Edge Function triggered
-3. Function generates instances using schedule-specific duration or template default
+3. Function generates instances for recurring schedules using schedule-specific duration or template default, and for each one-off date
 4. Instances stored in UTC with calculated `start_time` and `end_time`
+
+### Instance Cancellation
+Admins can cancel individual session instances from the admin home page.
+
+**Flow**:
+1. Admin clicks "Manage" on a session in the daily view → opens `InstancePanel` Sheet
+2. Admin clicks "Cancel this session", enters optional reason → confirmation dialog
+3. Server action `cancelSessionInstance(instanceId, reason)`:
+   - Verifies admin access
+   - Fetches all confirmed bookings for the instance
+   - Refunds paid bookings via Stripe (issues refund to original payment)
+   - Soft-deletes paid bookings (`cancelled_at`, `cancellation_reason`, `refund_amount`); hard-deletes free bookings
+   - Sends `session_cancellation` email to each affected user
+   - Sets `session_instances.status = 'cancelled'`, records `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason`
+
+**Key Files**:
+- `src/components/admin/instance-panel.tsx` — Sheet UI for manage/cancel
+- `src/components/admin/session-details.tsx` — Added "Manage" button + "Cancelled" badge
+- `src/app/actions/session.ts` — `cancelSessionInstance()` server action
+
+**User-facing**: The booking page (`/{slug}/{sessionId}?start=...`) checks `session.instances[0].status === 'cancelled'` and shows a "This session has been cancelled" message instead of the booking form.
+
+**Email type**: `session_cancellation` — triggers on instance cancellation, one email per affected user.
 
 ### Stripe Connect Integration
 Organizations connect their Stripe accounts to receive payments for bookings.
@@ -457,6 +490,7 @@ Transactional emails are sent via the **Resend** SDK. Three email types are supp
 |------|---------|
 | `booking_confirmation` | After paid booking (Stripe webhook `checkout.session.completed`) or free booking (`createDirectBooking`) |
 | `membership_confirmation` | After new subscription (Stripe webhook `customer.subscription.created`) |
+| `session_cancellation` | When an admin cancels a session instance (`cancelSessionInstance` server action) — one email per affected booking |
 | `waiting_list` | Not yet triggered — template exists ready for when the feature ships |
 
 **Key Files**:
@@ -478,7 +512,7 @@ Transactional emails are sent via the **Resend** SDK. Three email types are supp
 
 **Admin UI Location**: Settings page (`/{slug}/admin/settings`) → "Emails" section (above Waivers).
 
-**Idempotency Keys**: `booking-confirmation/{bookingId}`, `membership-confirmation/{subscriptionId}` — prevents duplicate sends on webhook retries.
+**Idempotency Keys**: `booking-confirmation/{bookingId}`, `membership-confirmation/{subscriptionId}`, `session-cancellation/{instanceId}/{bookingId}` — prevents duplicate sends on webhook retries.
 
 **Error handling**: All email functions catch and log errors but never throw, so webhook/booking flow is never broken by email failures. Check Resend dashboard (resend.com/emails) or server logs for `[sendBookingConfirmationEmail]` / `[sendMembershipConfirmationEmail]` prefixed entries.
 
@@ -505,7 +539,7 @@ Transactional emails are sent via the **Resend** SDK. Three email types are supp
 
 **Cannot connect to Supabase**: Ensure Docker Desktop is running, then `supabase start`
 
-**Sessions not generating**: Check template has `is_recurring = true`, schedules exist, and `recurrence_end_date` is in future
+**Sessions not generating**: Check that the template has schedules configured and `recurrence_end_date` is in the future (for recurring), or one-off dates exist. The `is_recurring` column no longer exists — it was removed in migration `20260228000002`.
 
 **Booking fails**: App auto-generates instances if missing; check template has schedules configured
 

@@ -10,6 +10,7 @@ import { CalendarView } from "@/components/admin/calendar-view"
 import { BookingsSearch } from "@/components/admin/bookings-search"
 import { List, Calendar, Plus, Search, X, Loader2 } from "lucide-react"
 import { usePageHeaderAction } from "@/hooks/use-page-header-action"
+import { cn } from "@/lib/utils"
 
 interface HeaderProps {
   slug: string
@@ -38,12 +39,46 @@ export function Header({ slug }: HeaderProps) {
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-40">
-      <div className="flex items-center justify-between">
+      <div className="relative flex items-center justify-between">
         <h1 className="pl-6 md:pl-0 text-2xl font-semibold text-gray-900">{getPageTitle()}</h1>
 
         {isBookingsPage && (
           <>
-            {/* Mobile: Expanded search takes full header */}
+            {/* Centered toggle — hidden when mobile search is expanded */}
+            {!(isMobile && searchExpanded) && (
+              <div className="absolute left-1/2 -translate-x-1/2">
+                <div className="inline-flex rounded-md border border-gray-200 text-sm overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setBookingsView("list")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 border-r border-gray-200 transition-colors",
+                      bookingsView === "list"
+                        ? "bg-primary/5 text-primary font-medium"
+                        : "bg-white text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <List className="h-4 w-4" />
+                    {!isMobile && "List"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBookingsView("calendar")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 transition-colors",
+                      bookingsView === "calendar"
+                        ? "bg-primary/5 text-primary font-medium"
+                        : "bg-white text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    {!isMobile && "Calendar"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Right side: search */}
             {isMobile && searchExpanded ? (
               <div className="flex items-center gap-2 flex-1 ml-4">
                 <BookingsSearch
@@ -63,15 +98,13 @@ export function Header({ slug }: HeaderProps) {
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 md:gap-4">
-                {/* Desktop: Full search bar */}
+              <div className="flex items-center gap-2">
                 {!isMobile && (
                   <BookingsSearch
                     value={searchQuery}
                     onChange={setSearchQuery}
                   />
                 )}
-                {/* Mobile: Search icon button */}
                 {isMobile && (
                   <Button
                     variant="outline"
@@ -81,37 +114,20 @@ export function Header({ slug }: HeaderProps) {
                     <Search className="h-4 w-4" />
                   </Button>
                 )}
-                <div className="flex items-center gap-1 md:gap-2">
-                  <Button
-                    variant={bookingsView === "list" ? "default" : "outline"}
-                    size={isMobile ? "icon" : "sm"}
-                    onClick={() => setBookingsView("list")}
-                    className={isMobile ? "" : "flex items-center gap-2"}
-                  >
-                    <List className="h-4 w-4" />
-                    {!isMobile && "List"}
-                  </Button>
-                  <Button
-                    variant={bookingsView === "calendar" ? "default" : "outline"}
-                    size={isMobile ? "icon" : "sm"}
-                    onClick={() => setBookingsView("calendar")}
-                    className={isMobile ? "" : "flex items-center gap-2"}
-                  >
-                    <Calendar className="h-4 w-4" />
-                    {!isMobile && "Calendar"}
-                  </Button>
-                </div>
               </div>
             )}
           </>
         )}
 
         {isSessionsPage && (
-          <div className="flex items-center gap-2">
-            <CalendarView.Toggle />
+          <>
+            {/* Centered toggle */}
+            <div className="absolute left-1/2 -translate-x-1/2">
+              <CalendarView.Toggle />
+            </div>
+            {/* New Session button on the right */}
             <Button
               onClick={() => {
-                // This will be handled by the sessions page
                 const event = new CustomEvent('openSessionForm')
                 window.dispatchEvent(event)
               }}
@@ -120,7 +136,7 @@ export function Header({ slug }: HeaderProps) {
             >
               {isMobile ? <Plus className="h-4 w-4" /> : "New Session"}
             </Button>
-          </div>
+          </>
         )}
 
         {pageAction && !isBookingsPage && !isSessionsPage && (

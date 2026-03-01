@@ -17,6 +17,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateType, string> = {
   booking_cancellation_notification: 'Cancellation (Admin)',
   membership_confirmation: 'Membership Confirmation',
   waiting_list: 'Waiting List',
+  session_cancellation: 'Session Cancellation (Admin-initiated)',
 };
 
 export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDefault> = {
@@ -94,6 +95,21 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
       'Time',
     ],
   },
+  session_cancellation: {
+    type: 'session_cancellation',
+    label: 'Session Cancellation (Admin-initiated)',
+    subject: '{{session_name}} on {{session_date}} has been cancelled',
+    content: `<p>Hi {{first_name}},</p>
+<p>We're sorry — <strong>{{session_name}}</strong> on <strong>{{session_date}}</strong> at <strong>{{session_time}}</strong> has been cancelled by {{org_name}}.</p>
+<p>{{cancellation_reason}}</p>`,
+    editableVariables: ['{{first_name}}', '{{session_name}}', '{{session_date}}', '{{session_time}}', '{{org_name}}', '{{cancellation_reason}}'],
+    injectedFields: [
+      'Session name',
+      'Date',
+      'Time',
+      'Refund note (if applicable)',
+    ],
+  },
 };
 
 export const ALL_EMAIL_TYPES: EmailTemplateType[] = [
@@ -102,4 +118,5 @@ export const ALL_EMAIL_TYPES: EmailTemplateType[] = [
   'booking_cancellation_notification',
   'membership_confirmation',
   'waiting_list',
+  'session_cancellation',
 ];

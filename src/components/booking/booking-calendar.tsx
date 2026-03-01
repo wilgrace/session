@@ -179,8 +179,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false }: BookingCale
       })
     }
 
-    // For recurring templates without instances, use the schedules to create events
-    if (template.is_recurring && template.schedules) {
+    // For templates with recurring schedules but without instances, use the schedules to create events
+    if ((template.schedules?.length ?? 0) > 0 && template.schedules) {
       const scheduleEvents: CalendarEvent[] = []
 
       template.schedules.forEach(schedule => {

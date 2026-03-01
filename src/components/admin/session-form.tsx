@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -109,7 +109,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [visibility, setVisibility] = useState<'open' | 'hidden' | 'closed'>(template?.visibility ?? 'open')
-  const [scheduleType, setScheduleType] = useState(template?.is_recurring ? "repeat" : "date")
+  const [showRepeatSection, setShowRepeatSection] = useState(false)
+  const [showDatesSection, setShowDatesSection] = useState(false)
   const [oneOffDates, setOneOffDates] = useState<OneOffDateItem[]>([
     { id: "1", date: undefined, time: "09:00", durationMinutes: 75 }
   ])
@@ -129,6 +130,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   const [scheduleExpanded, setScheduleExpanded] = useState(true)
   const [paymentExpanded, setPaymentExpanded] = useState(true)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [pendingDeleteScheduleId, setPendingDeleteScheduleId] = useState<string | null>(null)
+  const [pendingDeleteDateId, setPendingDeleteDateId] = useState<string | null>(null)
+  const [pendingDeleteRepeat, setPendingDeleteRepeat] = useState(false)
 
   // Pricing state
   const [pricingType, setPricingType] = useState<'free' | 'paid'>('paid')
@@ -168,8 +172,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     if (!template) {
       const today = new Date()
       setRecurrenceStartDate(startOfDay(today))
-      // Default to recurring schedule for new sessions with current day
-      setScheduleType("repeat")
+      // Start with both sections collapsed — user picks Repeat or Add Dates
+      setShowRepeatSection(false)
+      setShowDatesSection(false)
       setSchedules([{
         id: "1",
         time: "09:00",
@@ -205,7 +210,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       }])
 
       // Keep it as recurring schedule
-      setScheduleType("repeat")
+      setShowRepeatSection(true)
     }
   }, [initialTimeSlot])
 
@@ -218,7 +223,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setCapacity(template.capacity.toString())
       setDurationMinutes(template.duration_minutes ?? 75)
       setVisibility(template.visibility ?? 'open')
-      setScheduleType(template.is_recurring ? "repeat" : "date")
 
       // Load pricing fields
       setPricingType(template.pricing_type === 'paid' ? 'paid' : 'free')
@@ -233,42 +237,46 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       // Load event color
       setEventColor(normalizeEventColor(template.event_color))
 
-      if (template.is_recurring) {
-        if (template.schedules) {
-          setSchedules(template.schedules.map((s: any) => ({
-            id: s.id,
-            time: s.time,
-            days: s.days.map((day: string) => convertDayFormat(day, false)),
-            durationMinutes: s.duration_minutes
-          })))
-        }
-        if (template.recurrence_start_date) {
-          const startDate = parseISO(template.recurrence_start_date)
-          if (isValid(startDate)) {
-            setRecurrenceStartDate(startOfDay(startDate))
-          }
-        }
-        if (template.recurrence_end_date) {
-          const endDate = parseISO(template.recurrence_end_date)
-          if (isValid(endDate)) {
-            setRecurrenceEndDate(startOfDay(endDate))
-          }
-        }
+      // Load recurring schedules if present
+      if (template.schedules && template.schedules.length > 0) {
+        setShowRepeatSection(true)
+        setSchedules(template.schedules.map((s: any) => ({
+          id: s.id,
+          time: s.time,
+          days: s.days.map((day: string) => convertDayFormat(day, false)),
+          durationMinutes: s.duration_minutes
+        })))
       } else {
-        // Load one-off dates from template
-        if (template.one_off_dates && template.one_off_dates.length > 0) {
-          setOneOffDates(template.one_off_dates.map((d, i) => {
-            const parsed = parseISO(d.date)
-            return {
-              id: String(i + 1),
-              date: isValid(parsed) ? startOfDay(parsed) : undefined,
-              time: d.time,
-              durationMinutes: d.duration_minutes ?? (template.duration_minutes ?? 75),
-            }
-          }))
-        } else {
-          setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: template.duration_minutes ?? 75 }])
+        setShowRepeatSection(false)
+      }
+      if (template.recurrence_start_date) {
+        const startDate = parseISO(template.recurrence_start_date)
+        if (isValid(startDate)) {
+          setRecurrenceStartDate(startOfDay(startDate))
         }
+      }
+      if (template.recurrence_end_date) {
+        const endDate = parseISO(template.recurrence_end_date)
+        if (isValid(endDate)) {
+          setRecurrenceEndDate(startOfDay(endDate))
+        }
+      }
+
+      // Load one-off dates if present
+      if (template.one_off_dates && template.one_off_dates.length > 0) {
+        setShowDatesSection(true)
+        setOneOffDates(template.one_off_dates.map((d, i) => {
+          const parsed = parseISO(d.date)
+          return {
+            id: String(i + 1),
+            date: isValid(parsed) ? startOfDay(parsed) : undefined,
+            time: d.time,
+            durationMinutes: d.duration_minutes ?? (template.duration_minutes ?? 75),
+          }
+        }))
+      } else {
+        setShowDatesSection(false)
+        setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: template.duration_minutes ?? 75 }])
       }
     }
   }, [template])
@@ -372,20 +380,23 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     const errors: Record<string, string> = {}
     if (!name.trim()) errors.name = "Session name is required"
     if (!capacity || parseInt(capacity) < 1) errors.capacity = "Capacity is required"
-    if (scheduleType === "date") {
-      oneOffDates.forEach((item) => {
+    if (!showRepeatSection && !showDatesSection) {
+      errors.schedule = "Add at least one recurring schedule or one-off date"
+    }
+    if (showDatesSection) {
+      oneOffDates.filter(d => d.date || oneOffDates.length > 1).forEach((item) => {
         if (!item.date) errors[`one-off-date-${item.id}`] = "Date is required"
         if (!item.durationMinutes || item.durationMinutes <= 0) errors[`one-off-duration-${item.id}`] = "Duration is required"
       })
     }
-    if (scheduleType === "repeat" && (!durationMinutes || durationMinutes <= 0)) errors.duration = "Duration is required"
+    if (showRepeatSection && (!durationMinutes || durationMinutes <= 0)) errors.duration = "Duration is required"
     if (pricingType === "paid" && dropInEnabled && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
     if (pricingType === "paid") {
       const activeMembershipIds = memberships.filter(m => m.isActive).map(m => m.id)
       const anyEnabled = dropInEnabled || activeMembershipIds.some(id => membershipEnabled[id])
       if (!anyEnabled) errors.pricingOptions = "At least one pricing option must be selected"
     }
-    if (scheduleType === "repeat") {
+    if (showRepeatSection) {
       schedules.forEach((schedule) => {
         if (!schedule.days || schedule.days.length === 0) {
           errors[`schedule-days-${schedule.id}`] = "Select at least one day"
@@ -397,7 +408,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setFieldErrors(errors)
       // Auto-expand sections containing errors
       if (errors.name || errors.capacity) setGeneralExpanded(true)
-      if (Object.keys(errors).some(k => k.startsWith("one-off-") || k.startsWith("schedule-days-") || k === "duration")) setScheduleExpanded(true)
+      if (Object.keys(errors).some(k => k.startsWith("one-off-") || k.startsWith("schedule-days-") || k === "duration" || k === "schedule")) setScheduleExpanded(true)
       if (errors.dropInPrice || errors.pricingOptions) setPaymentExpanded(true)
       // Scroll to first error after a tick (to allow sections to expand)
       setTimeout(() => {
@@ -417,7 +428,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
       let templateId: string;
 
-      const oneOffDatesParam = scheduleType === "date"
+      const oneOffDatesParam = showDatesSection
         ? oneOffDates.filter(d => d.date).map(d => ({
             date: format(d.date!, 'yyyy-MM-dd'),
             time: d.time,
@@ -436,9 +447,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             capacity: parseInt(capacity),
             duration_minutes: durationMinutes,
             visibility: visibility,
-            is_recurring: scheduleType === "repeat",
-            recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
-            recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
+            recurrence_start_date: showRepeatSection && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
+            recurrence_end_date: showRepeatSection && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
             pricing_type: pricingType,
             drop_in_price: pricingType === 'paid' && dropInEnabled && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
             drop_in_enabled: pricingType === 'paid' ? dropInEnabled : true,
@@ -447,12 +457,11 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             image_url: imageUrl || null,
             event_color: eventColor,
           },
-          schedules: scheduleType === "repeat" ? schedules.map((s: any) => ({
+          schedules: showRepeatSection ? schedules.map((s: any) => ({
             time: s.time,
             days: (s.days || []).map((d: string) => d.toLowerCase()),
             duration_minutes: s.durationMinutes || null,
           })) : [],
-          isRecurring: scheduleType === "repeat",
           one_off_dates: oneOffDatesParam,
         });
 
@@ -469,9 +478,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           capacity: parseInt(capacity),
           duration_minutes: durationMinutes,
           visibility: visibility,
-          is_recurring: scheduleType === "repeat",
-          recurrence_start_date: scheduleType === "repeat" && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
-          recurrence_end_date: scheduleType === "repeat" && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
+          recurrence_start_date: showRepeatSection && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
+          recurrence_end_date: showRepeatSection && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
           created_by: user.id,
           // Pricing fields
           pricing_type: pricingType,
@@ -493,7 +501,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         templateId = result.id;
       }
 
-      if (!template && scheduleType === "repeat") {
+      if (!template && showRepeatSection) {
         // Schedule creation for new templates only — updates are handled by updateSessionWithSchedules
 
         // Validate schedules before creating
@@ -633,8 +641,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   }
 
   const addSchedule = () => {
-    const newId = (schedules.length + 1).toString()
-    setSchedules([...schedules, { id: newId, time: "09:00", days: [], durationMinutes: null }])
+    const newId = String(Date.now())
+    const lastSchedule = schedules[schedules.length - 1]
+    const newSchedule = lastSchedule
+      ? { id: newId, time: lastSchedule.time, days: [...lastSchedule.days], durationMinutes: lastSchedule.durationMinutes ?? null }
+      : { id: newId, time: "09:00", days: [], durationMinutes: null }
+    setSchedules([...schedules, newSchedule])
   }
 
   const removeSchedule = async (id: string) => {
@@ -686,15 +698,17 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     )
   }
 
-  const handleScheduleTypeChange = (type: "repeat" | "date") => {
-    setScheduleType(type)
-    if (type === "date") {
+  const handleAddRepeatSection = () => {
+    setShowRepeatSection(true)
+    if (schedules.length === 0) {
+      setSchedules([{ id: "1", time: "09:00", days: [], durationMinutes: null }])
+    }
+  }
+
+  const handleAddDatesSection = () => {
+    setShowDatesSection(true)
+    if (oneOffDates.length === 0 || (oneOffDates.length === 1 && !oneOffDates[0].date)) {
       setOneOffDates([{ id: "1", date: undefined, time: "09:00", durationMinutes: durationMinutes || 75 }])
-    } else {
-      // Only reset to default if there are no existing schedules to preserve
-      if (schedules.length === 0) {
-        setSchedules([{ id: "1", time: "09:00", days: ["mon", "thu", "fri"], durationMinutes: null }])
-      }
     }
   }
 
@@ -704,7 +718,14 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   }
 
   const removeOneOffDate = (id: string) => {
-    setOneOffDates(prev => prev.filter(d => d.id !== id))
+    setOneOffDates(prev => {
+      const next = prev.filter(d => d.id !== id)
+      if (next.length === 0) {
+        setShowDatesSection(false)
+        return [{ id: "1", date: undefined, time: "09:00", durationMinutes: durationMinutes || 75 }]
+      }
+      return next
+    })
   }
 
   const updateOneOffDate = (id: string, field: keyof OneOffDateItem, value: any) => {
@@ -714,13 +735,17 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="sm:max-w-[625px] overflow-y-auto p-0">
-        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
+        <div className="sticky top-0 bg-white z-20 px-6 py-4 border-b pr-12">
           <SheetHeader>
             <SheetTitle className="text-xl">{template ? "Edit Session" : "New Session"}</SheetTitle>
             <SheetDescription>
               {template ? "Any changes will update every instance of this session." : "Add a new session to your calendar."}
             </SheetDescription>
           </SheetHeader>
+          <SheetClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetClose>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
@@ -746,7 +771,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   </div>
                   <Input
                     id="name"
-                    defaultValue={name}
+                    value={name}
                     onChange={(e) => { setName(e.target.value); clearError("name") }}
                     className={cn(fieldErrors.name && "border-red-500 focus-visible:ring-red-500")}
                   />
@@ -766,7 +791,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     id="capacity"
                     type="number"
                     min="1"
-                    defaultValue={capacity}
+                    value={capacity}
                     onChange={(e) => { setCapacity(e.target.value); clearError("capacity") }}
                     className={cn(fieldErrors.capacity && "border-red-500 focus-visible:ring-red-500")}
                   />
@@ -787,7 +812,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   </div>
                   <Textarea
                     id="description"
-                    defaultValue={description}
+                    value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
                   <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
@@ -863,312 +888,214 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             </button>
 
             {scheduleExpanded && (
-              <div className="px-4 pb-4 space-y-4">
-                {/* Schedule Type */}
-                <div className="space-y-2 py-4" >
-                  <div className="grid grid-cols-2 gap-4">
-                    <Card
-                      className={cn(
-                        "cursor-pointer border rounded-lg",
-                        scheduleType === "repeat" ? "border-primary bg-primary/5" : "border-gray-200 rounded-lg",
-                      )}
-                      onClick={() => handleScheduleTypeChange("repeat")}
-                    >
-                      <CardContent className="p-4 flex text-left gap-1 justify-between">
-                        <div className="flex gap-2">
-                          <RefreshCw className="h-4 w-4 text-gray-500" />
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">Repeat</span>
-                            <span className="text-xs text-gray-500">Every day or week</span>
-                          </div>
-                        </div>
-                        {scheduleType === "repeat" && (
-                          <div className="relative h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-3 w-3"
-                            >
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Card
-                      className={cn(
-                        "cursor-pointer border rounded-lg",
-                        scheduleType === "date" ? "border-primary bg-primary/5" : "border-gray-200",
-                      )}
-                      onClick={() => handleScheduleTypeChange("date")}
-                    >
-                      <CardContent className="p-4 flex justify-between gap-1">
-                        <div className="flex gap-2 justify-between">
-                        <CalendarDays className="h-4 w-4 text-gray-500" />
-                        <div className="flex flex-col">
-                            <span className="font-medium text-sm">Event</span>
-                            <span className="text-xs text-gray-500">On one or more dates</span>
-                          </div>
-                          </div>
-                        {scheduleType === "date" && (
-                          <div className="relative h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-3 w-3"
-                            >
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+              <div className="px-4 pb-4 pt-4 space-y-4">
+                {/* Warning banner when editing template with instances */}
+                {template && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Changes to schedules will regenerate future instances. Sessions with existing bookings won&apos;t be affected until cancelled individually.
                   </div>
-                </div>
+                )}
 
-                {scheduleType === "date" ? (
-                  <div className="space-y-4">
-                    {oneOffDates.map((item) => (
-                      <div key={item.id} className="border rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm font-medium">Date <span className="text-red-500">*</span></Label>
-                          {oneOffDates.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                              onClick={() => removeOneOffDate(item.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
+                {/* Repeat section */}
+                {showRepeatSection && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between bg-gray-50 px-4 py-3 border-b">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4 text-gray-500" /> Repeat
+                      </span>
+                      {pendingDeleteRepeat ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => { setShowRepeatSection(false); setSchedules([]); setPendingDeleteScheduleId(null); setPendingDeleteRepeat(false) }}
+                        >
+                          Delete Schedule?
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setPendingDeleteRepeat(true)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {/* Start and End Dates */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Start Date</Label>
+                          <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !recurrenceStartDate && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {recurrenceStartDate ? format(recurrenceStartDate, "PPP") : <span>Pick a date</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar mode="single" selected={recurrenceStartDate} onSelect={(newDate) => { if (newDate) { setRecurrenceStartDate(startOfDay(newDate)); setStartDateOpen(false) } }} initialFocus />
+                            </PopoverContent>
+                          </Popover>
                         </div>
-                        <Popover open={openOneOffDateId === item.id} onOpenChange={(open) => setOpenOneOffDateId(open ? item.id : null)}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              id={`one-off-date-${item.id}`}
-                              type="button"
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !item.date && "text-muted-foreground",
-                                fieldErrors[`one-off-date-${item.id}`] && "border-red-500"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {item.date ? format(item.date, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={item.date}
-                              onSelect={(newDate) => {
-                                if (newDate) {
-                                  updateOneOffDate(item.id, "date", startOfDay(newDate))
-                                  clearError(`one-off-date-${item.id}`)
-                                  setOpenOneOffDateId(null)
-                                }
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        {fieldErrors[`one-off-date-${item.id}`] && (
-                          <p className="text-sm text-red-500">{fieldErrors[`one-off-date-${item.id}`]}</p>
-                        )}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-sm font-medium">Time <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="time"
-                              value={item.time}
-                              onChange={(e) => updateOneOffDate(item.id, "time", e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label
-                              htmlFor={`one-off-duration-${item.id}`}
-                              className="text-sm font-medium"
-                            >
-                              Duration (mins) <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              id={`one-off-duration-${item.id}`}
-                              type="number"
-                              min="1"
-                              value={item.durationMinutes || ""}
-                              onChange={(e) => {
-                                updateOneOffDate(item.id, "durationMinutes", parseInt(e.target.value) || 0)
-                                clearError(`one-off-duration-${item.id}`)
-                              }}
-                              className={cn(fieldErrors[`one-off-duration-${item.id}`] && "border-red-500 focus-visible:ring-red-500")}
-                            />
-                            {fieldErrors[`one-off-duration-${item.id}`] && (
-                              <p className="text-sm text-red-500">{fieldErrors[`one-off-duration-${item.id}`]}</p>
-                            )}
-                          </div>
+                        <div className="space-y-2">
+                          <Label>End Date (Optional)</Label>
+                          <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !recurrenceEndDate && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : <span>Pick a date</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar mode="single" selected={recurrenceEndDate} onSelect={(newDate) => { if (newDate) { setRecurrenceEndDate(startOfDay(newDate)); setEndDateOpen(false) } }} initialFocus />
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={addOneOffDate}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Another Date
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Start and End Dates - Inline */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Start Date <span className="text-red-500">*</span></Label>
-                        <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !recurrenceStartDate && "text-muted-foreground"
+                      {/* Time blocks */}
+                      <div className="space-y-3">
+                        {schedules.map((schedule, idx) => (
+                          <div key={schedule.id}>
+                            {idx > 0 && <hr className="border-gray-100 mb-3" />}
+                            <div className="space-y-3 relative">
+                              {(schedules.length > 1 || !!template) && (
+                                pendingDeleteScheduleId === schedule.id ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    className="absolute top-0 right-0 h-7 text-xs"
+                                    onClick={() => { removeSchedule(schedule.id); setPendingDeleteScheduleId(null) }}
+                                  >
+                                    Clear?
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-0 right-0 h-6 w-6"
+                                    onClick={() => setPendingDeleteScheduleId(schedule.id)}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )
                               )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {recurrenceStartDate ? format(recurrenceStartDate, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={recurrenceStartDate}
-                              onSelect={(newDate) => { if (newDate) { setRecurrenceStartDate(startOfDay(newDate)); setStartDateOpen(false) } }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>End Date (Optional)</Label>
-                        <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !recurrenceEndDate && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={recurrenceEndDate}
-                              onSelect={(newDate) => { if (newDate) { setRecurrenceEndDate(startOfDay(newDate)); setEndDateOpen(false) } }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                              <div className="space-y-2" id={`schedule-days-${schedule.id}`}>
+                                <Label className="text-sm font-medium">Days <span className="text-red-500">*</span></Label>
+                                <div className={cn("flex flex-wrap gap-2 rounded-md p-1", fieldErrors[`schedule-days-${schedule.id}`] && "ring-1 ring-red-500")}>
+                                  {daysOfWeek.map((day) => (
+                                    <button key={day.value} type="button" onClick={() => { toggleDay(schedule.id, day.value); clearError(`schedule-days-${schedule.id}`) }}
+                                      className={cn("px-3 py-1 rounded-md text-sm", schedule.days.includes(day.value) ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")}>
+                                      {day.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                {fieldErrors[`schedule-days-${schedule.id}`] && <p className="text-sm text-red-500">{fieldErrors[`schedule-days-${schedule.id}`]}</p>}
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor={`time-${schedule.id}`} className="text-sm font-medium">Time <span className="text-red-500">*</span></Label>
+                                  <Input id={`time-${schedule.id}`} type="time" value={schedule.time} onChange={(e) => updateScheduleTime(schedule.id, e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`duration-${schedule.id}`} className="text-sm font-medium">Duration (mins) <span className="text-red-500">*</span></Label>
+                                  <Input id={`duration-${schedule.id}`} type="number" min="1" value={schedule.durationMinutes ?? durationMinutes} onChange={(e) => updateScheduleDuration(schedule.id, parseInt(e.target.value) || 0)} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
+                    <div className="bg-gray-50 border-t">
+                      <Button type="button" variant="ghost" onClick={addSchedule} className="w-full py-3 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-none">
+                        <Plus className="mr-1 h-3 w-3" /> Add time
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-                    {/* Schedule Items - Only show for repeat type */}
-                    <div className="space-y-4">
-                      {schedules.map((schedule) => (
-                        <div key={schedule.id} className="border rounded-md p-4 space-y-3 relative">
-                          {schedules.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute top-2 right-2 h-6 w-6"
-                              onClick={() => removeSchedule(schedule.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
-                                                    <div className="space-y-2" id={`schedule-days-${schedule.id}`}>
-                            <Label className="text-sm font-medium">
-                              Days <span className="text-red-500">*</span>
-                            </Label>
-                            <div className={cn(
-                              "flex flex-wrap gap-2 rounded-md p-1",
-                              fieldErrors[`schedule-days-${schedule.id}`] && "ring-1 ring-red-500"
-                            )}>
-                              {daysOfWeek.map((day) => (
-                                <button
-                                  key={day.value}
+                {/* Dates section */}
+                {showDatesSection && (
+                  <>
+                    <div className="border rounded-lg p-4 space-y-3">
+                      {oneOffDates.map((item, idx) => (
+                        <div key={item.id}>
+                          {idx > 0 && <hr className="border-gray-100 mb-3" />}
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium">Date <span className="text-red-500">*</span></Label>
+                              {pendingDeleteDateId === item.id ? (
+                                <Button
                                   type="button"
-                                  onClick={() => { toggleDay(schedule.id, day.value); clearError(`schedule-days-${schedule.id}`) }}
-                                  className={cn(
-                                    "px-3 py-1 rounded-md text-sm",
-                                    schedule.days.includes(day.value)
-                                      ? "bg-primary text-white"
-                                      : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                                  )}
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-7 text-xs"
+                                  onClick={() => { removeOneOffDate(item.id); setPendingDeleteDateId(null) }}
                                 >
-                                  {day.label}
-                                </button>
-                              ))}
+                                  Clear?
+                                </Button>
+                              ) : (
+                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-red-500" onClick={() => setPendingDeleteDateId(item.id)}>
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
-                            {fieldErrors[`schedule-days-${schedule.id}`] && (
-                              <p className="text-sm text-red-500">{fieldErrors[`schedule-days-${schedule.id}`]}</p>
-                            )}
-                          </div>
-                          {/* Time and Duration inline */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor={`time-${schedule.id}`} className="text-sm font-medium">
-                                Time <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                id={`time-${schedule.id}`}
-                                type="time"
-                                value={schedule.time}
-                                onChange={(e) => updateScheduleTime(schedule.id, e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`duration-${schedule.id}`} className="text-sm font-medium">
-                                Duration (mins) <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                id={`duration-${schedule.id}`}
-                                type="number"
-                                min="1"
-                                value={schedule.durationMinutes ?? durationMinutes}
-                                onChange={(e) => updateScheduleDuration(schedule.id, parseInt(e.target.value) || 0)}
-                              />
+                            <Popover open={openOneOffDateId === item.id} onOpenChange={(open) => setOpenOneOffDateId(open ? item.id : null)}>
+                              <PopoverTrigger asChild>
+                                <Button id={`one-off-date-${item.id}`} type="button" variant="outline" className={cn("w-full justify-start text-left font-normal", !item.date && "text-muted-foreground", fieldErrors[`one-off-date-${item.id}`] && "border-red-500")}>
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {item.date ? format(item.date, "PPP") : <span>Pick a date</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar mode="single" selected={item.date} onSelect={(newDate) => { if (newDate) { updateOneOffDate(item.id, "date", startOfDay(newDate)); clearError(`one-off-date-${item.id}`); setOpenOneOffDateId(null) } }} initialFocus />
+                              </PopoverContent>
+                            </Popover>
+                            {fieldErrors[`one-off-date-${item.id}`] && <p className="text-sm text-red-500">{fieldErrors[`one-off-date-${item.id}`]}</p>}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-sm font-medium">Time <span className="text-red-500">*</span></Label>
+                                <Input type="time" value={item.time} onChange={(e) => updateOneOffDate(item.id, "time", e.target.value)} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor={`one-off-duration-${item.id}`} className="text-sm font-medium">Duration (mins) <span className="text-red-500">*</span></Label>
+                                <Input id={`one-off-duration-${item.id}`} type="number" min="1" value={item.durationMinutes || ""} onChange={(e) => { updateOneOffDate(item.id, "durationMinutes", parseInt(e.target.value) || 0); clearError(`one-off-duration-${item.id}`) }} className={cn(fieldErrors[`one-off-duration-${item.id}`] && "border-red-500 focus-visible:ring-red-500")} />
+                                {fieldErrors[`one-off-duration-${item.id}`] && <p className="text-sm text-red-500">{fieldErrors[`one-off-duration-${item.id}`]}</p>}
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
-                      <Button type="button" variant="outline" className="w-full" onClick={addSchedule}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Another Time
-                      </Button>
                     </div>
+                    <Button type="button" variant="outline" size="lg" className="w-full" onClick={addOneOffDate}>
+                      <CalendarDays className="mr-2 h-3 w-3" /> Add Single Date
+                    </Button>
                   </>
                 )}
+
+                {/* Error message if neither section active */}
+                {fieldErrors.schedule && <p className="text-sm text-red-500">{fieldErrors.schedule}</p>}
+
+                {/* Add section buttons */}
+                <div className="flex gap-4 flex-col" id="schedule">
+                  {!showRepeatSection && (
+                    <Button type="button" variant="outline" size="lg" onClick={handleAddRepeatSection}>
+                      <RefreshCw className="mr-2 h-3 w-3" /> Add Repeat Schedule
+                    </Button>
+                  )}
+                  {!showDatesSection && (
+                    <Button type="button" variant="outline" size="lg" onClick={handleAddDatesSection}>
+                      <CalendarDays className="mr-2 h-3 w-3" /> Add Single Date
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1459,10 +1386,22 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete session?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete &ldquo;{name}&rdquo; and all
-                      its scheduled instances and bookings. This action cannot be
-                      undone.
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2">
+                        <p>
+                          This will permanently delete &ldquo;{name}&rdquo; and all its scheduled instances. This action cannot be undone.
+                        </p>
+                        {(() => {
+                          const activeBookings = (template?.instances ?? []).flatMap(i =>
+                            (i.bookings ?? []).filter(b => !b.status || b.status === 'confirmed' || b.status === 'completed')
+                          )
+                          return activeBookings.length > 0 ? (
+                            <p className="font-medium text-destructive">
+                              {activeBookings.length} active booking{activeBookings.length !== 1 ? 's' : ''} will also be permanently deleted.
+                            </p>
+                          ) : null
+                        })()}
+                      </div>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

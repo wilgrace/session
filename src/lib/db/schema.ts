@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, timestamp, uuid, integer, boolean, date, time } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, timestamp, uuid, integer, boolean, date, time, unique } from 'drizzle-orm/pg-core';
 
 // Role enum for user permissions
 export const userRoleEnum = pgEnum('user_role', ['guest', 'user', 'admin', 'superadmin']);
@@ -93,12 +93,12 @@ export const sessionTemplates = pgTable('session_templates', {
   capacity: integer('capacity').notNull(),
   durationMinutes: integer('duration_minutes').notNull(),
   visibility: text('visibility').notNull().default('open'), // 'open' | 'hidden' | 'closed'
-  isRecurring: boolean('is_recurring').notNull().default(false),
   recurrenceStartDate: date('recurrence_start_date'),
   recurrenceEndDate: date('recurrence_end_date'),
   createdBy: uuid('created_by').notNull().references(() => clerkUsers.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }), // soft delete
   timezone: text('timezone').notNull().default('UTC'),
   // Pricing fields
   pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
@@ -119,6 +119,7 @@ export const sessionSchedules = pgTable('session_schedules', {
   time: time('time').notNull(),
   durationMinutes: integer('duration_minutes'), // Optional per-schedule duration; falls back to template duration
   isActive: boolean('is_active').notNull().default(true),
+  endedAt: date('ended_at'), // schedule stops generating instances after this date
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   organizationId: text('organization_id').references(() => organizations.id),
@@ -139,13 +140,27 @@ export const sessionInstances = pgTable('session_instances', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: text('organization_id').references(() => organizations.id),
   templateId: uuid('template_id').notNull().references(() => sessionTemplates.id),
+  scheduleId: uuid('schedule_id').references(() => sessionSchedules.id), // which recurring schedule generated this (null for one-off)
   startTime: timestamp('start_time', { withTimezone: true }).notNull(),
   endTime: timestamp('end_time', { withTimezone: true }).notNull(),
-  status: text('status').notNull().default('scheduled'),
+  status: text('status').notNull().default('scheduled'), // 'scheduled' | 'cancelled'
+  // Cancellation fields
+  cancellationReason: text('cancellation_reason'),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  cancelledByUserId: text('cancelled_by_user_id'),
+  // Instance-level overrides (null = inherit from template)
+  nameOverride: text('name_override'),
+  descriptionOverride: text('description_override'),
+  bookingInstructionsOverride: text('booking_instructions_override'),
+  pricingTypeOverride: text('pricing_type_override'), // 'free' | 'paid' | null
+  dropInPriceOverride: integer('drop_in_price_override'), // pence
+  memberPriceOverride: integer('member_price_override'), // pence
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   clerkUserId: text('clerk_user_id'),
-});
+}, (table) => ({
+  uniqueTemplateStartTime: unique().on(table.templateId, table.startTime),
+}));
 
 export const bookings = pgTable('bookings', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -165,6 +180,11 @@ export const bookings = pgTable('bookings', {
   // Price breakdown fields (for displaying on confirmation)
   unitPrice: integer('unit_price'), // First person price in pence
   discountAmount: integer('discount_amount'), // Discount applied in pence
+  // Soft-delete / cancellation fields (paid bookings are soft-deleted, free bookings are hard-deleted)
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  cancelledByUserId: text('cancelled_by_user_id'),
+  cancellationReason: text('cancellation_reason'),
+  refundAmount: integer('refund_amount'), // pence; may differ from amountPaid
 });
 
 export const stripeConnectAccounts = pgTable('stripe_connect_accounts', {
@@ -300,7 +320,7 @@ export type WaiverAgreement = typeof waiverAgreements.$inferSelect;
 export type NewWaiverAgreement = typeof waiverAgreements.$inferInsert;
 
 // Email notification type
-export type EmailTemplateType = 'booking_confirmation' | 'booking_cancellation' | 'booking_cancellation_notification' | 'membership_confirmation' | 'waiting_list';
+export type EmailTemplateType = 'booking_confirmation' | 'booking_cancellation' | 'booking_cancellation_notification' | 'membership_confirmation' | 'waiting_list' | 'session_cancellation';
 
 // Per-org email notification templates
 export const orgEmailTemplates = pgTable('org_email_templates', {

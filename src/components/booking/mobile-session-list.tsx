@@ -37,7 +37,7 @@ function findNextAvailableSessionDate(sessions: SessionTemplate[], afterDate: Da
           nextDateStr = instanceStr
         }
       }
-    } else if (template.is_recurring && template.schedules) {
+    } else if ((template.schedules?.length ?? 0) > 0 && template.schedules) {
       // No instances: find the next matching weekday from the schedule
       for (const schedule of template.schedules) {
         for (const day of schedule.days) {
@@ -89,7 +89,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect }
     }
 
     // If no instances found, check recurring schedule
-    if (results.length === 0 && template.is_recurring && template.schedules) {
+    if (results.length === 0 && (template.schedules?.length ?? 0) > 0 && template.schedules) {
       const dayName = format(selectedDate, 'EEEE').toLowerCase()
       const schedule = template.schedules.find(s =>
         s.days.some(d => d.toLowerCase() === dayName)

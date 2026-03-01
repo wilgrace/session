@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SessionForm } from "@/components/admin/session-form"
+import { InstancePanel } from "@/components/admin/instance-panel"
 import { SessionTemplate } from "@/types/session"
 
 const CalendarView = dynamic(
@@ -22,6 +23,8 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
   const [showSessionForm, setShowSessionForm] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionTemplate | null>(null)
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ start: Date; end: Date } | null>(null)
+  const [instancePanelOpen, setInstancePanelOpen] = useState(false)
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
 
   useEffect(() => {
     const handleOpenForm = () => setShowSessionForm(true)
@@ -34,6 +37,45 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
     setShowSessionForm(true)
   }
 
+  const handleSelectInstance = (instanceId: string, _template: SessionTemplate, _instanceStart: Date) => {
+    setSelectedInstanceId(instanceId)
+    setInstancePanelOpen(true)
+  }
+
+  // Find the selected instance from the sessions data
+  const selectedInstance = selectedInstanceId
+    ? sessions.flatMap(s => s.instances ?? []).find(i => i.id === selectedInstanceId) ?? null
+    : null
+
+  // Find the template for the selected instance (needed for template name)
+  const selectedInstanceTemplate = selectedInstanceId
+    ? sessions.find(s => s.instances?.some(i => i.id === selectedInstanceId)) ?? null
+    : null
+
+  // Build the InstancePanelSession shape from what we have
+  const instancePanelSession = selectedInstance && selectedInstanceTemplate ? {
+    id: selectedInstance.id,
+    start_time: selectedInstance.start_time,
+    end_time: selectedInstance.end_time,
+    status: selectedInstance.status,
+    cancelled_at: selectedInstance.cancelled_at ?? undefined,
+    cancellation_reason: selectedInstance.cancellation_reason ?? undefined,
+    bookings: selectedInstance.bookings?.map(b => ({
+      id: b.id,
+      status: b.status ?? 'confirmed',
+      number_of_spots: b.number_of_spots,
+    })),
+    template: {
+      id: selectedInstanceTemplate.id,
+      name: selectedInstanceTemplate.name,
+    },
+  } : null
+
+  // Get slug from URL path
+  const slug = typeof window !== 'undefined'
+    ? window.location.pathname.split('/')[1]
+    : ''
+
   return (
     <div className="flex-1 space-y-4 pt-0">
       {!sessions || sessions.length === 0 ? (
@@ -42,13 +84,14 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
         </div>
       ) : (
         <div className="space-y-6">
-          <CalendarView 
-            sessions={sessions} 
+          <CalendarView
+            sessions={sessions}
             onEditSession={(session) => {
               setSelectedSession(session)
               setShowSessionForm(true)
             }}
             onCreateSession={handleCreateSession}
+            onSelectInstance={handleSelectInstance}
             showControls={false}
           />
         </div>
@@ -66,11 +109,24 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
         defaultSessionImageUrl={defaultSessionImageUrl}
         defaultDropinPrice={defaultDropinPrice}
         onSuccess={() => {
-          // Refresh the page to get new data
           window.location.reload()
         }}
       />
 
+      <InstancePanel
+        open={instancePanelOpen}
+        session={instancePanelSession}
+        slug={slug}
+        onClose={() => {
+          setInstancePanelOpen(false)
+          setSelectedInstanceId(null)
+        }}
+        onCancelled={() => {
+          setInstancePanelOpen(false)
+          setSelectedInstanceId(null)
+          window.location.reload()
+        }}
+      />
     </div>
   )
-} 
+}

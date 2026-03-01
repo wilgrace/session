@@ -9,7 +9,7 @@ import { createSupabaseServerClient, getUserContextWithClient, UserContext } fro
 import Stripe from "stripe"
 import { parseISO, set, addMinutes, formatISO, format, getDay } from "date-fns"
 import { localToUTC, utcToLocal, SAUNA_TIMEZONE } from "@/lib/time-utils"
-import { sendBookingCancellationEmail, sendBookingCancellationNotification } from "@/lib/email"
+import { sendBookingCancellationEmail, sendBookingCancellationNotification, sendSessionCancellationEmail } from "@/lib/email"
 
 // Lazy initialization to avoid build-time errors when env vars aren't available
 function getStripe() {
@@ -65,7 +65,6 @@ interface CreateSessionTemplateParams {
   capacity: number
   duration_minutes: number
   visibility: 'open' | 'hidden' | 'closed'
-  is_recurring: boolean
   one_off_dates?: OneOffDateParam[]
   recurrence_start_date: string | null
   recurrence_end_date: string | null
@@ -122,7 +121,6 @@ interface UpdateSessionTemplateParams {
   capacity?: number
   duration_minutes?: number
   visibility?: 'open' | 'hidden' | 'closed'
-  is_recurring?: boolean
   recurrence_start_date?: string | null
   recurrence_end_date?: string | null
   // Pricing fields
@@ -218,7 +216,6 @@ interface DBSessionTemplate {
   capacity: number;
   duration_minutes: number;
   visibility: 'open' | 'hidden' | 'closed';
-  is_recurring: boolean;
   recurrence_start_date: string | null;
   recurrence_end_date: string | null;
   created_at: string;
@@ -294,7 +291,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         capacity: params.capacity,
         duration_minutes: params.duration_minutes,
         visibility: params.visibility,
-        is_recurring: params.is_recurring,
         recurrence_start_date: params.recurrence_start_date,
         recurrence_end_date: params.recurrence_end_date,
         created_by: userData.id,
@@ -358,7 +354,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
     }
 
     // Create one-off dates and their instances synchronously (for non-recurring templates)
-    if (!params.is_recurring && params.one_off_dates && params.one_off_dates.length > 0) {
+    if (params.one_off_dates && params.one_off_dates.length > 0) {
       const { error: datesError } = await supabase
         .from("session_one_off_dates")
         .insert(params.one_off_dates.map(d => ({
@@ -384,7 +380,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
     }
 
     // Trigger instance generation for all templates (recurring and date-type)
-    const shouldGenerate = params.is_recurring || (!params.is_recurring && params.one_off_dates && params.one_off_dates.length > 0)
+    const shouldGenerate = (params.schedules && params.schedules.length > 0) || (params.one_off_dates && params.one_off_dates.length > 0)
     if (shouldGenerate) {
       try {
         const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
@@ -677,7 +673,6 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         capacity,
         duration_minutes,
         visibility,
-        is_recurring,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -742,9 +737,12 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         start_time,
         end_time,
         status,
+        cancelled_at,
+        cancellation_reason,
         bookings (
           id,
           number_of_spots,
+          status,
           user:clerk_users!user_id (
             id,
             clerk_user_id
@@ -766,7 +764,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
       const templateOneOffDates = (oneOffDates as DBSessionOneOffDate[])?.filter(d => d.template_id === template.id) || []
 
       // Group schedules by time
-      const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups, schedule) => {
+      const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups: Record<string, SessionSchedule>, schedule) => {
         const time = schedule.time?.substring(0, 5)
         if (!groups[time]) {
           groups[time] = {
@@ -774,7 +772,6 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
             time,
             days: [],
             session_id: template.id,
-            is_recurring: true,
             duration_minutes: schedule.duration_minutes,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -792,6 +789,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
           return {
             id: booking.id,
             number_of_spots: booking.number_of_spots || 1,
+            status: booking.status || 'confirmed',
             user: {
               clerk_user_id: user?.clerk_user_id || ''
             }
@@ -803,6 +801,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
           start_time: instance.start_time,
           end_time: instance.end_time,
           status: instance.status,
+          cancelled_at: instance.cancelled_at,
+          cancellation_reason: instance.cancellation_reason,
           template_id: template.id,
           bookings
         };
@@ -815,7 +815,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         capacity: template.capacity,
         duration_minutes: template.duration_minutes,
         visibility: template.visibility,
-        is_recurring: template.is_recurring ?? false,
+        is_recurring: Object.keys(scheduleGroups).length > 0,
         one_off_dates: templateOneOffDates.map(d => ({
           id: d.id,
           template_id: d.template_id,
@@ -895,7 +895,6 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         capacity,
         duration_minutes,
         visibility,
-        is_recurring,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -967,7 +966,6 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
           time,
           days: [],
           session_id: template.id,
-          is_recurring: true,
           duration_minutes: schedule.duration_minutes,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -981,7 +979,7 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
     // Transform the data to match SessionTemplate type
     const transformedData = {
       ...template,
-      is_recurring: template.is_recurring ?? false,
+      is_recurring: (schedules?.length ?? 0) > 0,
       one_off_dates: (oneOffDates || []).map(d => ({
         id: d.id,
         template_id: d.template_id,
@@ -1171,8 +1169,7 @@ export async function deleteSessionInstances(templateId: string): Promise<Delete
 export async function updateSessionWithSchedules(params: {
   templateId: string
   template: Omit<UpdateSessionTemplateParams, 'id'>
-  schedules: Array<{ time: string; days: string[]; duration_minutes?: number | null }>
-  isRecurring: boolean
+  schedules: Array<{ id?: string; time: string; days: string[]; duration_minutes?: number | null }>
   one_off_dates?: OneOffDateParam[]
 }): Promise<{ success: boolean; error?: string }> {
   try {
@@ -1209,8 +1206,52 @@ export async function updateSessionWithSchedules(params: {
       return { success: false, error: "Unauthorized: Admin access required" }
     }
 
-    // Update template + delete schedules + delete instances + delete one_off_dates in parallel
-    const updateFields = { ...params.template, updated_at: new Date().toISOString() }
+    // Guard: check if any schedules being removed have future booked instances
+    const futureDate = new Date().toISOString()
+    const { data: bookedFutureInstances } = await supabase
+      .from('session_instances')
+      .select('id, schedule_id')
+      .eq('template_id', params.templateId)
+      .eq('status', 'scheduled')
+      .gt('start_time', futureDate)
+      .not('schedule_id', 'is', null)
+
+    if (bookedFutureInstances && bookedFutureInstances.length > 0) {
+      const scheduleIdsWithInstances = new Set(
+        bookedFutureInstances.map(i => i.schedule_id).filter(Boolean)
+      )
+      if (scheduleIdsWithInstances.size > 0) {
+        const incomingScheduleIds = new Set(params.schedules.map(s => s.id).filter(Boolean))
+        const deletedSchedulesWithBookings = [...scheduleIdsWithInstances].filter(
+          id => !incomingScheduleIds.has(id as string)
+        )
+        if (deletedSchedulesWithBookings.length > 0) {
+          // Check if any of these future instances actually have bookings
+          const instanceIds = bookedFutureInstances
+            .filter(i => deletedSchedulesWithBookings.includes(i.schedule_id as string))
+            .map(i => i.id)
+
+          const { data: existingBookings } = await supabase
+            .from('bookings')
+            .select('id')
+            .in('session_instance_id', instanceIds)
+            .in('status', ['confirmed', 'completed'])
+            .limit(1)
+
+          if (existingBookings && existingBookings.length > 0) {
+            return {
+              success: false,
+              error: 'Cannot delete schedules with future booked sessions. Cancel those sessions first, or use "End after date" to stop the schedule.',
+            }
+          }
+        }
+      }
+    }
+
+    // Update template fields (remove is_recurring — it's derived from child records now)
+    const { is_recurring: _removed, ...templateFieldsWithoutIsRecurring } = params.template as any
+    const updateFields = { ...templateFieldsWithoutIsRecurring, updated_at: new Date().toISOString() }
+
     const results = await Promise.all([
       supabase.from("session_templates").update(updateFields).eq("id", params.templateId),
       supabase.from("session_schedules").delete().eq("session_template_id", params.templateId),
@@ -1227,8 +1268,8 @@ export async function updateSessionWithSchedules(params: {
       ? 'http://localhost:54321/functions/v1/generate-instances'
       : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
 
-    // Batch insert new schedules (if recurring)
-    if (params.isRecurring && params.schedules.length > 0) {
+    // Insert new recurring schedules (if any)
+    if (params.schedules.length > 0) {
       const scheduleRows = params.schedules.flatMap(schedule =>
         schedule.days.map(day => ({
           session_template_id: params.templateId,
@@ -1236,6 +1277,7 @@ export async function updateSessionWithSchedules(params: {
           time: schedule.time,
           is_active: true,
           duration_minutes: schedule.duration_minutes ?? null,
+          organization_id: template.organization_id,
         }))
       )
 
@@ -1249,7 +1291,7 @@ export async function updateSessionWithSchedules(params: {
         }
       }
 
-      // Fire-and-forget instance generation
+      // Fire-and-forget instance generation for recurring schedules
       fetch(functionUrl, {
         method: 'POST',
         headers: {
@@ -1260,20 +1302,13 @@ export async function updateSessionWithSchedules(params: {
       }).catch(() => {})
     }
 
-    // Insert new one-off dates (if date-type template)
-    if (!params.isRecurring && params.one_off_dates && params.one_off_dates.length > 0) {
-      // Fetch the template's org id for the new rows
-      const { data: tpl } = await supabase
-        .from("session_templates")
-        .select("organization_id")
-        .eq("id", params.templateId)
-        .single()
-
+    // Insert new one-off dates (if any)
+    if (params.one_off_dates && params.one_off_dates.length > 0) {
       const { error: datesError } = await supabase
         .from("session_one_off_dates")
         .insert(params.one_off_dates.map(d => ({
           template_id: params.templateId,
-          organization_id: tpl?.organization_id,
+          organization_id: template.organization_id,
           date: d.date,
           time: d.time,
           duration_minutes: d.duration_minutes,
@@ -1283,15 +1318,19 @@ export async function updateSessionWithSchedules(params: {
         return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
       }
 
-      // Create instances synchronously so they're available immediately
-      // (instances for this template were already deleted in the parallel step above)
+      // Create one-off instances synchronously
       const instanceRows = buildInstancesFromOneOffDates(
         params.templateId,
-        tpl?.organization_id ?? '',
+        template.organization_id ?? '',
         params.template.duration_minutes ?? 75,
         params.one_off_dates
       )
       await supabase.from("session_instances").insert(instanceRows)
+    }
+
+    // If template has both recurring + one-off, trigger generation (handles recurring part)
+    if (params.schedules.length > 0 && params.one_off_dates && params.one_off_dates.length > 0) {
+      // Already triggered above for recurring; one-off handled synchronously
     }
 
     return { success: true }
@@ -1598,7 +1637,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         capacity,
         duration_minutes,
         visibility,
-        is_recurring,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -1668,12 +1706,12 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
     const threeMonthsFromNow = new Date()
     threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
 
-    const recurringTemplates = templates.filter(t => t.is_recurring)
-    const recurringTemplateIds = recurringTemplates.map(t => t.id)
-
     // Build a Set of template IDs that have schedules for O(1) lookup
     const templatesWithSchedules = new Set(schedules?.map(s => s.session_template_id) || [])
     const templatesWithOneOffDates = new Set((oneOffDates || []).map(d => d.template_id))
+
+    const recurringTemplates = templates.filter(t => templatesWithSchedules.has(t.id))
+    const recurringTemplateIds = recurringTemplates.map(t => t.id)
 
     // Single batch query to check which templates have instances (instead of N queries)
     let templatesWithInstances = new Set<string>()
@@ -1694,7 +1732,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
     )
 
     // Find date-type templates that need generation: has one_off_dates + no instances
-    const dateTypeTemplateIds = templates.filter(t => !t.is_recurring).map(t => t.id)
+    const dateTypeTemplateIds = templates.filter(t => templatesWithOneOffDates.has(t.id)).map(t => t.id)
     let dateTypeWithInstances = new Set<string>()
     if (dateTypeTemplateIds.length > 0) {
       const { data: existingDateInstances } = await supabase
@@ -1774,7 +1812,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
             time,
             days: [],
             session_id: template.id,
-            is_recurring: true,
             duration_minutes: schedule.duration_minutes,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -1810,7 +1847,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
 
       return {
         ...template,
-        is_recurring: template.is_recurring ?? false,
+        is_recurring: Object.keys(scheduleGroups).length > 0,
         one_off_dates: (oneOffDates || [])
           .filter(d => d.template_id === template.id)
           .map(d => ({
@@ -1868,7 +1905,6 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         capacity,
         duration_minutes,
         visibility,
-        is_recurring,
         recurrence_start_date,
         recurrence_end_date,
         created_at,
@@ -1883,6 +1919,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         event_color
       `)
       .eq('organization_id', organizationId)
+      .is('deleted_at', null)
       .order("created_at", { ascending: false })
 
     // Filter by visibility based on user role
@@ -1963,19 +2000,19 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
     }
 
     // Determine which templates need instance generation
-    const recurringTemplateIds = templates.filter(t => t.is_recurring).map(t => t.id)
-    const dateTypeTemplateIds = templates.filter(t => !t.is_recurring).map(t => t.id)
+    const allTemplateIds = templates.map(t => t.id)
     const templatesWithSchedules = new Set(schedules?.map(s => s.session_template_id) || [])
     const templatesWithOneOffDates = new Set((oneOffDates || []).map(d => d.template_id))
-    const templatesWithInstances = new Set(instances?.map(i => i.template_id) || [])
+    // Only count non-cancelled instances to decide if generation is needed
+    const templatesWithInstances = new Set(
+      instances?.filter(i => i.status !== 'cancelled').map(i => i.template_id) || []
+    )
 
-    const recurringNeedingGeneration = recurringTemplateIds.filter(
-      id => templatesWithSchedules.has(id) && !templatesWithInstances.has(id)
+    const templatesNeedingGeneration = allTemplateIds.filter(
+      id =>
+        (templatesWithSchedules.has(id) || templatesWithOneOffDates.has(id)) &&
+        !templatesWithInstances.has(id)
     )
-    const dateTypeNeedingGeneration = dateTypeTemplateIds.filter(
-      id => templatesWithOneOffDates.has(id) && !templatesWithInstances.has(id)
-    )
-    const templatesNeedingGeneration = [...recurringNeedingGeneration, ...dateTypeNeedingGeneration]
 
     if (templatesNeedingGeneration.length > 0) {
       const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
@@ -2011,7 +2048,6 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
             time,
             days: [],
             session_id: template.id,
-            is_recurring: true,
             duration_minutes: schedule.duration_minutes,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -2046,7 +2082,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
 
       return {
         ...template,
-        is_recurring: template.is_recurring ?? false,
+        is_recurring: Object.keys(scheduleGroups).length > 0, // derived: true if template has recurring schedules
         one_off_dates: templateOneOffDates.map(d => ({
           id: d.id,
           template_id: d.template_id,
@@ -2176,7 +2212,18 @@ export async function deleteBooking(booking_id: string) {
   }
 }
 
-export async function cancelBookingWithRefund(bookingId: string, { notifyAdmin = false }: { notifyAdmin?: boolean } = {}): Promise<{
+export async function cancelBookingWithRefund(
+  bookingId: string,
+  {
+    notifyAdmin = false,
+    cancelledByUserId,
+    cancellationReason,
+  }: {
+    notifyAdmin?: boolean
+    cancelledByUserId?: string
+    cancellationReason?: string
+  } = {}
+): Promise<{
   success: boolean
   refunded?: boolean
   error?: string
@@ -2234,7 +2281,6 @@ export async function cancelBookingWithRefund(bookingId: string, { notifyAdmin =
         console.log('[cancelBookingWithRefund] Refund processed successfully');
       } catch (stripeError: any) {
         console.error('[cancelBookingWithRefund] Stripe refund failed:', stripeError);
-        // Don't delete the booking if refund fails
         return {
           success: false,
           error: `Refund failed: ${stripeError.message || 'Unknown error'}. Please contact support.`
@@ -2242,18 +2288,37 @@ export async function cancelBookingWithRefund(bookingId: string, { notifyAdmin =
       }
     }
 
-    // 3. Send cancellation emails before deleting (booking record must still exist)
+    // 3. Send cancellation emails before modifying the record (must still exist)
     await sendBookingCancellationEmail(bookingId, booking.organization_id, refunded);
     if (notifyAdmin) {
       await sendBookingCancellationNotification(bookingId, booking.organization_id, refunded);
     }
 
-    // 4. Delete the booking using the existing deleteBooking function
-    const deleteResult = await deleteBooking(bookingId);
+    // 4a. Soft-delete paid bookings to preserve financial records
+    if (booking.payment_status === 'completed') {
+      const { error: softDeleteError } = await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancelled_by_user_id: cancelledByUserId ?? null,
+          cancellation_reason: cancellationReason ?? null,
+          refund_amount: refunded ? (booking.amount_paid ?? null) : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', bookingId);
 
-    if (!deleteResult.success) {
-      console.error('[cancelBookingWithRefund] Delete failed:', deleteResult.error);
-      return { success: false, error: deleteResult.error || 'Failed to delete booking' };
+      if (softDeleteError) {
+        console.error('[cancelBookingWithRefund] Soft-delete failed:', softDeleteError);
+        return { success: false, error: `Failed to cancel booking: ${softDeleteError.message}` };
+      }
+    } else {
+      // 4b. Hard-delete free/unpaid bookings — no financial record to preserve
+      const deleteResult = await deleteBooking(bookingId);
+      if (!deleteResult.success) {
+        console.error('[cancelBookingWithRefund] Delete failed:', deleteResult.error);
+        return { success: false, error: deleteResult.error || 'Failed to delete booking' };
+      }
     }
 
     console.log('[cancelBookingWithRefund] Booking cancelled successfully, refunded:', refunded);
@@ -2819,7 +2884,6 @@ export async function getPublicSessionById(
         capacity,
         duration_minutes,
         visibility,
-        is_recurring,
         timezone,
         created_at,
         updated_at,
@@ -2902,8 +2966,7 @@ export async function getPublicSessionById(
       const localDate = utcToLocal(new Date(startTime), tz);
       const localTimeStr = format(localDate, 'HH:mm');
 
-      if (sessionData.is_recurring) {
-        // Find the matching schedule by day-of-week and time in the session's timezone
+      // Check recurring schedules first
         const localDayOfWeek = getDay(localDate); // 0=Sunday … 6=Saturday
         const { data: schedules } = await supabase
           .from('session_schedules')
@@ -2918,22 +2981,23 @@ export async function getPublicSessionById(
         if (matchingSchedule?.duration_minutes != null) {
           effectiveDurationMinutes = matchingSchedule.duration_minutes;
         }
-      } else {
-        // Find the matching one-off date by local date and time
-        const localDateStr = format(localDate, 'yyyy-MM-dd');
-        const { data: oneOffDates } = await supabase
-          .from('session_one_off_dates')
-          .select('date, time, duration_minutes')
-          .eq('template_id', sessionId)
-          .eq('date', localDateStr);
 
-        const matchingOneOff = oneOffDates?.find(
-          d => d.time.substring(0, 5) === localTimeStr
-        );
-        if (matchingOneOff?.duration_minutes != null) {
-          effectiveDurationMinutes = matchingOneOff.duration_minutes;
+        // Also check one-off dates (template may have both)
+        if (effectiveDurationMinutes === null) {
+          const localDateStr = format(localDate, 'yyyy-MM-dd');
+          const { data: oneOffDates } = await supabase
+            .from('session_one_off_dates')
+            .select('date, time, duration_minutes')
+            .eq('template_id', sessionId)
+            .eq('date', localDateStr);
+
+          const matchingOneOff = oneOffDates?.find(
+            d => d.time.substring(0, 5) === localTimeStr
+          );
+          if (matchingOneOff?.duration_minutes != null) {
+            effectiveDurationMinutes = matchingOneOff.duration_minutes;
+          }
         }
-      }
 
       // Fall back to instance end_time if no schedule duration found
       if (effectiveDurationMinutes === null && instances.length > 0) {
@@ -3351,5 +3415,181 @@ export async function getAdminBookingsForOrg(
     };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+export async function cancelSessionInstance(
+  instanceId: string,
+  cancellationReason?: string
+): Promise<{
+  success: boolean
+  cancelledBookings: number
+  refundedBookings: number
+  error?: string
+}> {
+  try {
+    const userId = await getAuthenticatedUser()
+    const supabase = createSupabaseServerClient()
+
+    // Fetch instance and verify it exists
+    const { data: instance, error: instanceError } = await supabase
+      .from('session_instances')
+      .select('id, organization_id, status, template_id')
+      .eq('id', instanceId)
+      .single()
+
+    if (instanceError || !instance) {
+      return { success: false, cancelledBookings: 0, refundedBookings: 0, error: 'Instance not found' }
+    }
+
+    if (instance.status === 'cancelled') {
+      return { success: false, cancelledBookings: 0, refundedBookings: 0, error: 'Instance is already cancelled' }
+    }
+
+    // Verify caller is an admin for this org
+    const { data: userData } = await supabase
+      .from('clerk_users')
+      .select('role, organization_id')
+      .eq('clerk_user_id', userId)
+      .single()
+
+    const hasAccess =
+      userData?.role === 'superadmin' ||
+      (userData?.role === 'admin' && userData?.organization_id === instance.organization_id)
+
+    if (!hasAccess) {
+      return { success: false, cancelledBookings: 0, refundedBookings: 0, error: 'Unauthorized: Admin access required' }
+    }
+
+    // Fetch all confirmed/completed bookings for this instance
+    const { data: bookingsList, error: bookingsError } = await supabase
+      .from('bookings')
+      .select('id, payment_status, amount_paid')
+      .eq('session_instance_id', instanceId)
+      .in('status', ['confirmed', 'completed'])
+
+    if (bookingsError) {
+      return { success: false, cancelledBookings: 0, refundedBookings: 0, error: bookingsError.message }
+    }
+
+    const bookingsToCancel = bookingsList || []
+    let refundedCount = 0
+
+    // Cancel each booking and send session_cancellation email
+    for (const booking of bookingsToCancel) {
+      const result = await cancelBookingWithRefund(booking.id, {
+        cancelledByUserId: userId,
+        cancellationReason,
+      })
+      if (result.success) {
+        await sendSessionCancellationEmail(booking.id, instance.organization_id, result.refunded ?? false, cancellationReason)
+        if (result.refunded) refundedCount++
+      }
+    }
+
+    // Mark instance as cancelled
+    const { error: updateError } = await supabase
+      .from('session_instances')
+      .update({
+        status: 'cancelled',
+        cancellation_reason: cancellationReason ?? null,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by_user_id: userId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', instanceId)
+
+    if (updateError) {
+      return { success: false, cancelledBookings: 0, refundedBookings: 0, error: updateError.message }
+    }
+
+    return {
+      success: true,
+      cancelledBookings: bookingsToCancel.length,
+      refundedBookings: refundedCount,
+    }
+  } catch (error: any) {
+    return { success: false, cancelledBookings: 0, refundedBookings: 0, error: error.message }
+  }
+}
+
+export async function endSessionSchedule(
+  scheduleId: string,
+  endDate: string // ISO date string YYYY-MM-DD — last day this schedule generates instances
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const userId = await getAuthenticatedUser()
+    const supabase = createSupabaseServerClient()
+
+    // Verify caller is an admin for the schedule's org
+    const { data: schedule } = await supabase
+      .from('session_schedules')
+      .select('organization_id, session_template_id')
+      .eq('id', scheduleId)
+      .single()
+
+    if (!schedule) {
+      return { success: false, error: 'Schedule not found' }
+    }
+
+    const { data: userData } = await supabase
+      .from('clerk_users')
+      .select('role, organization_id')
+      .eq('clerk_user_id', userId)
+      .single()
+
+    const hasAccess =
+      userData?.role === 'superadmin' ||
+      (userData?.role === 'admin' && userData?.organization_id === schedule.organization_id)
+
+    if (!hasAccess) {
+      return { success: false, error: 'Unauthorized: Admin access required' }
+    }
+
+    // Set ended_at on the schedule
+    const { error: scheduleError } = await supabase
+      .from('session_schedules')
+      .update({ ended_at: endDate, updated_at: new Date().toISOString() })
+      .eq('id', scheduleId)
+
+    if (scheduleError) {
+      return { success: false, error: scheduleError.message }
+    }
+
+    // Delete future unbooked instances generated from this schedule
+    const endDateObj = new Date(endDate)
+    endDateObj.setHours(23, 59, 59, 999)
+
+    const { data: futureInstances } = await supabase
+      .from('session_instances')
+      .select('id')
+      .eq('schedule_id', scheduleId)
+      .eq('status', 'scheduled')
+      .gt('start_time', endDateObj.toISOString())
+
+    if (futureInstances && futureInstances.length > 0) {
+      const instanceIds = futureInstances.map(i => i.id)
+
+      // Keep instances that have bookings
+      const { data: existingBookings } = await supabase
+        .from('bookings')
+        .select('session_instance_id')
+        .in('session_instance_id', instanceIds)
+        .in('status', ['confirmed', 'completed'])
+
+      const bookedInstanceIds = new Set(existingBookings?.map(b => b.session_instance_id) || [])
+      const unbookedInstanceIds = instanceIds.filter(id => !bookedInstanceIds.has(id))
+
+      if (unbookedInstanceIds.length > 0) {
+        await supabase
+          .from('session_instances')
+          .delete()
+          .in('id', unbookedInstanceIds)
+      }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
   }
 }
