@@ -313,13 +313,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Create or update membership record
-        // Note: In newer Stripe API versions, current_period is on subscription items
-        const subscriptionItem = subscription.items?.data?.[0]
-        const currentPeriodStart = subscriptionItem?.current_period_start
-          ? new Date(subscriptionItem.current_period_start * 1000).toISOString()
+        const currentPeriodStart = subscription.current_period_start
+          ? new Date(subscription.current_period_start * 1000).toISOString()
           : new Date().toISOString()
-        const currentPeriodEnd = subscriptionItem?.current_period_end
-          ? new Date(subscriptionItem.current_period_end * 1000).toISOString()
+        const currentPeriodEnd = subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toISOString()
           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Default 30 days
 
         const membershipData: Record<string, unknown> = {
@@ -380,13 +378,11 @@ export async function POST(req: NextRequest) {
           membershipStatus = "expired"
         }
 
-        // Note: In newer Stripe API versions, current_period is on subscription items
-        const updateSubItem = subscription.items?.data?.[0]
-        const updatePeriodStart = updateSubItem?.current_period_start
-          ? new Date(updateSubItem.current_period_start * 1000).toISOString()
+        const updatePeriodStart = subscription.current_period_start
+          ? new Date(subscription.current_period_start * 1000).toISOString()
           : undefined
-        const updatePeriodEnd = updateSubItem?.current_period_end
-          ? new Date(updateSubItem.current_period_end * 1000).toISOString()
+        const updatePeriodEnd = subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toISOString()
           : undefined
 
         const updateData: Record<string, unknown> = {
