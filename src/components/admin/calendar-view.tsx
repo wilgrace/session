@@ -496,7 +496,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               min={timeRange.min}
               max={timeRange.max}
               eventPropGetter={(event: CalendarEvent) => {
-                const isFreeSession = event.resource.pricing_type === 'free'
                 const customColor = event.resource.event_color
 
                 // Calculate availability for full/sold out state
@@ -514,21 +513,19 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                 const isClosed = visibility === 'closed'
 
                 // Determine session type class
-                // Priority: closed > hidden > free > full > default
+                // Priority: closed > hidden > full > default
                 let typeClass = 'session-default'
                 if (isClosed) {
                   typeClass = 'session-closed'
                 } else if (isHidden) {
                   typeClass = 'session-hidden'
-                } else if (isFreeSession) {
-                  typeClass = 'session-free'
                 } else if (isFull) {
                   typeClass = 'session-full'
                 }
 
                 // Build style object with custom color if provided (and not overridden by special states)
                 const style: React.CSSProperties = {}
-                if (customColor && !isFreeSession && !isFull && !isHidden && !isClosed) {
+                if (customColor && !isFull && !isHidden && !isClosed) {
                   const colors = getEventColorValues(customColor)
                   style.borderLeftColor = colors.color500
                   style.backgroundColor = `${colors.color500}1A` // 10% opacity

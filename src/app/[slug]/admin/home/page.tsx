@@ -240,7 +240,7 @@ export default function AdminHomePage() {
                     <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
                       <Users className="h-6 w-6 text-gray-400" />
                     </div>
-                    <h4 className="text-base font-medium text-gray-900">No bookings yet</h4>
+                    <h4 className="text-lg font-medium text-gray-900">No bookings yet</h4>
                     <p className="text-gray-400 text-sm">Bookings for this session will appear here.</p>
                   </div>
                 )}
