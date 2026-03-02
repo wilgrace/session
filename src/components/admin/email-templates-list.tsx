@@ -16,7 +16,7 @@ import { Eye, Pencil, Mail } from "lucide-react"
 import type { OrgEmailTemplate } from "@/lib/db/schema"
 import { toggleEmailTemplateActive } from "@/app/actions/email-templates"
 import { toast } from "sonner"
-import { EMAIL_TEMPLATE_LABELS } from "@/lib/email-defaults"
+import { EMAIL_TEMPLATE_LABELS, EMAIL_TEMPLATE_DESCRIPTIONS } from "@/lib/email-defaults"
 import { EmailTemplateForm } from "./email-template-form"
 import { EmailTemplatePreviewModal } from "./email-template-preview-modal"
 
@@ -26,6 +26,7 @@ interface EmailTemplatesListProps {
   orgLogoUrl: string | null
   brandColor: string
   brandTextColor: string
+  adminNotificationEmail: string | null
   onRefresh: () => void
 }
 
@@ -35,6 +36,7 @@ export function EmailTemplatesList({
   orgLogoUrl,
   brandColor,
   brandTextColor,
+  adminNotificationEmail,
   onRefresh,
 }: EmailTemplatesListProps) {
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -68,7 +70,6 @@ export function EmailTemplatesList({
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead>Subject</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
@@ -78,12 +79,8 @@ export function EmailTemplatesList({
             {templates.map((template) => (
               <TableRow key={template.id}>
                 <TableCell>
-                  <p className="font-medium text-sm">{template.subject}</p>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">
-                    {EMAIL_TEMPLATE_LABELS[template.type as keyof typeof EMAIL_TEMPLATE_LABELS] ?? template.type}
-                  </Badge>
+                  <p className="font-medium text-sm">{EMAIL_TEMPLATE_LABELS[template.type as keyof typeof EMAIL_TEMPLATE_LABELS] ?? template.type}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{EMAIL_TEMPLATE_DESCRIPTIONS[template.type as keyof typeof EMAIL_TEMPLATE_DESCRIPTIONS]}</p>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
@@ -136,6 +133,7 @@ export function EmailTemplatesList({
           setEditingTemplate(null)
           onRefresh()
         }}
+        adminNotificationEmail={adminNotificationEmail}
       />
 
       <EmailTemplatePreviewModal

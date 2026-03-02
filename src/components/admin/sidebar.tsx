@@ -151,7 +151,7 @@ export function Sidebar({ slug }: SidebarProps) {
                   "flex items-center px-3 py-2 text-sm font-medium rounded-md",
                   isActive
                     ? "bg-gray-100 text-primary"
-                    : "text-gray-800 hover:bg-gray-50 hover:text-gray-900",
+                    : "text-gray-800 hover:bg-gray-100 hover:text-gray-900",
                 )}
               >
                 <item.icon className="mr-3 h-5 w-5 opacity-50" />
@@ -199,7 +199,7 @@ export function Sidebar({ slug }: SidebarProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="fixed top-4 left-1 z-50"
+          className="fixed top-3 left-1 z-50"
           onClick={() => setIsMobileOpen(true)}
         >
           <Menu className="h-6 w-6" />

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Loader2, ArrowUp, ArrowDown, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, ArrowUp, ArrowDown, X, SearchX, CalendarDays, CalendarOff } from "lucide-react"
 import { getAdminBookingsForOrg, type AdminBooking } from "@/app/actions/session"
 import { cn } from "@/lib/utils"
 
@@ -259,6 +259,33 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
         </button>
       </div>
 
+      {sortedBookings.length === 0 && !loading ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-12 text-center">
+          <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+            {searchQuery ? (
+              <SearchX className="h-6 w-6 text-gray-400" />
+            ) : timeFilter === 'upcoming' ? (
+              <CalendarDays className="h-6 w-6 text-gray-400" />
+            ) : (
+              <CalendarOff className="h-6 w-6 text-gray-400" />
+            )}
+          </div>
+          <h4 className="text-lg font-medium text-gray-900">
+            {searchQuery
+              ? "No bookings found"
+              : timeFilter === 'upcoming'
+              ? "No upcoming bookings"
+              : "No past bookings"}
+          </h4>
+          <p className="text-gray-400 text-sm">
+            {searchQuery
+              ? `No results for "${searchQuery}"`
+              : timeFilter === 'upcoming'
+              ? "Bookings for future sessions will appear here."
+              : "Completed sessions will appear here."}
+          </p>
+        </div>
+      ) : (
       <div className="flex-1 overflow-auto">
         <Table>
           <TableHeader>
@@ -273,18 +300,7 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedBookings.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                  {searchQuery
-                    ? "No bookings found matching your search"
-                    : timeFilter === 'upcoming'
-                    ? "No upcoming bookings"
-                    : "No past bookings"}
-                </TableCell>
-              </TableRow>
-            ) : (
-              sortedBookings.map((booking) => {
+            {sortedBookings.map((booking) => {
                 const userType = getUserType(booking)
                 return (
                   <TableRow
@@ -327,11 +343,11 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
                     </TableCell>
                   </TableRow>
                 )
-              })
-            )}
+              })}
           </TableBody>
         </Table>
       </div>
+      )}
 
       {/* Pagination */}
       {total > 0 && (

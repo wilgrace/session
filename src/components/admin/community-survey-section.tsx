@@ -37,7 +37,7 @@ export function CommunitySurveySection({
     <div className="space-y-4">
       <div>
         <p className="text-sm text-gray-500">
-          Community surveys collect optional demographic data from users when they sign up or from their profile menu.
+          Collect optional demographic data from users when they sign up or from their profile menu.
         </p>
       </div>
 
@@ -55,7 +55,7 @@ export function CommunitySurveySection({
             <TableRow>
               <TableCell>
                 <div>
-                  <p className="font-medium">Cardiff Survey</p>
+                  <p className="font-medium">Community Survey</p>
                   <p className="text-sm text-gray-500 truncate max-w-xs">
                     Collects location, age, gender, ethnicity, housing &amp; work situation
                   </p>

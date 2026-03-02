@@ -6,7 +6,7 @@ import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '@/styles/calendar.css'
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Users, EyeOff } from "lucide-react"
+import { ChevronLeft, ChevronRight, Users, EyeOff, Calendar } from "lucide-react"
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, endOfWeek, isSameDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { useRouter } from "next/navigation"
@@ -114,6 +114,37 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
       </div>
       <div className="session-meta">
         {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+      </div>
+    </div>
+  )
+}
+
+function EmptyStateOverlay({ isAdmin, slug }: { isAdmin: boolean; slug: string }) {
+  const router = useRouter()
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-white/85 z-10">
+      <div className="text-center px-6 py-8">
+        <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <Calendar className="h-6 w-6 text-gray-400" />
+        </div>
+        {isAdmin ? (
+          <>
+            <h4 className="text-lg font-medium text-gray-900">Create your first session</h4>
+            <p className="text-gray-400 text-sm mt-1">
+              Schedule a session to start taking bookings.<br />Your sessions will be displayed here.
+            </p>
+            <Button className="mt-4" onClick={() => router.push(`/${slug}/admin/sessions?new=1`)}>
+              + New Session
+            </Button>
+          </>
+        ) : (
+          <>
+            <h4 className="text-lg font-medium text-gray-900">Coming Soon</h4>
+            <p className="text-gray-400 text-sm mt-1">
+              Sessions will be available here soon.<br />Please check back later.
+            </p>
+          </>
+        )}
       </div>
     </div>
   )
@@ -373,7 +404,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
             onFilterChange={setSelectedTemplateIds}
           />
         </div>
-        <div>
+        <div className="relative min-h-[50vh]">
+          {sessions.length === 0 && <EmptyStateOverlay isAdmin={isAdmin} slug={slug} />}
           <MobileSessionList
             sessions={filteredSessions}
             selectedDate={selectedDate}
@@ -441,6 +473,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
         </div>
       </div>
       {/* Calendar without fixed height */}
+      <div className="relative">
+      {sessions.length === 0 && <EmptyStateOverlay isAdmin={isAdmin} slug={slug} />}
       <BigCalendar
         localizer={localizer}
         formats={calendarFormats}
@@ -497,6 +531,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
         }}
         components={components}
       />
+      </div>
 
     </div>
   )

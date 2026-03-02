@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { SessionForm } from "@/components/admin/session-form"
 import { InstancePanel } from "@/components/admin/instance-panel"
 import { SessionTemplate } from "@/types/session"
+import { Calendar } from "lucide-react"
+
 
 const CalendarView = dynamic(
   () => import("@/components/admin/calendar-view").then((mod) => ({ default: mod.CalendarView })),
@@ -30,6 +33,16 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
     const handleOpenForm = () => setShowSessionForm(true)
     window.addEventListener('openSessionForm', handleOpenForm)
     return () => window.removeEventListener('openSessionForm', handleOpenForm)
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('new') === '1') {
+      setShowSessionForm(true)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('new')
+      window.history.replaceState({}, '', url.toString())
+    }
   }, [])
 
   const handleCreateSession = (start: Date, end: Date) => {
@@ -77,10 +90,15 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
     : ''
 
   return (
-    <div className="flex-1 space-y-4 pt-0">
+    <div className="flex-1 space-y-4 pt-0 content-center">
       {!sessions || sessions.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No sessions found. Click "New Session" to create one.</p>
+        <div className="text-center py-8 ">
+          <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                <Calendar className="h-6 w-6 text-gray-400" />
+          </div>
+          <h4 className="text-lg font-medium text-gray-900">Create your first session</h4>
+          <p className="text-gray-400 text-sm">Schedule a session to start taking bookings. <br/>Your sessions will be displayed here.</p>
+          <Button className="mt-4" onClick={() => setShowSessionForm(true)}>+ New Session</Button>
         </div>
       ) : (
         <div className="space-y-6">

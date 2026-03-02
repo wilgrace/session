@@ -234,6 +234,43 @@ export async function updateOrganizationSettings(params: {
 }
 
 /**
+ * Update only the admin notification email for the current org (from headers).
+ * Called from the email template form so it doesn't need organizationId passed in.
+ */
+export async function updateAdminNotificationEmail(
+  email: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return { success: false, error: 'Not authenticated' };
+
+    const tenant = await getTenantFromHeaders();
+    if (!tenant) return { success: false, error: 'Organization context not found' };
+
+    const role = await getUserRoleForOrg(userId, tenant.organizationId);
+    if (role !== 'admin' && role !== 'superadmin') {
+      return { success: false, error: 'Not authorized' };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { error } = await supabase
+      .from('organizations')
+      .update({ admin_notification_email: email, updated_at: new Date().toISOString() })
+      .eq('id', tenant.organizationId);
+
+    if (error) {
+      console.error('[updateAdminNotificationEmail] Error:', error);
+      return { success: false, error: 'Failed to update notification email' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[updateAdminNotificationEmail] Error:', error);
+    return { success: false, error: 'Failed to update notification email' };
+  }
+}
+
+/**
  * Apply the org's default session image to all session templates that have no image set.
  * Called after saving org settings with a default session image.
  */
