@@ -536,18 +536,9 @@ async function inviteUser(params: {
     if (params.mode === "invite") {
       // Send a Clerk invitation email — user sets their own password
       try {
-        const { data: org } = await supabase
-          .from("organizations")
-          .select("slug")
-          .eq("id", ctx.callerOrgId)
-          .single()
-        const redirectUrl = org?.slug
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/${org.slug}`
-          : process.env.NEXT_PUBLIC_APP_URL!
-
         await clerkClient.invitations.createInvitation({
           emailAddress: params.email,
-          redirectUrl,
+          redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
         })
       } catch (clerkError: any) {
         const msg = clerkError?.errors?.[0]?.longMessage ?? clerkError?.message ?? "Failed to create invitation"
