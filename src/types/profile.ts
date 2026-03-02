@@ -12,6 +12,7 @@ export interface Profile {
   role?: string | null;
   roleLabel?: string | null;
   isMember?: boolean;
+  isPending?: boolean;
   created_at: string;
   updated_at: string;
 } 

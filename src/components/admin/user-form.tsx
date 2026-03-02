@@ -10,13 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Profile } from "@/types/profile";
 import { createClient } from "@supabase/supabase-js";
-import { updateClerkUser, deleteClerkUser, createClerkUser } from "@/app/actions/clerk";
+import { updateClerkUser, deleteClerkUser, createClerkUser, resendInvite } from "@/app/actions/clerk";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUser } from "@clerk/nextjs";
 import { ROLES, DB_ROLES } from "@/lib/auth-utils";
 import { Protect } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Clock, Send } from "lucide-react";
 
 interface UserFormProps {
   open: boolean;
@@ -148,6 +149,20 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
     }
   };
 
+  const isPending = user?.clerk_user_id?.startsWith("pending_") ?? false;
+
+  const handleResendInvite = async () => {
+    if (!user) return;
+    setLoading(true);
+    const { success, error } = await resendInvite(user.id);
+    setLoading(false);
+    if (success) {
+      toast.success("Invite resent");
+    } else {
+      toast.error(error || "Failed to resend invite");
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="sm:max-w-md overflow-y-auto p-0">
@@ -160,6 +175,12 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
           </SheetHeader>
         </div>
         <form onSubmit={handleSave} className="px-6 py-4 space-y-6">
+          {isPending && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>This user hasn&apos;t accepted their invite yet.</span>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="first_name">First Name</Label>
             <Input
@@ -287,27 +308,40 @@ export function UserForm({ open, onClose, user, onSuccess }: UserFormProps) {
           <div className="sticky bottom-0 bg-white border-t px-6 py-4 -mx-6 -mb-4">
             <div className="flex justify-between w-full">
               {user && (
-                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" type="button">
-                      Delete
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the user and all associated data.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <div className="flex items-center gap-2">
+                  <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" type="button">
                         Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete the user and all associated data.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  {isPending && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResendInvite}
+                      disabled={loading}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Invite Again
+                    </Button>
+                  )}
+                </div>
               )}
               <div className="ml-auto">
                 <Button type="submit" className="bg-primary" disabled={loading}>

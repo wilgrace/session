@@ -38,9 +38,10 @@ export default async function Page() {
         user.role === "admin" ? "Admin" :
         user.role === "user" ? "User" : "Guest",
       isMember,
+      isPending: user.clerk_user_id?.startsWith("pending_") ?? false,
       created_at: user.created_at,
     };
   });
 
-  return <UsersPage initialUsers={mappedUsers} />;
+  return <UsersPage initialUsers={mappedUsers} organizationId={organizationId} />;
 }

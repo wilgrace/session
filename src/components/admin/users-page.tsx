@@ -27,9 +27,10 @@ import { deleteClerkUser } from "@/app/actions/clerk";
 
 interface UsersPageProps {
   initialUsers: Profile[];
+  organizationId: string;
 }
 
-export function UsersPage({ initialUsers }: UsersPageProps) {
+export function UsersPage({ initialUsers, organizationId }: UsersPageProps) {
   const router = useRouter();
   const [users, setUsers] = useState(initialUsers);
   const [showUserForm, setShowUserForm] = useState(false);
@@ -160,7 +161,16 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
                       handleEdit(user);
                     }}
                   >
-                    <TableCell className="font-medium">{[user.first_name, user.last_name].filter(Boolean).join(" ")}</TableCell>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        {[user.first_name, user.last_name].filter(Boolean).join(" ")}
+                        {user.isPending && (
+                          <Badge variant="secondary" className="bg-amber-100 text-amber-700">
+                            Pending
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <span className="flex items-center gap-2">
@@ -211,6 +221,7 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
         open={showInviteSheet}
         onClose={() => setShowInviteSheet(false)}
         onSuccess={() => router.refresh()}
+        organizationId={organizationId}
       />
 
       <UserForm
