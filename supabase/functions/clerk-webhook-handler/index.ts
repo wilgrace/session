@@ -156,9 +156,30 @@ Deno.serve(async (req) => {
             console.error('Error upgrading guest user:', updateError);
             throw updateError;
           }
-          // Note: Clerk organization membership is managed separately from Supabase organizations
-          // The DEFAULT_ORGANIZATION_ID is a Supabase org UUID, not a Clerk org ID
-          // Skip Clerk org membership creation - not needed for booking flow
+
+          // If admin pre-set names but Clerk doesn't have them (invite flow),
+          // push the stored names back to Clerk so they appear in the profile dropdown.
+          const clerkSecretKey = Deno.env.get('CLERK_SECRET_KEY');
+          const presetFirstName = existingClerkUser.first_name;
+          const presetLastName = existingClerkUser.last_name;
+          if (clerkSecretKey && (presetFirstName || presetLastName) && userData.first_name === null && userData.last_name === null) {
+            try {
+              await fetch(`https://api.clerk.com/v1/users/${userData.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Authorization': `Bearer ${clerkSecretKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  first_name: presetFirstName ?? null,
+                  last_name: presetLastName ?? null,
+                }),
+              });
+            } catch (err) {
+              // Non-fatal — Supabase record is already updated, just log and continue
+              console.error('Failed to sync pre-set names to Clerk:', err);
+            }
+          }
 
           return new Response(JSON.stringify({
             status: 'success',
