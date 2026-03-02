@@ -1520,6 +1520,22 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     const startTime = new Date(params.start_time)
     const endTime = new Date(startTime.getTime() + template.duration_minutes * 60000)
 
+    // Check for a cancelled instance at this start_time first — never recreate cancelled slots
+    const { data: cancelledInstance } = await supabase
+      .from("session_instances")
+      .select("id")
+      .eq("template_id", params.session_template_id)
+      .eq("start_time", startTime.toISOString())
+      .eq("status", "cancelled")
+      .maybeSingle()
+
+    if (cancelledInstance) {
+      return {
+        success: false,
+        error: "This session has been cancelled"
+      }
+    }
+
     let instance;
     const { data: existingInstance, error: instanceError } = await supabase
       .from("session_instances")
@@ -1995,6 +2011,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
           )
         `)
         .in('template_id', templateIds)
+        .neq('status', 'cancelled')
         .gte('start_time', now)
         .lte('start_time', threeMonthsFromNow.toISOString())
         .order('start_time', { ascending: true })
