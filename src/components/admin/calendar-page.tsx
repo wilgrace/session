@@ -90,9 +90,9 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl, defaultD
     : ''
 
   return (
-    <div className="flex-1 space-y-4 pt-0 content-center">
+    <div className="flex-1 space-y-4 pt-0">
       {!sessions || sessions.length === 0 ? (
-        <div className="text-center py-8 ">
+        <div className="text-center py-8 mt-8">
           <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                 <Calendar className="h-6 w-6 text-gray-400" />
           </div>
