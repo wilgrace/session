@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, isValid, parseISO, startOfDay } from "date-fns"
-import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock, Loader2, RefreshCw, CalendarDays, Gift, CreditCard } from "lucide-react"
+import { CalendarIcon, Plus, X, ChevronUp, ChevronDown, Eye, EyeOff, Lock, Loader2, RefreshCw, CalendarDays, Gift, CreditCard, ExternalLink } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
@@ -28,6 +28,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { SessionTemplate } from "@/types/session"
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/constants'
 import { localToUTC, SAUNA_TIMEZONE } from '@/lib/time-utils'
+import { getStripeConnectStatus } from "@/app/actions/stripe"
+import { useSlug } from "@/lib/slug-context"
+import Link from "next/link"
 import { ImageUpload } from "@/components/admin/image-upload"
 import { getMemberships, getSessionMembershipPrices, updateSessionMembershipPrices } from "@/app/actions/memberships"
 import type { Membership } from "@/lib/db/schema"
@@ -106,6 +109,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   const { toast } = useToast()
   const { user } = useUser()
   const { getToken } = useAuth()
+  const slug = useSlug()
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [visibility, setVisibility] = useState<'open' | 'hidden' | 'closed'>(template?.visibility ?? 'open')
@@ -153,6 +157,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
   // Event color state
   const [eventColor, setEventColor] = useState<EventColorKey>(DEFAULT_EVENT_COLOR)
+
+  // Stripe Connect status
+  const [stripeChargesEnabled, setStripeChargesEnabled] = useState<boolean | null>(null)
 
   // Inline validation
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -370,6 +377,21 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     loadMembershipsData()
   }, [open, template?.id])
 
+  // Check Stripe Connect status when form opens
+  useEffect(() => {
+    if (!open) return
+    setStripeChargesEnabled(null)
+    getStripeConnectStatus().then(result => {
+      const enabled = !!(result.success && result.data?.chargesEnabled)
+      setStripeChargesEnabled(enabled)
+      if (!enabled && !template) {
+        setPricingType('free')
+      }
+    }).catch(() => {
+      setStripeChargesEnabled(true) // fail open on error
+    })
+  }, [open])
+
   // When drop-in price input loses focus, update pre-populated prices for discount-type memberships
   // (only if the membership price is still blank — don't override anything the user has set)
   const handleDropInPriceBlur = () => {
@@ -408,9 +430,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     if (showRepeatSection && (!durationMinutes || durationMinutes <= 0)) errors.duration = "Duration is required"
     if (pricingType === "paid" && dropInEnabled && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
     if (pricingType === "paid") {
-      const activeMembershipIds = memberships.filter(m => m.isActive).map(m => m.id)
-      const anyEnabled = dropInEnabled || activeMembershipIds.some(id => membershipEnabled[id])
-      if (!anyEnabled) errors.pricingOptions = "At least one pricing option must be selected"
+      if (stripeChargesEnabled === false) {
+        errors.pricingType = "Connect Stripe to accept payments for this session"
+      } else {
+        const activeMembershipIds = memberships.filter(m => m.isActive).map(m => m.id)
+        const anyEnabled = dropInEnabled || activeMembershipIds.some(id => membershipEnabled[id])
+        if (!anyEnabled) errors.pricingOptions = "At least one pricing option must be selected"
+      }
     }
     if (showRepeatSection) {
       schedules.forEach((schedule) => {
@@ -425,7 +451,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       // Auto-expand sections containing errors
       if (errors.name || errors.capacity) setGeneralExpanded(true)
       if (Object.keys(errors).some(k => k.startsWith("one-off-") || k.startsWith("schedule-days-") || k === "duration" || k === "schedule")) setScheduleExpanded(true)
-      if (errors.dropInPrice || errors.pricingOptions) setPaymentExpanded(true)
+      if (errors.dropInPrice || errors.pricingOptions || errors.pricingType) setPaymentExpanded(true)
       // Scroll to first error after a tick (to allow sections to expand)
       setTimeout(() => {
         const firstKey = Object.keys(errors)[0]
@@ -1203,7 +1229,25 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 </div>
 
 
-                {pricingType === "paid" && (
+                {pricingType === "paid" && stripeChargesEnabled === false && (
+                  <div className="text-center py-8">
+                    <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                      <CreditCard className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <h4 className="text-base font-medium text-gray-900 mb-2">Connect Your Stripe Account</h4>
+                    <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+                      Connect a Stripe account to start accepting payments for your sessions.
+                    </p>
+                    <Button variant="outline" asChild>
+                      <Link href={`/${slug}/admin/billing`}>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Set Up Stripe
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+
+                {pricingType === "paid" && stripeChargesEnabled !== false && (
                   <div className="space-y-2">
                     {fieldErrors.pricingOptions && (
                       <p className="text-sm text-red-500">{fieldErrors.pricingOptions}</p>

@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { OrgEmailTemplate } from "@/lib/db/schema"
 import { updateEmailTemplate } from "@/app/actions/email-templates"
+import { updateAdminNotificationEmail } from "@/app/actions/organization"
 import { EMAIL_TEMPLATE_LABELS, EMAIL_TEMPLATE_DEFAULTS } from "@/lib/email-defaults"
 import type { EmailTemplateType } from "@/lib/db/schema"
 
@@ -27,6 +28,7 @@ interface EmailTemplateFormProps {
   onClose: () => void
   template: OrgEmailTemplate | null
   onSuccess: () => void
+  adminNotificationEmail?: string | null
 }
 
 export function EmailTemplateForm({
@@ -34,13 +36,17 @@ export function EmailTemplateForm({
   onClose,
   template,
   onSuccess,
+  adminNotificationEmail: initialAdminEmail,
 }: EmailTemplateFormProps) {
   const [loading, setLoading] = useState(false)
 
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
   const [replyTo, setReplyTo] = useState("")
+  const [adminEmail, setAdminEmail] = useState("")
   const [isActive, setIsActive] = useState(true)
+
+  const isAdminNotification = template?.type === "booking_cancellation_notification"
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const clearError = (field: string) => {
@@ -54,10 +60,11 @@ export function EmailTemplateForm({
       setSubject(template.subject)
       setContent(template.content)
       setReplyTo(template.replyTo || "")
+      setAdminEmail(initialAdminEmail || "")
       setIsActive(template.isActive)
       setFieldErrors({})
     }
-  }, [template, open])
+  }, [template, open, initialAdminEmail])
 
   const templateDefaults = template
     ? EMAIL_TEMPLATE_DEFAULTS[template.type as EmailTemplateType]
@@ -78,19 +85,24 @@ export function EmailTemplateForm({
     setFieldErrors({})
     setLoading(true)
 
-    const result = await updateEmailTemplate({
-      id: template.id,
-      subject: subject.trim(),
-      content: content.trim(),
-      replyTo: replyTo.trim() || null,
-      isActive,
-    })
+    const [result, adminResult] = await Promise.all([
+      updateEmailTemplate({
+        id: template.id,
+        subject: subject.trim(),
+        content: content.trim(),
+        replyTo: isAdminNotification ? null : (replyTo.trim() || null),
+        isActive,
+      }),
+      isAdminNotification
+        ? updateAdminNotificationEmail(adminEmail.trim() || null)
+        : Promise.resolve({ success: true }),
+    ])
 
-    if (result.success) {
+    if (result.success && adminResult.success) {
       toast.success("Email template saved")
       onSuccess()
     } else {
-      toast.error(result.error || "Failed to save template")
+      toast.error(result.error || adminResult.error || "Failed to save template")
     }
 
     setLoading(false)
@@ -173,21 +185,38 @@ export function EmailTemplateForm({
             </div>
           )}
 
-          {/* Reply-to */}
-          <div className="space-y-2 border-t pt-4">
-            <Label htmlFor="email-reply-to">Reply-to (optional)</Label>
-            <Input
-              id="email-reply-to"
-              type="email"
-              value={replyTo}
-              onChange={(e) => setReplyTo(e.target.value)}
-              placeholder="hello@yourdomain.com"
-              disabled={loading}
-            />
-            <p className="text-xs text-gray-500">
-              If set, replies from users will go to this address instead of the From address.
-            </p>
-          </div>
+          {/* Admin notification email (booking_cancellation_notification only) */}
+          {isAdminNotification ? (
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="email-admin-notification">Send notifications to (optional)</Label>
+              <Input
+                id="email-admin-notification"
+                type="email"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="admin@example.com"
+                disabled={loading}
+              />
+              <p className="text-xs text-gray-500">
+                When a user cancels a booking, a notification is sent to this address.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="email-reply-to">Reply-to (optional)</Label>
+              <Input
+                id="email-reply-to"
+                type="email"
+                value={replyTo}
+                onChange={(e) => setReplyTo(e.target.value)}
+                placeholder="hello@yourdomain.com"
+                disabled={loading}
+              />
+              <p className="text-xs text-gray-500">
+                If set, replies from users will go to this address instead of the From address.
+              </p>
+            </div>
+          )}
 
           {/* Status */}
           <div className="space-y-2 border-t pt-4">

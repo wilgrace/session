@@ -57,9 +57,9 @@ export function DayPicker({
               key={key}
               className={cn(
                 'flex flex-col items-stretch px-2 py-2 transition-all bg-white flex-1',
-                isSelected && 'border border-primary bg-primary/10',
-                isToday && !isSelected && 'bg-blue-50',
-                !isSelected && !isToday && 'border-gray-200',
+                isSelected && 'border border-gray-200 bg-primary/10 rounded-[8px]',
+                isToday && !isSelected && 'bg-blue-50 rounded-[8px',
+                !isSelected && !isToday && 'border-gray-200 rounded-[8px',
                 'hover:bg-primary/5 cursor-pointer'
               )}
               onClick={() => onSelectDay(date)}

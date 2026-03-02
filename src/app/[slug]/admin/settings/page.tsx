@@ -235,7 +235,6 @@ function SettingsPageContent() {
       homepageUrl: homepageUrl.trim() || null,
       instagramUrl: instagramUrl.trim() || null,
       facebookUrl: facebookUrl.trim() || null,
-      adminNotificationEmail: adminNotificationEmail.trim() || null,
     })
 
     if (result.success) {
@@ -280,8 +279,72 @@ function SettingsPageContent() {
 
   return (
     <div className="flex-1 space-y-6 pb-6">
-      {/* Basic Information */}
+      {/* Emails */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Emails</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Configure notification emails sent to your users automatically.
+          </p>
+        </div>
+
+        <EmailTemplatesList
+          templates={emailTemplates}
+          orgName={settings?.name || ""}
+          orgLogoUrl={settings?.logoUrl || null}
+          brandColor={brandColor}
+          brandTextColor={brandTextColor}
+          adminNotificationEmail={adminNotificationEmail}
+          onRefresh={handleEmailTemplatesRefresh}
+        />
+      </div>
+
+      {/* Waivers */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Waivers</h3>
+        </div>
+        <WaiversList
+          waivers={waivers}
+          onEdit={handleEditWaiver}
+          onCreate={handleCreateWaiver}
+          onRefresh={handleWaiverRefresh}
+        />
+      </div>
+
+      {/* Waiver Form Sheet */}
+      <WaiverForm
+        open={waiverFormOpen}
+        onClose={() => {
+          setWaiverFormOpen(false)
+          setEditingWaiver(null)
+        }}
+        waiver={editingWaiver}
+        onSuccess={handleWaiverRefresh}
+      />
+
+      {/* Community Survey */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Surveys</h3>
+        </div>
+        <CommunitySurveySection
+          enabled={communitySurveyEnabled}
+          onToggle={handleToggleCommunitySurvey}
+          onViewSurvey={() => setSurveyPreviewOpen(true)}
+        />
+      </div>
+
+      {/* Survey Preview Overlay */}
+      <CommunityProfileOverlay
+        isOpen={surveyPreviewOpen}
+        onComplete={() => setSurveyPreviewOpen(false)}
+        onSkip={() => setSurveyPreviewOpen(false)}
+      />
+
+      {/* General */}
       <div className="border-b border-gray-200 bg-white p-6 space-y-6">
+        <h3 className="text-lg font-medium text-gray-900">General</h3>
 
         <div className="space-y-8 max-w-xl ">
           {/* Name */}
@@ -414,82 +477,6 @@ function SettingsPageContent() {
           </div>
         </div>
       </div>
-
-      {/* Emails */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Emails</h3>
-          <p className="text-sm text-gray-500 mt-1">
-            Configure notification emails sent to your users automatically.
-          </p>
-        </div>
-
-        <div className="space-y-2 max-w-xl">
-          <Label htmlFor="adminNotificationEmail">Admin Notification Email (optional)</Label>
-          <Input
-            id="adminNotificationEmail"
-            type="email"
-            value={adminNotificationEmail}
-            onChange={(e) => setAdminNotificationEmail(e.target.value)}
-            placeholder="admin@example.com"
-          />
-          <p className="text-sm text-gray-500">
-            When a user cancels a booking, a notification is sent to this address.
-          </p>
-        </div>
-
-        <EmailTemplatesList
-          templates={emailTemplates}
-          orgName={settings?.name || ""}
-          orgLogoUrl={settings?.logoUrl || null}
-          brandColor={brandColor}
-          brandTextColor={brandTextColor}
-          onRefresh={handleEmailTemplatesRefresh}
-        />
-      </div>
-
-      {/* Waivers */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Waivers</h3>
-        </div>
-        <WaiversList
-          waivers={waivers}
-          onEdit={handleEditWaiver}
-          onCreate={handleCreateWaiver}
-          onRefresh={handleWaiverRefresh}
-        />
-      </div>
-
-      {/* Waiver Form Sheet */}
-      <WaiverForm
-        open={waiverFormOpen}
-        onClose={() => {
-          setWaiverFormOpen(false)
-          setEditingWaiver(null)
-        }}
-        waiver={editingWaiver}
-        onSuccess={handleWaiverRefresh}
-      />
-
-      {/* Community Survey */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Community Survey</h3>
-        </div>
-        <CommunitySurveySection
-          enabled={communitySurveyEnabled}
-          onToggle={handleToggleCommunitySurvey}
-          onViewSurvey={() => setSurveyPreviewOpen(true)}
-        />
-      </div>
-
-      {/* Survey Preview Overlay */}
-      <CommunityProfileOverlay
-        isOpen={surveyPreviewOpen}
-        onComplete={() => setSurveyPreviewOpen(false)}
-        onSkip={() => setSurveyPreviewOpen(false)}
-      />
 
       {/* Brand & Design */}
       <div className="border-b border-gray-200 bg-white p-6 space-y-6">

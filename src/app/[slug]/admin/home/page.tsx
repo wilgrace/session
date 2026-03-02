@@ -1,22 +1,26 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { DayPicker } from '@/components/admin/day-picker';
 import { useSessions } from '@/hooks/use-sessions';
-import { addDays, startOfDay, format, endOfDay } from 'date-fns';
+import { addDays, startOfDay, format, endOfDay, isToday } from 'date-fns';
 import { SessionDetails } from '@/components/admin/session-details';
 import { BookingsList } from '@/components/admin/bookings-list';
 import { BookingDetailsPanel } from '@/components/admin/booking-details-panel';
 import { InstancePanel } from '@/components/admin/instance-panel';
 import { BookingsListView } from '@/components/admin/bookings-list-view';
 import { useBookingsView } from '@/hooks/use-bookings-view';
+import { CalendarDays, CalendarOff, Users, Layers } from "lucide-react"
+import { Button } from '@/components/ui/button';
+import { getSessions } from '@/app/actions/session';
 
 const NUM_DAYS = 14;
 
 export default function AdminHomePage() {
   const params = useParams();
   const slug = params.slug as string;
+  const router = useRouter();
   const [today] = useState(() => startOfDay(new Date()));
   const [dayOffset, setDayOffset] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -25,7 +29,14 @@ export default function AdminHomePage() {
   const [instancePanelOpen, setInstancePanelOpen] = useState(false);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const [hasSetInitialSession, setHasSetInitialSession] = useState(false);
+  const [hasTemplates, setHasTemplates] = useState<boolean | null>(null);
   const { view, searchQuery, setView, setSearchQuery } = useBookingsView();
+
+  useEffect(() => {
+    getSessions().then(result => {
+      setHasTemplates((result.data?.length ?? 0) > 0);
+    });
+  }, []);
 
   // Auto-switch to list view when search is active
   useEffect(() => {
@@ -211,22 +222,55 @@ export default function AdminHomePage() {
                 onManage={() => setInstancePanelOpen(true)}
               />
               <div className="p-6">
-                <BookingsList
-                  bookings={currentSession.bookings || []}
-                  onCheckIn={handleCheckIn}
-                  onSelect={(booking) => setSelectedBooking({
-                    ...booking,
-                    session_instance: {
-                      start_time: (currentSession as any).start_time,
-                      end_time: (currentSession as any).end_time,
-                      template: { name: (currentSession as any).template?.name },
-                    },
-                  })}
-                />
+                {(currentSession.bookings?.length ?? 0) > 0 ? (
+                  <BookingsList
+                    bookings={currentSession.bookings || []}
+                    onCheckIn={handleCheckIn}
+                    onSelect={(booking) => setSelectedBooking({
+                      ...booking,
+                      session_instance: {
+                        start_time: (currentSession as any).start_time,
+                        end_time: (currentSession as any).end_time,
+                        template: { name: (currentSession as any).template?.name },
+                      },
+                    })}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                    <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                      <Users className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <h4 className="text-base font-medium text-gray-900">No bookings yet</h4>
+                    <p className="text-gray-400 text-sm">Bookings for this session will appear here.</p>
+                  </div>
+                )}
               </div>
             </>
+          ) : hasTemplates === false ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                <Layers className="h-6 w-6 text-gray-400" />
+              </div>
+              <h4 className="text-lg font-medium text-gray-900">No sessions yet</h4>
+              <p className="text-gray-400 text-sm mb-2">Create your first session to start taking bookings.</p>
+              <Button onClick={() => router.push(`/${slug}/admin/sessions?new=1`)}>+ Add Session</Button>
+            </div>
+          ) : isToday(selectedDay) ? (
+            <div className="h-full flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                <CalendarDays className="h-6 w-6 text-gray-400" />
+              </div>
+              <h4 className="text-lg font-medium text-gray-900">Nothing scheduled for today</h4>
+              <p className="text-gray-400 text-sm">Sessions you create will appear here.</p>
+            </div>
           ) : (
-            <div className="text-muted-foreground text-center py-12">No sessions for this day.</div>
+            <div className="h-full flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                <CalendarOff className="h-6 w-6 text-gray-400" />
+              </div>
+              <h4 className="text-lg font-medium text-gray-900">No sessions on {format(selectedDay, 'EEEE d MMMM')}</h4>
+              <p className="text-gray-400 text-sm">Nothing scheduled for this day.</p>
+            </div>
           )}
         </div>
       </div>

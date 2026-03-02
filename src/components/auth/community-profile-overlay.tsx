@@ -14,20 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Loader2, Check, ChevronsUpDown } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface CommunityProfileOverlayProps {
@@ -94,46 +81,6 @@ const HOUSING_SITUATION_OPTIONS = [
   { value: "prefer-not-to-say", label: "Prefer not to say" },
 ]
 
-// Cardiff neighbourhoods
-const CARDIFF_NEIGHBOURHOODS = [
-  // South & Central
-  "Adamsdown",
-  "Butetown & Cardiff Bay",
-  "Canton",
-  "Cathays",
-  "City Centre",
-  "Grangetown",
-  "Plasnewydd",
-  "Pontcanna",
-  "Riverside",
-  "Roath",
-  "Splott",
-  "Tremorfa",
-  // North & West
-  "Birchgrove",
-  "Coryton",
-  "Gabalfa",
-  "Heath",
-  "Lisvane",
-  "Llandaff",
-  "Llandaff North",
-  "Llanishen",
-  "Radyr and Morganstown",
-  "Rhiwbina",
-  "Thornhill",
-  "Tongwynlais",
-  "Whitchurch",
-  // East
-  "Cardiff Gate",
-  "Llanedeyrn",
-  "Llanrumney",
-  "Pentwyn",
-  "Penylan",
-  "Pontprennau",
-  "Rumney",
-  "St Mellons (including Old St Mellons)",
-  "Trowbridge",
-]
 
 export function CommunityProfileOverlay({
   isOpen,
@@ -148,8 +95,7 @@ export function CommunityProfileOverlay({
   const [workSituation, setWorkSituation] = useState<string>("")
   const [housingSituation, setHousingSituation] = useState<string>("")
   const [livesInCardiff, setLivesInCardiff] = useState<boolean | null>(null)
-  const [cardiffNeighbourhood, setCardiffNeighbourhood] = useState<string>("")
-  const [neighbourhoodOpen, setNeighbourhoodOpen] = useState(false)
+  const [postcode, setPostcode] = useState<string>("")
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -162,7 +108,7 @@ export function CommunityProfileOverlay({
         workSituation: workSituation || null,
         housingSituation: housingSituation || null,
         livesInCardiff: livesInCardiff,
-        cardiffNeighbourhood: livesInCardiff ? (cardiffNeighbourhood || null) : null,
+        cardiffNeighbourhood: livesInCardiff ? (postcode || null) : null,
       })
       onComplete()
     } catch (error) {
@@ -206,10 +152,10 @@ export function CommunityProfileOverlay({
 
         {/* Location Section */}
         <div className="space-y-4">
-          {/* Cardiff Yes/No */}
+          {/* Lives locally Yes/No */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              Do you live in Cardiff?
+              Do you live locally?
             </Label>
             <div className="flex gap-2">
               <Button
@@ -232,7 +178,7 @@ export function CommunityProfileOverlay({
                 )}
                 onClick={() => {
                   setLivesInCardiff(false)
-                  setCardiffNeighbourhood("") // Clear neighbourhood when switching away
+                  setPostcode("") // Clear postcode when switching away
                 }}
               >
                 No
@@ -240,53 +186,25 @@ export function CommunityProfileOverlay({
             </div>
           </div>
 
-          {/* Cardiff Neighbourhood (shown when livesInCardiff === true) */}
+          {/* Postcode (shown when livesInCardiff === true) */}
           {livesInCardiff === true && (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                Which neighbourhood?
+              <Label htmlFor="postcode" className="text-sm font-medium">
+                What is your postcode?
               </Label>
-              <Popover open={neighbourhoodOpen} onOpenChange={setNeighbourhoodOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={neighbourhoodOpen}
-                    className="w-full h-10 justify-between rounded-xl bg-muted/50 font-normal"
-                  >
-                    {cardiffNeighbourhood || "Search neighbourhoods..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search neighbourhoods..." />
-                    <CommandList>
-                      <CommandEmpty>No neighbourhood found.</CommandEmpty>
-                      <CommandGroup>
-                        {CARDIFF_NEIGHBOURHOODS.map((neighbourhood) => (
-                          <CommandItem
-                            key={neighbourhood}
-                            value={neighbourhood}
-                            onSelect={(value) => {
-                              setCardiffNeighbourhood(value === cardiffNeighbourhood ? "" : value)
-                              setNeighbourhoodOpen(false)
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                cardiffNeighbourhood === neighbourhood ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {neighbourhood}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <input
+                id="postcode"
+                type="text"
+                placeholder="e.g. CF10 1AA"
+                value={postcode}
+                onChange={(e) => setPostcode(e.target.value.toUpperCase())}
+                className={cn(
+                  "flex h-10 w-full rounded-xl border border-input bg-muted/50 px-3 py-2 text-sm",
+                  "ring-offset-background placeholder:text-muted-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "disabled:cursor-not-allowed disabled:opacity-50"
+                )}
+              />
             </div>
           )}
 

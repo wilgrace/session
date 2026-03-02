@@ -20,6 +20,15 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateType, string> = {
   session_cancellation: 'Session Cancellation (Admin-initiated)',
 };
 
+export const EMAIL_TEMPLATE_DESCRIPTIONS: Record<EmailTemplateType, string> = {
+  booking_confirmation: 'Sent after successful checkout or booking',
+  booking_cancellation: 'Sent to the user when they cancel a booking',
+  booking_cancellation_notification: 'Sent to admin when a user cancels a booking',
+  membership_confirmation: 'Sent after a new membership is activated',
+  waiting_list: 'Sent when a spot opens up on the waiting list',
+  session_cancellation: 'Sent to attendees when an admin cancels a session',
+};
+
 export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDefault> = {
   booking_confirmation: {
     type: 'booking_confirmation',

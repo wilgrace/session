@@ -40,7 +40,7 @@ export function Header({ slug }: HeaderProps) {
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-40">
       <div className="relative flex items-center justify-between">
-        <h1 className="pl-6 md:pl-0 text-2xl font-semibold text-gray-900">{getPageTitle()}</h1>
+        <h1 className="pl-6 md:pl-0 text-lg md:text-2xl font-semibold text-gray-900">{getPageTitle()}</h1>
 
         {isBookingsPage && (
           <>
