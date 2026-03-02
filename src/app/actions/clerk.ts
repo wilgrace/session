@@ -487,6 +487,64 @@ async function syncOrganizationToClerk(organizationId: string) {
   }
 }
 
+async function resendInvite(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const ctx = await getCallerAdminContext()
+    if ("error" in ctx) return { success: false, error: ctx.error }
+
+    const supabase = createSupabaseClient()
+
+    const { data: userData, error: userError } = await supabase
+      .from("clerk_users")
+      .select("email, organization_id, clerk_user_id")
+      .eq("id", userId)
+      .single()
+
+    if (userError || !userData) return { success: false, error: "User not found" }
+
+    if (!userData.clerk_user_id?.startsWith("pending_")) {
+      return { success: false, error: "User is not pending" }
+    }
+
+    if (ctx.callerRole !== "superadmin" && userData.organization_id !== ctx.callerOrgId) {
+      return { success: false, error: "Forbidden: cannot resend invite for users from another organization" }
+    }
+
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("slug")
+      .eq("id", ctx.callerOrgId)
+      .single()
+    const postSignUpPath = org?.slug ? `/${org.slug}` : "/"
+    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/sign-up?redirect_url=${encodeURIComponent(postSignUpPath)}`
+
+    // Revoke any existing pending invitation for this email, then create a new one
+    try {
+      const { data: existingInvitations } = await clerkClient.invitations.getInvitationList({ status: "pending" })
+      const existing = existingInvitations?.find((inv: any) => inv.emailAddress === userData.email)
+      if (existing) {
+        await clerkClient.invitations.revokeInvitation(existing.id)
+      }
+    } catch {
+      // Non-fatal — proceed to create a new invitation regardless
+    }
+
+    try {
+      await clerkClient.invitations.createInvitation({
+        emailAddress: userData.email,
+        redirectUrl,
+      })
+    } catch (clerkError: any) {
+      const msg = clerkError?.errors?.[0]?.longMessage ?? clerkError?.message ?? "Failed to resend invitation"
+      return { success: false, error: msg }
+    }
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
+  }
+}
+
 async function handleOrganizationChange(organizationId: string) {
   try {
     await syncOrganizationToClerk(organizationId)
@@ -521,6 +579,7 @@ async function inviteUser(params: {
   role: string
   mode: 'invite' | 'password'
   password?: string
+  organizationId?: string
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const ctx = await getCallerAdminContext()
@@ -531,6 +590,12 @@ async function inviteUser(params: {
       return { success: false, error: "Forbidden: cannot assign superadmin role" }
     }
 
+    // Superadmins may target a specific org (e.g. when acting on /{slug}/admin/users).
+    // Regular admins are always scoped to their own org.
+    const targetOrgId = (ctx.callerRole === "superadmin" && params.organizationId)
+      ? params.organizationId
+      : ctx.callerOrgId
+
     const supabase = createSupabaseClient()
 
     if (params.mode === "invite") {
@@ -539,7 +604,7 @@ async function inviteUser(params: {
         const { data: org } = await supabase
           .from("organizations")
           .select("slug")
-          .eq("id", ctx.callerOrgId)
+          .eq("id", targetOrgId)
           .single()
         const postSignUpPath = org?.slug ? `/${org.slug}` : "/"
         const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/sign-up?redirect_url=${encodeURIComponent(postSignUpPath)}`
@@ -561,7 +626,7 @@ async function inviteUser(params: {
           email: params.email,
           first_name: params.firstName || null,
           last_name: params.lastName || null,
-          organization_id: ctx.callerOrgId,
+          organization_id: targetOrgId,
           role: params.role,
           // Placeholder clerk_user_id — webhook replaces it with the real one when user accepts
           clerk_user_id: `pending_${crypto.randomUUID()}`,
@@ -603,7 +668,7 @@ async function inviteUser(params: {
           email: params.email,
           first_name: params.firstName || null,
           last_name: params.lastName || null,
-          organization_id: ctx.callerOrgId,
+          organization_id: targetOrgId,
           role: params.role,
         })
 
@@ -632,4 +697,5 @@ export {
   syncOrganizationToClerk,
   handleOrganizationChange,
   inviteUser,
+  resendInvite,
 }

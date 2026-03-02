@@ -18,11 +18,12 @@ interface InviteUserSheetProps {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  organizationId: string
 }
 
 type Mode = "invite" | "password"
 
-export function InviteUserSheet({ open, onClose, onSuccess }: InviteUserSheetProps) {
+export function InviteUserSheet({ open, onClose, onSuccess, organizationId }: InviteUserSheetProps) {
   const { user: currentUser } = useUser()
   const isSuperAdmin = currentUser?.organizationMemberships?.[0]?.role === ROLES.SUPER_ADMIN
 
@@ -93,6 +94,7 @@ export function InviteUserSheet({ open, onClose, onSuccess }: InviteUserSheetPro
       role,
       mode,
       password: mode === "password" ? password : undefined,
+      organizationId,
     })
     setLoading(false)
 
