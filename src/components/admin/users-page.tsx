@@ -39,6 +39,10 @@ export function UsersPage({ initialUsers, organizationId }: UsersPageProps) {
   const setAction = usePageHeaderAction((s) => s.setAction);
 
   useEffect(() => {
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
+  useEffect(() => {
     setAction({ label: "Add User", onClick: () => setShowInviteSheet(true) })
     return () => setAction(null)
   }, [setAction])
