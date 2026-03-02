@@ -158,8 +158,8 @@ export function MembershipSignupForm({
   }
 
   const handleSubmit = async () => {
-    // Guest with paid membership: require auth first
-    if (!isLoggedIn && membership.price > 0) {
+    // Guests must create an account for any membership (free or paid)
+    if (!isLoggedIn) {
       setSavedEmail(email)
       setAwaitingAuthComplete(true)
       openSignUp({
@@ -291,7 +291,7 @@ export function MembershipSignupForm({
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Processing...
           </>
-        ) : !isLoggedIn && membership.price > 0 ? (
+        ) : !isLoggedIn ? (
           "Create Account"
         ) : isFree ? (
           "Join for Free"
