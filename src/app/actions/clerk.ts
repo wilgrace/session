@@ -514,6 +514,114 @@ async function updateUserOrganization(clerkUserId: string, organizationId: strin
   }
 }
 
+async function inviteUser(params: {
+  email: string
+  firstName?: string
+  lastName?: string
+  role: string
+  mode: 'invite' | 'password'
+  password?: string
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const ctx = await getCallerAdminContext()
+    if ("error" in ctx) return { success: false, error: ctx.error }
+
+    // Prevent role escalation
+    if (params.role === "superadmin" && ctx.callerRole !== "superadmin") {
+      return { success: false, error: "Forbidden: cannot assign superadmin role" }
+    }
+
+    const supabase = createSupabaseClient()
+
+    if (params.mode === "invite") {
+      // Send a Clerk invitation email — user sets their own password
+      try {
+        const { data: org } = await supabase
+          .from("organizations")
+          .select("slug")
+          .eq("id", ctx.callerOrgId)
+          .single()
+        const redirectUrl = org?.slug
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/${org.slug}`
+          : process.env.NEXT_PUBLIC_APP_URL!
+
+        await clerkClient.invitations.createInvitation({
+          emailAddress: params.email,
+          redirectUrl,
+        })
+      } catch (clerkError: any) {
+        const msg = clerkError?.errors?.[0]?.longMessage ?? clerkError?.message ?? "Failed to create invitation"
+        return { success: false, error: msg }
+      }
+
+      // Pre-insert the Supabase record so the webhook upgrade path picks it up with
+      // the correct role and org (webhook preserves role since it doesn't update that field)
+      const { error: insertError } = await supabase
+        .from("clerk_users")
+        .insert({
+          email: params.email,
+          first_name: params.firstName || null,
+          last_name: params.lastName || null,
+          organization_id: ctx.callerOrgId,
+          role: params.role,
+          // Placeholder clerk_user_id — webhook replaces it with the real one when user accepts
+          clerk_user_id: `pending_${crypto.randomUUID()}`,
+        })
+
+      if (insertError) {
+        // If a record already exists (duplicate email), return a clear error
+        if (insertError.code === "23505") {
+          return { success: false, error: "A user with this email already exists" }
+        }
+        return { success: false, error: insertError.message }
+      }
+
+      return { success: true }
+    } else {
+      // Create user in Clerk directly with a password
+      if (!params.password) {
+        return { success: false, error: "Password is required" }
+      }
+
+      let clerkUser: { id: string }
+      try {
+        clerkUser = await clerkClient.users.createUser({
+          emailAddress: [params.email],
+          password: params.password,
+          firstName: params.firstName,
+          lastName: params.lastName,
+        })
+      } catch (clerkError: any) {
+        const msg = clerkError?.errors?.[0]?.longMessage ?? clerkError?.message ?? "Failed to create user"
+        return { success: false, error: msg }
+      }
+
+      // Insert into Supabase with the real Clerk user ID
+      const { error: insertError } = await supabase
+        .from("clerk_users")
+        .insert({
+          clerk_user_id: clerkUser.id,
+          email: params.email,
+          first_name: params.firstName || null,
+          last_name: params.lastName || null,
+          organization_id: ctx.callerOrgId,
+          role: params.role,
+        })
+
+      if (insertError) {
+        if (insertError.code === "23505") {
+          return { success: false, error: "A user with this email already exists" }
+        }
+        return { success: false, error: insertError.message }
+      }
+
+      return { success: true }
+    }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error occurred" }
+  }
+}
+
 export {
   getClerkUser,
   createClerkUser,
@@ -523,5 +631,6 @@ export {
   updateClerkUser,
   deleteClerkUser,
   syncOrganizationToClerk,
-  handleOrganizationChange
+  handleOrganizationChange,
+  inviteUser,
 }

@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Profile } from "@/types/profile";
 import { UserForm } from "@/components/admin/user-form";
+import { InviteUserSheet } from "@/components/admin/invite-user-sheet";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { usePageHeaderAction } from "@/hooks/use-page-header-action";
 import { Badge } from "@/components/ui/badge";
 
 type SortDirection = "asc" | "desc" | null;
@@ -27,9 +30,18 @@ interface UsersPageProps {
 }
 
 export function UsersPage({ initialUsers }: UsersPageProps) {
+  const router = useRouter();
   const [users, setUsers] = useState(initialUsers);
   const [showUserForm, setShowUserForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [showInviteSheet, setShowInviteSheet] = useState(false);
+  const setAction = usePageHeaderAction((s) => s.setAction);
+
+  useEffect(() => {
+    setAction({ label: "Add User", onClick: () => setShowInviteSheet(true) })
+    return () => setAction(null)
+  }, [setAction])
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [userToDelete, setUserToDelete] = useState<Profile | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
@@ -194,6 +206,12 @@ export function UsersPage({ initialUsers }: UsersPageProps) {
             </Table>
         </div>
       )}
+
+      <InviteUserSheet
+        open={showInviteSheet}
+        onClose={() => setShowInviteSheet(false)}
+        onSuccess={() => router.refresh()}
+      />
 
       <UserForm
         open={showUserForm}
