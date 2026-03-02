@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og"
 import { getOrganizationBySlug } from "@/lib/tenant-utils"
 
-// export const runtime = "edge"
+export const runtime = "edge"
 
 export async function GET(
   request: Request,
