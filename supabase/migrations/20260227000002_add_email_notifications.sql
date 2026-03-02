@@ -57,8 +57,8 @@ INSERT INTO org_email_templates (organization_id, type, subject, content, is_act
 SELECT
   id,
   'waiting_list',
-  'You''re on the waiting list for {{session_name}}',
-  '<p>Hi {{first_name}},</p><p>You''ve been added to the waiting list for {{session_name}}. We''ll let you know if a spot opens up!</p>',
+  'There''s now space for you at {{session_name}}',
+  '<p>Hi {{first_name}},</p><p>You joined the waiting list for {{session_name}}. You''re in luck! There has been a cancellation and there''s now space for you.</p>',
   false
 FROM organizations
 WHERE id NOT IN (
