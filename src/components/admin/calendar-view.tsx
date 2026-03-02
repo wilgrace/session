@@ -207,13 +207,19 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               0
             );
 
-            events.push({
-              id: `${session.id}-${schedule.id}-${format(currentDate, 'yyyy-MM-dd')}`,
-              title: `${format(startTime, 'h:mm a')} – ${format(endTime, 'h:mm a')}: ${session.name}`,
-              start: startTime,
-              end: endTime,
-              resource: session
-            });
+            // Skip slots that have a cancelled instance
+            const hasCancelledInstance = session.instances?.some(i =>
+              new Date(i.start_time).getTime() === startTime.getTime() && i.status === 'cancelled'
+            )
+            if (!hasCancelledInstance) {
+              events.push({
+                id: `${session.id}-${schedule.id}-${format(currentDate, 'yyyy-MM-dd')}`,
+                title: `${format(startTime, 'h:mm a')} – ${format(endTime, 'h:mm a')}: ${session.name}`,
+                start: startTime,
+                end: endTime,
+                resource: session
+              });
+            }
           }
           currentDate = addDays(currentDate, 1);
         }
@@ -224,6 +230,9 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
     if (!session.schedules?.length || (session.one_off_dates?.length ?? 0) > 0) {
       if (session.instances && session.instances.length > 0) {
         session.instances.forEach((instance) => {
+          // Skip cancelled instances
+          if (instance.status === 'cancelled') return
+
           // Parse the ISO string and create a new Date object
           const startTime = new Date(instance.start_time);
           const endTime = new Date(instance.end_time);
