@@ -16,6 +16,7 @@ import type { Membership } from "@/lib/db/schema"
 export interface CheckoutFormData {
   numberOfSpots: number
   email: string
+  name?: string // Guest full name (first word = first name, rest = last name)
   pricingType: "drop_in" | "membership"
   isNewMembership?: boolean
   membershipId?: string // The selected membership ID
@@ -116,6 +117,7 @@ export function PreCheckoutForm({
   )
   const [numberOfSpots, setNumberOfSpots] = useState(1)
   const [email, setEmail] = useState(userEmail || "")
+  const [name, setName] = useState("")
   const [couponCode, setCouponCode] = useState("")
   const [showCoupon, setShowCoupon] = useState(false)
 
@@ -269,6 +271,7 @@ export function PreCheckoutForm({
       const formData: CheckoutFormData = {
         numberOfSpots,
         email,
+        name: name.trim() || undefined,
         pricingType,
         isNewMembership,
         membershipId: selectedMembershipId || undefined,
@@ -296,6 +299,7 @@ export function PreCheckoutForm({
     onProceedToCheckout({
       numberOfSpots,
       email: isLoggedIn ? (userEmail || "") : email,
+      name: isLoggedIn ? undefined : (name.trim() || undefined),
       pricingType,
       isNewMembership,
       membershipId: pricingType === "membership" ? (selectedMembershipId || undefined) : undefined,
@@ -312,7 +316,7 @@ export function PreCheckoutForm({
   const canProceed =
     numberOfSpots >= 1 &&
     numberOfSpots <= effectiveSpotsRemaining &&
-    (isLoggedIn || guestNeedsAccountForMembership || (email && emailValidation?.valid)) &&
+    (isLoggedIn || guestNeedsAccountForMembership || (email && emailValidation?.valid && name.trim().length > 0)) &&
     !emailValidation?.requiresSignIn &&
     !isLoading
 
@@ -509,7 +513,7 @@ export function PreCheckoutForm({
           )}
         </div>
 
-        {/* Email Input - only shown to guests */}
+        {/* Email + Name Inputs - only shown to guests */}
         {!isLoggedIn && (
           <div className="space-y-2">
             <Label htmlFor="email" className="text-base font-semibold">Email</Label>
@@ -533,9 +537,6 @@ export function PreCheckoutForm({
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              We&apos;ll check if you have an existing account
-            </p>
             {emailValidation?.requiresSignIn && (
               <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -552,6 +553,19 @@ export function PreCheckoutForm({
             {emailValidation?.error && !emailValidation.requiresSignIn && (
               <p className="text-sm text-destructive">{emailValidation.error}</p>
             )}
+          </div>
+        )}
+        {!isLoggedIn && (
+          <div className="space-y-2">
+            <Label htmlFor="name" className="text-base font-semibold">Name</Label>
+            <Input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              className="h-12 rounded-xl bg-muted/50"
+            />
           </div>
         )}
 

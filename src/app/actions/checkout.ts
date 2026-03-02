@@ -537,6 +537,7 @@ export interface CreateEmbeddedCheckoutParams {
   startTime: string
   numberOfSpots: number
   customerEmail?: string // For guest users
+  customerName?: string // For guest users (first word = first name, rest = last name)
   promotionCode?: string // Validated promotion code ID
   pricingType?: "drop_in" | "membership"
   isNewMembership?: boolean // True if user is signing up for membership
@@ -795,6 +796,7 @@ export async function createEmbeddedCheckoutSession(
         organizationId: template.organization_id,
         clerkUserId: userId || null,
         customerEmail: customerEmail || null,
+        customerName: params.customerName,
         durationMinutes: template.duration_minutes,
       })
 
@@ -983,6 +985,7 @@ async function createDirectBooking(params: {
   organizationId: string
   clerkUserId: string | null
   customerEmail: string | null
+  customerName?: string
   durationMinutes: number
 }): Promise<{ success: boolean; bookingId?: string; error?: string }> {
   try {
@@ -1017,11 +1020,14 @@ async function createDirectBooking(params: {
         internalUserId = existingUser.id
       } else {
         // Create guest user
+        const nameParts = params.customerName?.trim().split(/\s+/) ?? []
         const { data: guestUser, error: guestError } = await supabase
           .from("clerk_users")
           .insert({
             clerk_user_id: `guest_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
             email: params.customerEmail,
+            first_name: nameParts[0] || undefined,
+            last_name: nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined,
             organization_id: params.organizationId,
           })
           .select("id")

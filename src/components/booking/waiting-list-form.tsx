@@ -30,7 +30,8 @@ export function WaitingListForm({
   isLoggedIn,
 }: WaitingListFormProps) {
   const [email, setEmail] = useState(userEmail || "")
-  const [firstName, setFirstName] = useState("")
+  const [name, setName] = useState("")
+  const [nameError, setNameError] = useState<string | null>(null)
   const [requestedSpots, setRequestedSpots] = useState(1)
   const [status, setStatus] = useState<FormStatus>("idle")
   const [position, setPosition] = useState<number | null>(null)
@@ -69,15 +70,21 @@ export function WaitingListForm({
       return
     }
 
+    if (!isLoggedIn && !name.trim()) {
+      setNameError("Name is required")
+      return
+    }
+
     setStatus("submitting")
     setError(null)
 
+    const nameParts = name.trim().split(/\s+/)
     const result = await joinWaitingList({
       sessionInstanceId,
       sessionTemplateId,
       organizationId,
       email: effectiveEmail,
-      firstName: isLoggedIn ? userFirstName : firstName || undefined,
+      firstName: isLoggedIn ? userFirstName : (nameParts[0] || undefined),
       requestedSpots,
     })
 
@@ -182,19 +189,6 @@ export function WaitingListForm({
       {!isLoggedIn && (
         <>
           <div className="space-y-2">
-            <Label htmlFor="wl-first-name" className="text-base font-semibold">
-              First name <span className="text-muted-foreground font-normal text-sm">(optional)</span>
-            </Label>
-            <Input
-              id="wl-first-name"
-              type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Alex"
-              className="h-12 rounded-xl bg-muted/50"
-            />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="wl-email" className="text-base font-semibold">
               Email address
             </Label>
@@ -215,6 +209,27 @@ export function WaitingListForm({
             />
             {emailError && (
               <p className="text-sm text-destructive">{emailError}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wl-name" className="text-base font-semibold">Name</Label>
+            <Input
+              id="wl-name"
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                setNameError(null)
+              }}
+              onBlur={() => !name.trim() && setNameError("Name is required")}
+              placeholder="Your name"
+              className={cn(
+                "h-12 rounded-xl bg-muted/50",
+                nameError && "border-destructive focus-visible:ring-destructive"
+              )}
+            />
+            {nameError && (
+              <p className="text-sm text-destructive">{nameError}</p>
             )}
           </div>
         </>
@@ -240,7 +255,7 @@ export function WaitingListForm({
       <Button
         type="submit"
         className="w-full h-12 rounded-xl"
-        disabled={status === "submitting" || (!isLoggedIn && !email)}
+        disabled={status === "submitting" || (!isLoggedIn && (!email || !name.trim()))}
       >
         {status === "submitting" ? "Joining…" : "Join waiting list"}
       </Button>
