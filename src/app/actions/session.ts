@@ -2865,6 +2865,7 @@ export async function moveBookingToInstance(
         id,
         number_of_spots,
         session_instance_id,
+        organization_id,
         status,
         session_instance:session_instances(template_id)
       `)
@@ -2929,6 +2930,12 @@ export async function moveBookingToInstance(
 
     if (updateError) {
       return { success: false, error: `Failed to move booking: ${updateError.message}` };
+    }
+
+    // Notify waiting list for the original instance — a spot just opened up
+    const originalInstanceId = booking.session_instance_id;
+    if (originalInstanceId && booking.organization_id) {
+      await notifyNextWaitingListEntry(originalInstanceId, booking.organization_id);
     }
 
     return { success: true, newStartTime: newInstance.start_time };
