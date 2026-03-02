@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
 import {
@@ -169,8 +170,14 @@ export function Sidebar({ slug }: SidebarProps) {
             onClick={onNavigate}
             className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-primary hover:bg-primary/10"
           >
-            <ExternalLink className="mr-3 h-5 w-5" />
+            <Avatar className="h-8 w-8 mr-3 flex-shrink-0">
+              <AvatarImage src={currentOrg?.organization.faviconUrl || currentOrg?.organization.logoUrl || undefined} alt={currentOrg?.organization.name} />
+              <AvatarFallback className="text-xs font-medium">
+                {currentOrg?.organization.name?.[0]?.toUpperCase() ?? "?"}
+              </AvatarFallback>
+            </Avatar>
             Booking Page
+            <ExternalLink className="ml-3 h-5 w-5 opacity-80" />
           </Link>
         </div>
         <UserButtonSection />

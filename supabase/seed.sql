@@ -200,6 +200,58 @@ TRUNCATE TABLE public.clerk_users CASCADE;
 TRUNCATE TABLE public.organizations CASCADE;
 
 -- ============================================================================
+-- STORAGE OBJECTS
+-- Re-register seed images in storage.objects after db reset.
+-- Physical files persist in the Docker volume (supabase_storage_sawna) across
+-- resets; only the DB metadata rows are lost. This restores them so Supabase
+-- can serve them again without re-uploading.
+-- The `version` value must match the UUID subdirectory on disk.
+-- ============================================================================
+INSERT INTO storage.objects (bucket_id, name, owner, created_at, updated_at, last_accessed_at, metadata, version)
+VALUES
+  -- Cardiff org: logo (135 KB PNG)
+  (
+    'session-images',
+    'sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377969192.png',
+    NULL, NOW(), NOW(), NOW(),
+    '{"eTag":"seed","size":135063,"mimetype":"image/png","cacheControl":"max-age=3600","lastModified":"2026-01-01T00:00:00.000Z","contentLength":135063,"httpStatusCode":200}'::jsonb,
+    'df3c7a18-3d6b-4384-af7f-6be20f9fc5a3'
+  ),
+  -- Cardiff org: favicon (1.6 KB PNG)
+  (
+    'session-images',
+    'sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377972513.png',
+    NULL, NOW(), NOW(), NOW(),
+    '{"eTag":"seed","size":1613,"mimetype":"image/png","cacheControl":"max-age=3600","lastModified":"2026-01-01T00:00:00.000Z","contentLength":1613,"httpStatusCode":200}'::jsonb,
+    '029f4fd9-ed94-4e53-9ed0-47f4afa18a0c'
+  ),
+  -- Cardiff org: header image (428 KB JPG)
+  (
+    'session-images',
+    'sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770377978474.jpg',
+    NULL, NOW(), NOW(), NOW(),
+    '{"eTag":"seed","size":428189,"mimetype":"image/jpeg","cacheControl":"max-age=3600","lastModified":"2026-01-01T00:00:00.000Z","contentLength":428189,"httpStatusCode":200}'::jsonb,
+    'c1dfc2f1-8b30-43db-9b30-65b4fa3d0084'
+  ),
+  -- Regular membership image (1.8 MB JPG)
+  (
+    'session-images',
+    'sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770383229478.jpg',
+    NULL, NOW(), NOW(), NOW(),
+    '{"eTag":"seed","size":1799339,"mimetype":"image/jpeg","cacheControl":"max-age=3600","lastModified":"2026-01-01T00:00:00.000Z","contentLength":1799339,"httpStatusCode":200}'::jsonb,
+    '5358fe0d-5fe4-4a4c-ab9d-1e45c6366802'
+  ),
+  -- Free membership image (1.8 MB JPG)
+  (
+    'session-images',
+    'sessions/user_2y6VL5FKMg9cwwlLvbjg01GPlxT-1770383208336.jpg',
+    NULL, NOW(), NOW(), NOW(),
+    '{"eTag":"seed","size":1799339,"mimetype":"image/jpeg","cacheControl":"max-age=3600","lastModified":"2026-01-01T00:00:00.000Z","contentLength":1799339,"httpStatusCode":200}'::jsonb,
+    'dd1fd460-f792-4bfe-8c44-40fc6ec76385'
+  )
+ON CONFLICT DO NOTHING;
+
+-- ============================================================================
 -- ORGANIZATIONS
 -- ============================================================================
 INSERT INTO public.organizations (
