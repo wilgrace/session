@@ -137,16 +137,20 @@ Deno.serve(async (req) => {
           throw checkClerkError;
         }
         if (existingClerkUser) {
-          // Upgrade guest to full user
+          // Upgrade guest/pending user to full user.
+          // Only overwrite names if Clerk provides non-null values so that names
+          // pre-set by an admin when sending an invite are preserved.
+          const upgradeData: Record<string, unknown> = {
+            clerk_user_id: userData.id,
+            organization_id: defaultOrgIdFromEnv,
+            updated_at: new Date().toISOString(),
+          };
+          if (userData.first_name !== null) upgradeData.first_name = userData.first_name;
+          if (userData.last_name !== null) upgradeData.last_name = userData.last_name;
+
           const { error: updateError } = await supabaseAdmin
             .from('clerk_users')
-            .update({
-              clerk_user_id: userData.id,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              organization_id: defaultOrgIdFromEnv,
-              updated_at: new Date().toISOString()
-            })
+            .update(upgradeData)
             .eq('id', existingClerkUser.id);
           if (updateError) {
             console.error('Error upgrading guest user:', updateError);
