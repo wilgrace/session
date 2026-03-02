@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Pencil, Users, Lock, ArrowUp, ArrowDown, EyeOff } from "lucide-react"
+import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Pencil, Users, ArrowUp, ArrowDown, EyeOff } from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek as dateFnsStartOfWeek, endOfWeek as dateFnsEndOfWeek, startOfDay, endOfDay, getDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { cn } from "@/lib/utils"
@@ -83,7 +83,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
           {isFull ? 'Waiting List' : `${totalSpotsBooked}/${totalCapacity}`}
         </span>
         <span className="flex items-center gap-1">
-          {isFreeSession && <Lock className="h-3 w-3" />}
+          {isFreeSession && <span className="text-[10px] font-semibold uppercase">Free</span>}
           {isHidden && <EyeOff className="h-3 w-3" />}
           {isClosed && <Lock className="h-3 w-3" />}
         </span>

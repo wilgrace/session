@@ -7,7 +7,7 @@ import { Profile } from "@/types/profile";
 import { UserForm } from "@/components/admin/user-form";
 import { InviteUserSheet } from "@/components/admin/invite-user-sheet";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { Pencil, Trash2, ArrowUp, ArrowDown, Users } from "lucide-react";
 import { usePageHeaderAction } from "@/hooks/use-page-header-action";
 import { Badge } from "@/components/ui/badge";
 
@@ -138,8 +138,13 @@ export function UsersPage({ initialUsers, organizationId }: UsersPageProps) {
   return (
     <div className="flex flex-col h-full">
       {!users || users.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No users found.</p>
+        <div className="text-center py-8 mt-8">
+          <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <Users className="h-6 w-6 text-gray-400" />
+          </div>
+          <h4 className="text-lg font-medium text-gray-900">No users yet</h4>
+          <p className="text-gray-400 text-sm">Invite someone to give them access to book sessions.</p>
+          <Button className="mt-4" onClick={() => setShowInviteSheet(true)}>+ Invite User</Button>
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
