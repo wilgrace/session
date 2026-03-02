@@ -11,6 +11,7 @@ interface Booking {
   id: string;
   status: 'confirmed' | 'completed';
   number_of_spots: number;
+  membership_name?: string | null;
   user?: {
     first_name?: string;
     last_name?: string;
@@ -129,9 +130,19 @@ export function BookingsList({ bookings, onSelect, onCheckIn }: {
                   </span>
                 )}
               </p>
-              <p className="text-sm text-muted-foreground">
-                {getUserType(booking.user)}
-              </p>
+              {(booking.membership_name || getUserType(booking.user) === 'Admin' || getUserType(booking.user) === 'Guest') && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {booking.membership_name && (
+                    <Badge variant="secondary" className="text-xs py-0 h-4 bg-purple-100 text-purple-700">{booking.membership_name}</Badge>
+                  )}
+                  {getUserType(booking.user) === 'Admin' && (
+                    <Badge variant="default" className="text-xs py-0 h-4">Admin</Badge>
+                  )}
+                  {!booking.membership_name && getUserType(booking.user) === 'Guest' && (
+                    <Badge variant="secondary" className="text-xs py-0 h-4 bg-gray-100 text-gray-600">Guest</Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />

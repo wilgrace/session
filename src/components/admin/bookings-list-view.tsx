@@ -74,25 +74,15 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
     return user?.email || "Unknown"
   }
 
-  const getUserType = (booking: AdminBooking) => {
+  const getUserType = (booking: AdminBooking): { label: string; className: string } => {
     const role = booking.user?.role?.toLowerCase() || "user"
-    if (role === "admin" || role === "superadmin") return "admin"
-    if (role === "guest") return "guest"
-    if (booking.is_member) return "member"
-    return "user"
-  }
-
-  const getTypeBadgeClass = (type: string) => {
-    switch (type) {
-      case "admin":
-        return "bg-blue-100 text-blue-800"
-      case "member":
-        return "bg-purple-100 text-purple-700"
-      case "guest":
-        return "bg-gray-100 text-gray-600"
-      default:
-        return "bg-gray-100 text-gray-600"
+    if (role === "admin" || role === "superadmin") return { label: "Admin", className: "bg-blue-100 text-blue-800" }
+    if (role === "guest") return { label: "Guest", className: "bg-gray-100 text-gray-600" }
+    if (booking.is_member) return {
+      label: booking.membership_name || "Member",
+      className: "bg-purple-100 text-purple-700",
     }
+    return { label: "User", className: "bg-gray-100 text-gray-600" }
   }
 
   const formatPrice = (amount: number | null) => {
@@ -143,8 +133,8 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
           bVal = getUserName(b.user).toLowerCase()
           break
         case "type":
-          aVal = getUserType(a)
-          bVal = getUserType(b)
+          aVal = getUserType(a).label
+          bVal = getUserType(b).label
           break
         case "qty":
           aVal = a.number_of_spots
@@ -308,9 +298,9 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={getTypeBadgeClass(userType)}
+                        className={userType.className}
                       >
-                        {userType.charAt(0).toUpperCase() + userType.slice(1)}
+                        {userType.label}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">

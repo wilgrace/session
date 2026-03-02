@@ -99,6 +99,22 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
       }
     }
 
+    // Also check by email — a previous guest booking may have used a different clerk_user_id
+    const { data: existingByEmail } = await supabase
+      .from("clerk_users")
+      .select("id, clerk_user_id")
+      .eq("email", params.email)
+      .maybeSingle()
+
+    if (existingByEmail) {
+      if (existingByEmail.clerk_user_id.startsWith("guest_") || existingByEmail.clerk_user_id.startsWith("pending_")) {
+        // Reuse the existing guest/pending record
+        return { success: true, id: existingByEmail.id }
+      }
+      // Registered user — don't overwrite their record
+      return { success: false, error: "An account with this email already exists. Please sign in to continue." }
+    }
+
     // Get the organization ID to use
     const orgId = params.organization_id || process.env.DEFAULT_ORGANIZATION_ID;
     if (!orgId) {

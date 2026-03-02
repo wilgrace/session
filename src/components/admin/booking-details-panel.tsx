@@ -19,6 +19,7 @@ interface Booking {
   notes?: string;
   created_at?: string;
   amount_paid?: number | null;
+  membership_name?: string | null;
   session_instance?: {
     start_time?: string;
     end_time?: string;
@@ -370,6 +371,11 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
                   <div className="font-semibold mb-2">
                     About {user.first_name || user.full_name?.split(' ')[0] || user.name?.split(' ')[0] || 'Guest'}
                   </div>
+                  {localBooking.membership_name && (
+                    <div className="flex items-center gap-2 text-sm mb-1">
+                      <Badge variant="secondary" className="bg-purple-100 text-purple-700">{localBooking.membership_name}</Badge>
+                    </div>
+                  )}
                   {user.visits && (
                     <div className="flex items-center gap-2 text-sm mb-1">
                       <Check className="h-4 w-4 text-muted-foreground" /> {user.visits} visits

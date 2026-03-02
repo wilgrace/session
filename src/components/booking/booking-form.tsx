@@ -206,6 +206,7 @@ export function BookingForm({
         startTime: startTime.toISOString(),
         numberOfSpots: formData.numberOfSpots,
         customerEmail: user ? undefined : formData.email, // Only pass for guests
+        customerName: user ? undefined : formData.name,   // Only pass for guests
         promotionCode: formData.promotionCode,
         pricingType: formData.pricingType,
         isNewMembership: formData.isNewMembership,
@@ -256,11 +257,14 @@ export function BookingForm({
   }
 
   // Perform free session booking (extracted so waiver completion can call it)
-  const performFreeBooking = useCallback(async (opts?: { email?: string; spots?: number }) => {
+  const performFreeBooking = useCallback(async (opts?: { email?: string; spots?: number; name?: string }) => {
     if (!startTime) return
 
     const guestEmail = opts?.email ?? ''
     const spotsToBook = opts?.spots ?? numberOfSpots
+    const nameParts = opts?.name?.trim().split(/\s+/) ?? []
+    const guestFirstName = nameParts[0] || ''
+    const guestLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined
 
     setLoading(true)
     try {
@@ -270,8 +274,8 @@ export function BookingForm({
         const result = await createClerkUser({
           clerk_user_id: `guest_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
           email: guestEmail,
-          first_name: '',
-          last_name: undefined,
+          first_name: guestFirstName,
+          last_name: guestLastName,
         })
 
         if (!result.success || !result.id) {
@@ -367,7 +371,7 @@ export function BookingForm({
     } else if (pendingFreeSubmit) {
       // Free session flow - proceed to booking
       setPendingFreeSubmit(false)
-      performFreeBooking({ email: pendingFreeFormData?.email, spots: pendingFreeFormData?.numberOfSpots })
+      performFreeBooking({ email: pendingFreeFormData?.email, spots: pendingFreeFormData?.numberOfSpots, name: pendingFreeFormData?.name })
       setPendingFreeFormData(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,7 +385,7 @@ export function BookingForm({
       setShowWaiverOverlay(true)
       return
     }
-    performFreeBooking({ email: formData.email, spots: formData.numberOfSpots })
+    performFreeBooking({ email: formData.email, spots: formData.numberOfSpots, name: formData.name })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiverNeeded, activeWaiver, performFreeBooking])
 

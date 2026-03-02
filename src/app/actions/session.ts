@@ -3304,7 +3304,45 @@ export async function getAdminSessionsForDateRange(
       return { success: false, error: error.message };
     }
 
-    return { success: true, data: instances || [] };
+    // Collect all user IDs from bookings to fetch membership names
+    const allUserIds = [
+      ...new Set(
+        (instances || []).flatMap((i: any) =>
+          (i.bookings || []).map((b: any) => b.user?.id).filter(Boolean)
+        )
+      ),
+    ];
+
+    let membershipNames: Record<string, string | null> = {};
+    if (allUserIds.length > 0) {
+      const { data: membershipData } = await supabase
+        .from('user_memberships')
+        .select('user_id, status, current_period_end, membership:memberships(name)')
+        .eq('organization_id', orgId)
+        .in('user_id', allUserIds);
+
+      for (const m of membershipData || []) {
+        const isActive =
+          m.status === 'active' ||
+          (m.status === 'cancelled' &&
+            m.current_period_end &&
+            new Date(m.current_period_end) > new Date());
+        if (isActive) {
+          membershipNames[m.user_id] = (m.membership as any)?.name || null;
+        }
+      }
+    }
+
+    // Add membership_name to each booking
+    const transformed = (instances || []).map((instance: any) => ({
+      ...instance,
+      bookings: (instance.bookings || []).map((booking: any) => ({
+        ...booking,
+        membership_name: membershipNames[booking.user?.id] || null,
+      })),
+    }));
+
+    return { success: true, data: transformed };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -3316,6 +3354,7 @@ export interface AdminBooking {
   status: string;
   amount_paid: number | null;
   booked_at: string;
+  membership_name?: string | null;
   user: {
     id: string;
     first_name: string | null;
@@ -3423,11 +3462,11 @@ export async function getAdminBookingsForOrg(
     // Get membership status for all users in the results
     const userIds = [...new Set((bookings || []).map((b: any) => b.user?.id).filter(Boolean))];
 
-    let memberships: Record<string, boolean> = {};
+    let memberships: Record<string, { isActive: boolean; name: string | null }> = {};
     if (userIds.length > 0) {
       const { data: membershipData } = await supabase
         .from('user_memberships')
-        .select('user_id, status, current_period_end')
+        .select('user_id, status, current_period_end, membership:memberships(name)')
         .eq('organization_id', orgId)
         .in('user_id', userIds);
 
@@ -3435,7 +3474,9 @@ export async function getAdminBookingsForOrg(
         for (const m of membershipData) {
           const isActive = m.status === 'active' ||
             (m.status === 'cancelled' && m.current_period_end && new Date(m.current_period_end) > new Date());
-          memberships[m.user_id] = isActive;
+          if (isActive) {
+            memberships[m.user_id] = { isActive: true, name: (m.membership as any)?.name || null };
+          }
         }
       }
     }
@@ -3449,7 +3490,8 @@ export async function getAdminBookingsForOrg(
       booked_at: b.booked_at,
       user: b.user,
       session_instance: b.session_instance,
-      is_member: memberships[b.user?.id] || false
+      is_member: memberships[b.user?.id]?.isActive || false,
+      membership_name: memberships[b.user?.id]?.name || null,
     }));
 
     // Apply search filter (client-side due to Supabase limitations with nested relations)
@@ -3691,9 +3733,10 @@ export async function endSessionSchedule(
 // ---------------------------------------------------------------------------
 
 /**
- * Internal helper — finds the first waiting list entry whose requested_spots
- * can be accommodated by the current availability, then sends the spot-available email.
- * Errors are caught and logged; this must never break the booking cancellation flow.
+ * Internal helper — finds all waiting list entries whose requested_spots
+ * can be accommodated by the current availability, then sends the spot-available email
+ * to each of them. Errors are caught and logged; this must never break the booking
+ * cancellation flow.
  */
 async function notifyNextWaitingListEntry(
   sessionInstanceId: string,
@@ -3722,7 +3765,7 @@ async function notifyNextWaitingListEntry(
 
     if (availableSpots <= 0) return
 
-    // Find the earliest-queued entry whose requested quantity can be filled
+    // Find all entries whose requested quantity can be filled, ordered by queue position
     const { data: entries } = await supabase
       .from('waiting_list_entries')
       .select('id, email, requested_spots')
@@ -3730,18 +3773,17 @@ async function notifyNextWaitingListEntry(
       .eq('status', 'waiting')
       .lte('requested_spots', availableSpots)
       .order('added_at', { ascending: true })
-      .limit(1)
 
-    const entry = entries?.[0]
-    if (!entry) return
+    if (!entries || entries.length === 0) return
 
-    // Mark as notified
+    // Bulk-mark all eligible entries as notified
+    const entryIds = entries.map((e) => e.id)
     await supabase
       .from('waiting_list_entries')
       .update({ status: 'notified', notified_at: new Date().toISOString() })
-      .eq('id', entry.id)
+      .in('id', entryIds)
 
-    // Fetch org slug for the booking link
+    // Fetch org slug once for the booking links
     const { data: org } = await supabase
       .from('organizations')
       .select('slug')
@@ -3750,7 +3792,10 @@ async function notifyNextWaitingListEntry(
 
     if (!org?.slug) return
 
-    await sendWaitingListSpotAvailableEmail(entry.id, organizationId, org.slug)
+    // Send email to every eligible entry
+    for (const entry of entries) {
+      await sendWaitingListSpotAvailableEmail(entry.id, organizationId, org.slug)
+    }
   } catch (err) {
     console.error('[notifyNextWaitingListEntry] Error:', err)
   }
