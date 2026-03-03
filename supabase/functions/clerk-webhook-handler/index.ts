@@ -142,11 +142,19 @@ Deno.serve(async (req) => {
           // pre-set by an admin when sending an invite are preserved.
           const upgradeData: Record<string, unknown> = {
             clerk_user_id: userData.id,
-            organization_id: defaultOrgIdFromEnv,
             updated_at: new Date().toISOString(),
           };
           if (userData.first_name !== null) upgradeData.first_name = userData.first_name;
           if (userData.last_name !== null) upgradeData.last_name = userData.last_name;
+
+          // For migrated users (e.g. from Acuity), preserve their org assignment.
+          // For all other placeholder users, reset to the default org (normal flow).
+          if (!existingClerkUser.migrated_from) {
+            upgradeData.organization_id = defaultOrgIdFromEnv;
+          } else {
+            // Clear the migration flag now that they have a real Clerk account
+            upgradeData.migrated_from = null;
+          }
 
           const { error: updateError } = await supabaseAdmin
             .from('clerk_users')

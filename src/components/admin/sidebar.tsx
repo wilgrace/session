@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield, ArrowDownToLine } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -54,6 +54,7 @@ export function Sidebar({ slug }: SidebarProps) {
     { href: `/${slug}/admin/users`, icon: Users, label: "Users" },
     { href: `/${slug}/admin/billing`, icon: CreditCard, label: "Billing" },
     { href: `/${slug}/admin/settings`, icon: Settings, label: "Settings" },
+    { href: `/${slug}/admin/import`, icon: ArrowDownToLine, label: "Import" },
   ]
 
   // Find current org from assignments
