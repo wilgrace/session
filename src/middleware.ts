@@ -18,6 +18,8 @@ const BYPASS_PATHS = [
   '/icons',
   '/sw.js',
   '/workbox-',
+  '/terms-of-service',
+  '/privacy-policy',
 ];
 
 // Static file extensions to bypass
