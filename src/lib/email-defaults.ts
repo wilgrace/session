@@ -43,7 +43,7 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
       'Date',
       'Time',
       'Duration',
-      'Number of spots',
+      'Number of spaces',
       'Total paid',
       'Booking instructions',
       'View booking link',

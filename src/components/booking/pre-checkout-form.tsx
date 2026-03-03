@@ -404,8 +404,7 @@ export function PreCheckoutForm({
                 {pricingType === "drop_in" && <Check className="h-3 w-3" />}
               </div>
               <div>
-                <div className="font-medium">Drop-in</div>
-                <div className="text-sm text-muted-foreground">Single session access</div>
+                <div className="font-medium">Session price</div>
               </div>
             </div>
             <div className="text-xl font-bold">{formatPrice(dropInPrice)}</div>
@@ -473,10 +472,10 @@ export function PreCheckoutForm({
         )}
       </div>
 
-        {/* Number of People */}
+        {/* Number of Spaces */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-base font-semibold">Number of people</Label>
+            <Label className="text-base font-semibold">Number of spaces</Label>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -508,7 +507,7 @@ export function PreCheckoutForm({
           )}
           {!isNewMembership && isActiveMember && numberOfSpots > 1 && (
             <p className="text-sm text-muted-foreground">
-              You get member rate. Additional guests pay drop-in price.
+              You get member price. Additional spaces pay session price.
             </p>
           )}
         </div>
@@ -649,7 +648,7 @@ export function PreCheckoutForm({
           </div>
           {additionalPeople > 0 && (
             <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Additional guests × {additionalPeople}</span>
+              <span>Additional spaces × {additionalPeople}</span>
               <span>{formatPrice(additionalPersonPrice * additionalPeople)}</span>
             </div>
           )}
