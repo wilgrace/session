@@ -25,7 +25,7 @@ export const EMAIL_TEMPLATE_DESCRIPTIONS: Record<EmailTemplateType, string> = {
   booking_cancellation: 'Sent to the user when they cancel a booking',
   booking_cancellation_notification: 'Sent to admin when a user cancels a booking',
   membership_confirmation: 'Sent after a new membership is activated',
-  waiting_list: 'Sent when a spot opens up on the waiting list',
+  waiting_list: 'Sent when a space opens up on the waiting list',
   session_cancellation: 'Sent to attendees when an admin cancels a session',
 };
 
@@ -94,15 +94,15 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateType, EmailTemplateDef
   waiting_list: {
     type: 'waiting_list',
     label: 'Waiting List',
-    subject: "A spot has opened up for {{session_name}}!",
+    subject: "A space has opened up for {{session_name}}!",
     content: `<p>Hi {{first_name}},</p>
-<p>Great news — a spot has just become available for <strong>{{session_name}}</strong>. Book now before it fills up again!</p>`,
+<p>Great news — a space has just become available for <strong>{{session_name}}</strong>. Book now before it fills up again!</p>`,
     editableVariables: ['{{first_name}}', '{{session_name}}', '{{org_name}}'],
     injectedFields: [
       'Session name',
       'Date',
       'Time',
-      '"Book your spot" button',
+      '"Book your space" button',
     ],
   },
   session_cancellation: {

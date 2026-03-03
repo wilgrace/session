@@ -469,13 +469,13 @@ export async function updateDefaultDropinPrice(
 
     if (error) {
       console.error('[updateDefaultDropinPrice] Error:', error);
-      return { success: false, error: 'Failed to update default drop-in price' };
+      return { success: false, error: 'Failed to update default session price' };
     }
 
     return { success: true };
   } catch (error) {
     console.error('[updateDefaultDropinPrice] Error:', error);
-    return { success: false, error: 'Failed to update default drop-in price' };
+    return { success: false, error: 'Failed to update default session price' };
   }
 }
 
