@@ -11,6 +11,7 @@ const BYPASS_PATHS = [
   '/api',
   '/sign-in',
   '/sign-up',
+  '/onboarding',
   '/favicon.ico',
   '/robots.txt',
   '/sitemap.xml',
@@ -269,6 +270,7 @@ function extractSlugFromPath(pathname: string): string | null {
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/onboarding(.*)',
   '/',
   '/api/webhooks(.*)',
 ]);
@@ -294,8 +296,8 @@ export default clerkMiddleware(async (auth, req) => {
         if (userData.slug) {
           return NextResponse.redirect(new URL(`/${userData.slug}`, req.url));
         }
-        // User has no org - send to sign-in (they may need to be invited to an org)
-        return NextResponse.redirect(new URL('/sign-in', req.url));
+        // User has no org yet - send to onboarding wizard
+        return NextResponse.redirect(new URL('/onboarding', req.url));
       }
       // Unauthenticated users see the landing page
       return NextResponse.next();
@@ -307,6 +309,8 @@ export default clerkMiddleware(async (auth, req) => {
       if (userData.slug) {
         return NextResponse.redirect(new URL(`/${userData.slug}`, req.url));
       }
+      // Authenticated but no org yet — send to onboarding
+      return NextResponse.redirect(new URL('/onboarding', req.url));
     }
 
     return NextResponse.next();

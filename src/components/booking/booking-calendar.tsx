@@ -261,10 +261,10 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
   // Calculate time range based on sessions
   const calculateTimeRange = () => {
     if (events.length === 0) {
-      // Default to 7am-9pm if no events
+      // Default to 7am-1pm if no events
       return {
         min: new Date(0, 0, 0, 7, 0, 0),
-        max: new Date(0, 0, 0, 21, 0, 0)
+        max: new Date(0, 0, 0, 13, 0, 0)
       }
     }
 
@@ -428,24 +428,18 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
           <div className="text-lg font-semibold shrink-0">
             {format(currentDate, 'MMMM yyyy')}
           </div>
-          {(eventsInCurrentWeek.length === 0 || allEventsInWeekFull) && (
+          {(eventsInCurrentWeek.length === 0 || allEventsInWeekFull) && sessions.length > 0 && (
             <div className="flex flex-col items-center text-sm text-muted-foreground">
-              {sessions.length === 0 ? (
-                <span>No sessions available</span>
-              ) : (
-                <>
-                  <span>
-                    {allEventsInWeekFull ? 'All sessions this week are full' : 'No sessions this week'}
-                  </span>
-                  {nextAvailableEventAfterWeek && (
-                    <button
-                      onClick={() => setCurrentDate(nextAvailableEventAfterWeek.start)}
-                      className="text-primary underline-offset-4 hover:underline"
-                    >
-                      Skip to the next available session →
-                    </button>
-                  )}
-                </>
+              <span>
+                {allEventsInWeekFull ? 'All sessions this week are full' : 'No sessions this week'}
+              </span>
+              {nextAvailableEventAfterWeek && (
+                <button
+                  onClick={() => setCurrentDate(nextAvailableEventAfterWeek.start)}
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Skip to the next available session →
+                </button>
               )}
             </div>
           )}

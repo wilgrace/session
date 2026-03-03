@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Loader2, ArrowUp, ArrowDown, X, SearchX, CalendarDays, CalendarOff } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, ArrowUp, ArrowDown, X, SearchX, CalendarDays, CalendarOff, Calendar } from "lucide-react"
 import { getAdminBookingsForOrg, type AdminBooking } from "@/app/actions/session"
 import { cn } from "@/lib/utils"
+import { useParams, useRouter } from "next/navigation"
 
 type SortDirection = "asc" | "desc" | null
 type SortColumn = "name" | "type" | "qty" | "date" | "session" | "booking" | "paid" | null
@@ -23,9 +24,13 @@ interface BookingsListViewProps {
   searchQuery: string
   onSelectBooking: (booking: any) => void
   onClearSearch?: () => void
+  hasTemplates?: boolean | null
 }
 
-export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }: BookingsListViewProps) {
+export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch, hasTemplates }: BookingsListViewProps) {
+  const params = useParams()
+  const router = useRouter()
+  const slug = params.slug as string
   const [bookings, setBookings] = useState<AdminBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -264,6 +269,8 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
           <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
             {searchQuery ? (
               <SearchX className="h-6 w-6 text-gray-400" />
+            ) : hasTemplates === false ? (
+              <Calendar className="h-6 w-6 text-gray-400" />
             ) : timeFilter === 'upcoming' ? (
               <CalendarDays className="h-6 w-6 text-gray-400" />
             ) : (
@@ -273,6 +280,8 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
           <h4 className="text-lg font-medium text-gray-900">
             {searchQuery
               ? "No bookings found"
+              : hasTemplates === false
+              ? "Create your first session"
               : timeFilter === 'upcoming'
               ? "No upcoming bookings"
               : "No past bookings"}
@@ -280,10 +289,15 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch }
           <p className="text-gray-400 text-sm">
             {searchQuery
               ? `No results for "${searchQuery}"`
+              : hasTemplates === false
+              ? "Schedule a session to start taking bookings."
               : timeFilter === 'upcoming'
               ? "Bookings for future sessions will appear here."
               : "Completed sessions will appear here."}
           </p>
+          {!searchQuery && hasTemplates === false && (
+            <Button className="mt-2" onClick={() => router.push(`/${slug}/admin/sessions`)}>+ New Session</Button>
+          )}
         </div>
       ) : (
       <div className="flex-1 overflow-auto">
