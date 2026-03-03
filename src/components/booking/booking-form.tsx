@@ -276,6 +276,7 @@ export function BookingForm({
           email: guestEmail,
           first_name: guestFirstName,
           last_name: guestLastName,
+          organization_id: session.organization_id,
         })
 
         if (!result.success || !result.id) {

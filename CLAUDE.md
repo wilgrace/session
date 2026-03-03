@@ -33,7 +33,8 @@ src/
 │   │       ├── home/                 # /{slug}/admin/home - Bookings view
 │   │       ├── sessions/             # /{slug}/admin/sessions - Manage sessions
 │   │       ├── billing/              # /{slug}/admin/billing - Stripe Connect
-│   │       └── users/                # /{slug}/admin/users - User management
+│   │       ├── users/                # /{slug}/admin/users - User management
+│   │       └── import/               # /{slug}/admin/import - Acuity migration wizard
 │   ├── actions/          # Server actions (session.ts, clerk.ts, stripe.ts, onboarding.ts)
 │   └── api/              # API routes (webhooks)
 ├── components/
@@ -80,7 +81,7 @@ The middleware validates the slug against the database and sets `x-organization-
 ## Database Schema (9 Tables)
 
 1. **organizations** - Multi-tenant support (has `slug` column for URL routing)
-2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile). `role` column defaults to `'user'` — new tenant admins are explicitly promoted to `'admin'` by `createOrganizationForUser()` during onboarding
+2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile). `role` column defaults to `'user'` — new tenant admins are explicitly promoted to `'admin'` by `createOrganizationForUser()` during onboarding. `clerk_user_id` is nullable to support placeholder users imported from Acuity; `migrated_from` tracks the source platform (`'acuity'` | null)
 3. **user_memberships** - User subscription status per organization
 4. **saunas** - Sauna/facility definitions (legacy, may be unused)
 5. **session_templates** - Master templates, includes `event_color` for calendar display. Whether a template is recurring/one-off is **derived** from child records (not stored); `deleted_at` for soft-delete
@@ -416,6 +417,39 @@ Admins can cancel individual session instances from the admin home page.
 **User-facing**: The booking page (`/{slug}/{sessionId}?start=...`) checks `session.instances[0].status === 'cancelled'` and shows a "This session has been cancelled" message instead of the booking form.
 
 **Email type**: `session_cancellation` — triggers on instance cancellation, one email per affected user.
+
+### Acuity Scheduling Migration Tool
+
+Tenants can migrate historical bookings from Acuity Scheduling into Session via a self-service 4-step wizard at `/{slug}/admin/import`.
+
+**Flow**:
+1. Admin first manually creates matching session templates + instances in Session
+2. Admin uploads their Acuity CSV export (from Acuity Scheduling → Export)
+3. The wizard maps each unique Acuity time slot to an existing Session instance
+4. Import runs: creates bookings + placeholder users, optionally sends notification emails
+
+**Key Files**:
+- `src/lib/acuity-csv.ts` — CSV parsing + slot grouping utility
+- `src/app/actions/import.ts` — `importFromAcuity()` server action + `getSessionInstancesForImport()` + `sendMigrationNotificationEmails()`
+- `src/app/[slug]/admin/import/page.tsx` — 4-step wizard (Upload → Map → Confirm → Done)
+- `supabase/migrations/20260304000000_add_migrated_from_to_clerk_users.sql` — adds `migrated_from` column, makes `clerk_user_id` nullable
+
+**Placeholder Users**:
+- Users not yet in the system get a `clerk_users` row with a generated UUID `id`, `clerk_user_id = null`, and `migrated_from = 'acuity'`
+- When they sign up via Clerk with the same email, the Clerk webhook (`supabase/functions/clerk-webhook-handler/index.ts`) detects `migrated_from` is set, preserves their existing `organization_id`, writes the real `clerk_user_id`, and clears `migrated_from = null` — their bookings transfer automatically
+
+**Acuity CSV format**:
+- Each row = one spot booked by one person (multiple rows share the same start_time = one session slot)
+- Appointment type variants like `"60 mins - Sauna (Concession)"` are normalised by stripping `(Concession)` / `(Member)` suffixes so they map to a single Session template
+- Slot key: `{normalizedType}|{startTimeUTC}` — used as the admin mapping identifier
+- Idempotency: bookings are skipped if `notes ILIKE '%Acuity ID: {appointmentId}%'` already exists
+
+**Switch Date**:
+- Notification emails are only sent to users whose sessions fall on or after the switch date (the date Acuity stops taking new bookings)
+- Notifications default to **off** — admin must opt in
+
+**Timezone display in mapping step**:
+- Instance times in the mapping dropdown use `format(parseISO(inst.startTime))` (browser local timezone) rather than `formatInTimeZone(date, inst.timezone)` — the `session_templates.timezone` field defaults to `'UTC'` in the Drizzle schema, which would cause times to display 1 hour early for UK admins. The browser local timezone is the correct display context for an admin operating the tool.
 
 ### Stripe Connect Integration
 Organizations connect their Stripe accounts to receive payments for bookings.

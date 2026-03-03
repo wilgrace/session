@@ -31,7 +31,7 @@ export function Header({ slug }: HeaderProps) {
     if (pathname === `/${slug}/admin/sessions`) return "Sessions"
     if (pathname === `/${slug}/admin/billing`) return "Billing"
     if (pathname === `/${slug}/admin/settings`) return "Settings"
-    return "Admin Dashboard" // Default title
+    return "Admin" // Default title
   }
 
   const isBookingsPage = pathname === `/${slug}/admin` || pathname === `/${slug}/admin/home`

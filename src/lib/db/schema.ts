@@ -53,7 +53,8 @@ export const clerkUsers = pgTable('clerk_users', {
   housingSituation: text('housing_situation'),
   livesInCardiff: boolean('lives_in_cardiff'),
   cardiffNeighbourhood: text('cardiff_neighbourhood'),
-  clerkUserId: text('clerk_user_id').notNull().unique(),
+  clerkUserId: text('clerk_user_id').unique(), // nullable for migrated users who haven't signed up yet
+  migratedFrom: text('migrated_from'), // 'acuity' | null — cleared when user claims their account
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
