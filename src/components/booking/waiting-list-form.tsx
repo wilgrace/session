@@ -127,14 +127,9 @@ export function WaitingListForm({
           </div>
           <div className="flex items-start gap-2 text-muted-foreground text-sm">
             <Clock className="h-4 w-4 shrink-0 mt-0.5" />
-            <p>
-              You're{" "}
-              <span className="font-medium text-foreground">
-                #{position}
-              </span>{" "}
-              in line for {requestedSpots} {spotWord}. We'll email{" "}
+            <p>We'll email{" "}
               <span className="font-medium text-foreground">{displayEmail}</span>{" "}
-              when {requestedSpots === 1 ? "a spot becomes" : `${requestedSpots} spots become`} available.
+              when {requestedSpots === 1 ? "a space becomes" : `${requestedSpots} spaces become`} available.
             </p>
           </div>
         </div>

@@ -3,9 +3,9 @@
 
 UPDATE org_email_templates
 SET
-  subject = 'A spot has opened up for {{session_name}}!',
+  subject = 'A space has opened up for {{session_name}}!',
   content = '<p>Hi {{first_name}},</p>
-<p>Great news — a spot has just become available for <strong>{{session_name}}</strong>. Book now before it fills up again!</p>',
+<p>Great news — a space has just become available for <strong>{{session_name}}</strong>. Book now before it fills up again!</p>',
   updated_at = now()
 WHERE
   type = 'waiting_list'

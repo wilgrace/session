@@ -241,10 +241,11 @@ serveWithoutAuth(async (req) => {
           time,
           duration_minutes
         )
-      `)
-      .eq("id", specificTemplateIdToProcess);
+      `);
 
-    const result = await query;
+    const result = await (specificTemplateIdToProcess
+      ? query.eq("id", specificTemplateIdToProcess)
+      : query);
     const templates = result.data as unknown as SessionTemplate[];
     const error = result.error;
 

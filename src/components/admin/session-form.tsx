@@ -428,7 +428,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       })
     }
     if (showRepeatSection && (!durationMinutes || durationMinutes <= 0)) errors.duration = "Duration is required"
-    if (pricingType === "paid" && dropInEnabled && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Drop-in price is required"
+    if (pricingType === "paid" && dropInEnabled && (!dropInPrice || parseFloat(dropInPrice) <= 0)) errors.dropInPrice = "Session price is required"
     if (pricingType === "paid") {
       if (stripeChargesEnabled === false) {
         errors.pricingType = "Connect Stripe to accept payments for this session"
@@ -1267,8 +1267,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                             }}
                           />
                           <label htmlFor="dropInEnabled" className="flex-1 min-w-0 cursor-pointer">
-                            <p className="text-sm font-medium">Drop-in</p>
-                            <p className="text-xs text-gray-500">Single session for non-members</p>
+                            <p className="text-sm font-medium">Session pricing</p>
+                            <p className="text-xs text-gray-500">Per space for non-members</p>
                           </label>
                           {dropInEnabled && (
                             <div className="relative w-32">
