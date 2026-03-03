@@ -820,7 +820,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   {fieldErrors.name ? (
                     <p className="text-sm text-red-500">{fieldErrors.name}</p>
                   ) : (
-                    <p className="text-sm text-gray-500">Give your session a short and clear name.</p>
+                    <p className="text-sm text-gray-500">Descriptive names are good - avoid words like Sauna and Session.</p>
                   )}
                 </div>
 
@@ -871,7 +871,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     onChange={(e) => setBookingInstructions(e.target.value)}
                     rows={4}
                   />
-                  <p className="text-sm text-gray-500">Displayed on the confirmation page after booking.</p>
+                  <p className="text-sm text-gray-500">Displayed on the booking confirmation page and email.</p>
                 </div>
 
                 {/* Image Upload */}
