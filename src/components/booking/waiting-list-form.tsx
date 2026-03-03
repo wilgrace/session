@@ -147,14 +147,14 @@ export function WaitingListForm({
       <div>
         <h2 className="text-xl font-semibold">This session is full</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Join the waiting list and we'll email you if enough spots become available.
+          Join the waiting list and we'll email you if enough spaces become available.
         </p>
       </div>
 
       {/* Spots picker */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-base font-semibold">Spots needed</Label>
+          <Label className="text-base font-semibold">Spaces needed</Label>
           <div className="flex items-center gap-2">
             <Button
               type="button"
