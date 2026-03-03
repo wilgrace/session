@@ -893,6 +893,111 @@ export async function sendSessionCancellationEmail(
 }
 
 // ---------------------------------------------------------------------------
+// Admin welcome — sent from the Session platform after org creation
+// ---------------------------------------------------------------------------
+
+export async function sendAdminWelcomeEmail(
+  clerkUserId: string,
+  orgId: string,
+  orgSlug: string,
+  orgName: string
+): Promise<void> {
+  try {
+    const supabase = createSupabaseServerClient();
+
+    const { data: user } = await supabase
+      .from('clerk_users')
+      .select('email, first_name')
+      .eq('clerk_user_id', clerkUserId)
+      .single();
+
+    if (!user) {
+      console.error('[sendAdminWelcomeEmail] User not found:', clerkUserId);
+      return;
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.bookasession.org';
+    const dashboardUrl = `${appUrl}/${orgSlug}/admin/home`;
+    const sessionsUrl = `${appUrl}/${orgSlug}/admin/sessions`;
+    const billingUrl = `${appUrl}/${orgSlug}/admin/billing`;
+    const bookingPageUrl = `${appUrl}/${orgSlug}`;
+
+    // Session platform brand colours
+    const brandColor = '#6c47ff';
+    const brandTextColor = '#ffffff';
+
+    const firstName = user.first_name || 'there';
+
+    const nextStepsHtml = `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden">
+        <tr>
+          <td style="padding:16px 20px 4px">
+            <p style="margin:0 0 12px;font-size:13px;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Next steps</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 20px 16px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f4f4f5">
+                  <p style="margin:0;font-size:15px;color:#111;font-weight:500">1. Create your first session</p>
+                  <p style="margin:4px 0 0;font-size:13px;color:#71717a">Set up recurring or one-off bookable sessions for your customers.</p>
+                  <a href="${sessionsUrl}" style="display:inline-block;margin-top:8px;font-size:13px;color:${brandColor};text-decoration:none;font-weight:600">Go to Sessions →</a>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f4f4f5">
+                  <p style="margin:0;font-size:15px;color:#111;font-weight:500">2. Connect Stripe to accept payments</p>
+                  <p style="margin:4px 0 0;font-size:13px;color:#71717a">Link your Stripe account so customers can pay for bookings.</p>
+                  <a href="${billingUrl}" style="display:inline-block;margin-top:8px;font-size:13px;color:${brandColor};text-decoration:none;font-weight:600">Go to Billing →</a>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0">
+                  <p style="margin:0;font-size:15px;color:#111;font-weight:500">3. Share your booking page</p>
+                  <p style="margin:4px 0 0;font-size:13px;color:#71717a">Your public booking page is ready — share it with your community.</p>
+                  <a href="${bookingPageUrl}" style="display:inline-block;margin-top:8px;font-size:13px;color:${brandColor};text-decoration:none;font-weight:600">${bookingPageUrl} →</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    `;
+
+    const body = `
+      <div style="font-size:15px;line-height:1.6;color:#333">
+        <p style="margin:0 0 16px">Hi ${escapeHtml(firstName)},</p>
+        <p style="margin:0 0 16px">Welcome to Session! Your organisation <strong>${escapeHtml(orgName)}</strong> is set up and ready to go.</p>
+        <p style="margin:0">Here's how to get started:</p>
+      </div>
+      ${nextStepsHtml}
+      ${buildCtaButton(dashboardUrl, 'Go to your dashboard', brandColor, brandTextColor)}
+    `;
+
+    const html = buildEmailWrapper({
+      orgName: 'Session',
+      orgLogoUrl: null,
+      brandColor,
+      brandTextColor,
+      body,
+    });
+
+    const fromAddress = `Session <${process.env.RESEND_FROM_EMAIL ?? 'notifications@bookasession.org'}>`;
+
+    await sendEmail({
+      from: fromAddress,
+      to: user.email,
+      subject: `Welcome to Session — ${orgName} is live`,
+      html,
+      idempotencyKey: `admin-welcome/${orgId}`,
+    });
+  } catch (err) {
+    console.error('[sendAdminWelcomeEmail] Error:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Waiting list — spot available notification
 // ---------------------------------------------------------------------------
 

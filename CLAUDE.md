@@ -18,6 +18,9 @@
 src/
 ├── app/
 │   ├── (auth)/           # Sign-in/sign-up pages
+│   ├── onboarding/       # New tenant onboarding wizard (/onboarding)
+│   │   ├── page.tsx              # Server component guard (redirects complete/customer users)
+│   │   └── onboarding-client.tsx # 2-step client wizard
 │   ├── [slug]/           # Multi-tenant routes (org-specific)
 │   │   ├── (booking)/    # Public booking pages
 │   │   │   ├── page.tsx              # /{slug} - Booking calendar
@@ -31,7 +34,7 @@ src/
 │   │       ├── sessions/             # /{slug}/admin/sessions - Manage sessions
 │   │       ├── billing/              # /{slug}/admin/billing - Stripe Connect
 │   │       └── users/                # /{slug}/admin/users - User management
-│   ├── actions/          # Server actions (session.ts, clerk.ts, stripe.ts)
+│   ├── actions/          # Server actions (session.ts, clerk.ts, stripe.ts, onboarding.ts)
 │   └── api/              # API routes (webhooks)
 ├── components/
 │   ├── ui/               # Shadcn UI primitives
@@ -77,7 +80,7 @@ The middleware validates the slug against the database and sets `x-organization-
 ## Database Schema (9 Tables)
 
 1. **organizations** - Multi-tenant support (has `slug` column for URL routing)
-2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile)
+2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile). `role` column defaults to `'user'` — new tenant admins are explicitly promoted to `'admin'` by `createOrganizationForUser()` during onboarding
 3. **user_memberships** - User subscription status per organization
 4. **saunas** - Sauna/facility definitions (legacy, may be unused)
 5. **session_templates** - Master templates, includes `event_color` for calendar display. Whether a template is recurring/one-off is **derived** from child records (not stored); `deleted_at` for soft-delete
@@ -224,6 +227,8 @@ Required in `.env.local`:
 - Sets `x-organization-id` and `x-organization-slug` headers
 - Server components use `getTenantFromHeaders()` to access context
 - Client components use `useParams()` or `useSlug()` hook
+- `/onboarding` is in `BYPASS_PATHS` — never treated as an org slug
+- Authenticated users with no org (or `slug: null`) are redirected to `/onboarding` instead of `/sign-in`
 
 ### Server Actions
 All database operations use React 19 server actions in `src/app/actions/`:
@@ -243,10 +248,20 @@ All database operations use React 19 server actions in `src/app/actions/`:
 **Critical — date+time string parsing**: `new Date('2024-03-01')` (date-only string) is parsed by JS as **UTC midnight**, causing display one hour early in UTC+1 timezones. Always use `new Date(\`${date}T${time}:00\`)` (ISO local datetime without timezone suffix) when constructing dates from separate date and time strings — browsers parse this as local time.
 
 ### Authentication Flow
-1. User signs up via Clerk (through Auth Overlay or dedicated pages)
-2. Webhook calls `clerk-webhook-handler` Edge Function
-3. Function creates `clerk_users` entry in Supabase
-4. Middleware routes by role: admin → `/{slug}/admin`, user → `/{slug}`
+
+**New tenant signup** (via `/sign-up` page):
+1. User signs up via Clerk at `/sign-up`
+2. Webhook creates `clerk_users` with `role = 'user'` and `organization_id = DEFAULT_ORGANIZATION_ID`
+3. Clerk redirects to `/onboarding`
+4. Onboarding wizard collects org details (2 steps) and calls `createOrganizationForUser()`
+5. Action creates org, sets user `role = 'admin'` and `organization_id = newOrg.id`, seeds email templates + default waiver
+6. Redirected to `/{slug}` (their new booking page)
+
+**Booking customer signup** (via Auth Overlay within `/{slug}`):
+1. User signs up via Clerk in the auth overlay
+2. Webhook creates `clerk_users` with `role = 'user'` and `organization_id = DEFAULT_ORGANIZATION_ID`
+3. Auth overlay calls `updateUserOrganization(orgId)` to correct the org assignment
+4. User remains `role = 'user'` — correct for a customer
 
 ### Auth Overlay System
 
@@ -280,6 +295,39 @@ openSignUp({
 - Optional demographic fields: date of birth, gender, ethnicity
 - All fields include "Prefer not to say" option
 - Skip button returns to previous flow
+
+### Tenant Onboarding
+
+New tenants sign up at `/sign-up` and are routed through a 2-step wizard at `/onboarding` before they can access their booking page.
+
+**Route**: `/onboarding` — added to middleware `BYPASS_PATHS` so it is never treated as an org slug.
+
+**Step 1** (required): org name, booking URL/slug (with live availability check), description, homepage, social links.
+
+**Step 2** (optional, skippable): logo URL, favicon URL, header image URL, default session image URL, brand colour, button text colour.
+
+**Key Files**:
+- `src/app/onboarding/page.tsx` — server component; redirects already-onboarded admins to `/{slug}`, booking customers to `/{slug}`, unauthenticated users to `/sign-up`
+- `src/app/onboarding/onboarding-client.tsx` — 2-step client wizard
+- `src/app/actions/onboarding.ts` — `createOrganizationForUser()` and `checkOnboardingStatus()`
+
+**`createOrganizationForUser()` does**:
+1. Creates org row (must supply `id: randomUUID()` — `organizations.id` has no DB-level default)
+2. Updates `clerk_users`: sets `organization_id` + `role = 'admin'`
+3. Seeds all email templates via `seedDefaultEmailTemplates(orgId)`
+4. Seeds a default inactive waiver via direct Supabase insert (bypasses `createWaiver()` which uses `requireTenantFromHeaders()`)
+
+**`checkOnboardingStatus()` logic**:
+- `superadmin` → complete
+- `role = 'admin'` AND `org ≠ DEFAULT_ORGANIZATION_ID` → complete
+- `role = 'user'` AND `org ≠ DEFAULT_ORGANIZATION_ID` → customer (redirect to booking page)
+- Everything else → incomplete (show wizard)
+
+**Post-onboarding redirect**: uses `router.push(`/${slug}`)` (not `redirect()`) to bypass the middleware's 1-minute `userOrgCache` which still has `slug: null` for the user.
+
+**Landing page CTA** (`public/landing/index.html`): links to `/sign-up`. All nav links now use relative paths (no more absolute `rehost.page` URLs).
+
+---
 
 ### Unified Booking Page
 

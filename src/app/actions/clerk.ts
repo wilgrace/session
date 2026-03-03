@@ -132,7 +132,8 @@ async function createClerkUser(params: { clerk_user_id?: string; email: string; 
         email: params.email,
         first_name: params.first_name,
         last_name: params.last_name,
-        organization_id: orgId
+        organization_id: orgId,
+        role: 'user',
       })
       .select()
       .single()
@@ -206,7 +207,8 @@ async function ensureClerkUser(clerkUserId: string, email: string, firstName: st
         email: email,
         first_name: firstName,
         last_name: lastName,
-        organization_id: orgId
+        organization_id: orgId,
+        role: 'user',
       })
       .select("id")
       .single();

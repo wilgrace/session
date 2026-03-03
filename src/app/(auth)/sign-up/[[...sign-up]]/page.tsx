@@ -6,7 +6,7 @@ export default async function SignUpPage({
   searchParams: Promise<{ redirect_url?: string }>
 }) {
   const { redirect_url } = await searchParams
-  const fallbackRedirectUrl = redirect_url || "/"
+  const fallbackRedirectUrl = redirect_url || "/onboarding"
 
   return (
     <div className="flex min-h-screen items-center justify-center">

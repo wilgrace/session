@@ -174,6 +174,7 @@ export default function AdminHomePage() {
               searchQuery={searchQuery}
               onSelectBooking={setSelectedBooking}
               onClearSearch={() => setSearchQuery("")}
+              hasTemplates={hasTemplates}
             />
           </div>
         </div>

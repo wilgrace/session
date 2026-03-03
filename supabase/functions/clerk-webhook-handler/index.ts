@@ -198,7 +198,8 @@ Deno.serve(async (req) => {
             email: primaryEmail,
             first_name: userData.first_name,
             last_name: userData.last_name,
-            organization_id: defaultOrgIdFromEnv
+            organization_id: defaultOrgIdFromEnv,
+            role: 'user',
           })
           .select()
           .single();
