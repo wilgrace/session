@@ -390,10 +390,33 @@ export function MembershipForm({
               <Label className="text-base font-medium">Signing Up</Label>
             </div>
 
+            {/* On the members page toggle */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="showOnMembershipPage" className="font-normal">
+                    Publicly visible
+                  </Label>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Anyone can sign up on the /members page and session booking page.
+                  </p>
+                </div>
+                <Switch
+                  id="showOnMembershipPage"
+                  checked={showOnMembershipPage}
+                  onCheckedChange={setShowOnMembershipPage}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
             {/* Direct link — always shown for existing memberships */}
             {membership && slug && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
+                <Label className="font-normal whitespace-nowrap">
+                    Direct link
+                  </Label>
                   <Input
                     readOnly
                     value={`${typeof window !== "undefined" ? window.location.origin : ""}/${slug}/membership/${membership.id}`}
@@ -421,26 +444,6 @@ export function MembershipForm({
                 </div>
               </div>
             )}
-
-            {/* On the members page toggle */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="showOnMembershipPage" className="font-normal">
-                    List on the members page
-                  </Label>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    Show publicly on the /members listing page
-                  </p>
-                </div>
-                <Switch
-                  id="showOnMembershipPage"
-                  checked={showOnMembershipPage}
-                  onCheckedChange={setShowOnMembershipPage}
-                  disabled={loading}
-                />
-              </div>
-            </div>
 
             {/* Warning when not visible on members page */}
             {!showOnMembershipPage && (
