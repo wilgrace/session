@@ -91,11 +91,7 @@ export function MembershipsList({
   }
 
   function getSignUpDisplay(membership: Membership): string {
-    const { showOnBookingPage, showOnMembershipPage } = membership
-    if (showOnBookingPage && showOnMembershipPage) return "Session & Direct"
-    if (showOnBookingPage) return "Session"
-    if (showOnMembershipPage) return "Direct"
-    return "Hidden"
+    return membership.showOnMembershipPage ? "Members page" : "Direct link only"
   }
 
   return (
