@@ -411,8 +411,8 @@ export function PreCheckoutForm({
           </button>
         )}
 
-        {/* Available Memberships - show if user doesn't have a membership */}
-        {!isActiveMember && memberships.length > 0 && memberships.map((option) => {
+        {/* Available Memberships - show if user doesn't have a membership and membership is publicly visible */}
+        {!isActiveMember && memberships.length > 0 && memberships.filter(option => option.membership.showOnMembershipPage !== false).map((option) => {
           const isSelected = pricingType === "membership" && selectedMembershipId === option.membership.id
           const monthlyPrice = option.membership.price
           const isFree = monthlyPrice === 0

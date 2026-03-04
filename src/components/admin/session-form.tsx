@@ -35,6 +35,7 @@ import { ImageUpload } from "@/components/admin/image-upload"
 import { getMemberships, getSessionMembershipPrices, updateSessionMembershipPrices } from "@/app/actions/memberships"
 import type { Membership } from "@/lib/db/schema"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { EVENT_COLORS, EventColorKey, DEFAULT_EVENT_COLOR, normalizeEventColor } from "@/lib/event-colors"
 
 async function generateInstances() {
@@ -1309,7 +1310,21 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                                 }}
                               />
                               <label htmlFor={`membership-${membership.id}`} className="flex-1 min-w-0 cursor-pointer">
-                                <p className="text-sm font-medium">{membership.name}</p>
+                                <p className="text-sm font-medium flex items-center gap-1.5">
+                                  {membership.name}
+                                  {!membership.showOnMembershipPage && (
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                          <p>Hidden — only accessible via direct link</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </p>
                                 <p className="text-xs text-gray-500">
                                   {membership.memberPriceType === 'discount' && membership.memberDiscountPercent
                                     ? `${membership.memberDiscountPercent}% off drop-in`
