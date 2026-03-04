@@ -36,6 +36,9 @@ export function Header({ slug }: HeaderProps) {
 
   const isBookingsPage = pathname === `/${slug}/admin` || pathname === `/${slug}/admin/home`
   const isSessionsPage = pathname === `/${slug}/admin/sessions`
+  const isImportPage = pathname === `/${slug}/admin/import`
+
+  if (isImportPage) return null
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-40">
