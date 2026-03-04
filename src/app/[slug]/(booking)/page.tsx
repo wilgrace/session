@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { Suspense } from "react"
 import Image from "next/image"
 import { notFound } from "next/navigation"
@@ -9,11 +10,26 @@ import { BookingHeader } from "@/components/booking/booking-header"
 import { Skeleton } from "@/components/ui/skeleton"
 import { auth } from "@clerk/nextjs/server"
 import { BookingConfirmationToast } from "@/components/booking/booking-confirmation-toast"
-import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
+import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg, getOrganizationBySlug } from "@/lib/tenant-utils"
 import type { SessionTemplate } from "@/types/session"
 
 interface BookingPageProps {
   params: Promise<{ slug: string }>
+}
+
+export async function generateMetadata({ params }: BookingPageProps): Promise<Metadata> {
+  const { slug } = await params
+  const org = await getOrganizationBySlug(slug)
+  if (!org) return {}
+  return {
+    title: org.name,
+    description: org.description ?? `Book sessions with ${org.name}`,
+    openGraph: {
+      title: org.name,
+      description: org.description ?? `Book sessions with ${org.name}`,
+      ...(org.headerImageUrl ? { images: [org.headerImageUrl] } : {}),
+    },
+  }
 }
 
 // Async server component — streams in calendar once sessions load
