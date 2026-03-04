@@ -694,25 +694,23 @@ cp "landing-page/Session - Sauna Booking Software.html" public/landing/index.htm
 cp "landing-page/Session - Sauna Booking Software_files/"* public/landing/files/
 ```
 
-**3. Rewrite asset paths** (Framer exports use relative `_files/` paths):
+**3. Rewrite asset paths** (Framer exports use relative `_files/` paths, and some analytics files have no extension):
 ```bash
 python3 -c "
 import re, pathlib
 p = pathlib.Path('public/landing/index.html')
 c = p.read_text()
 c = re.sub(r'./Session - Sauna Booking Software_files/', '/landing/files/', c)
-c = c.replace('src=\"script\"', 'src=\"script.js\"')
+c = c.replace('src=\"/landing/files/script\"', 'src=\"/landing/files/script.js\"')
+c = c.replace('src=\"/landing/files/js\"', 'src=\"/landing/files/js.js\"')
 p.write_text(c)
 "
+# Also rename the extensionless files themselves:
+mv public/landing/files/script public/landing/files/script.js 2>/dev/null || true
+mv public/landing/files/js public/landing/files/js.js 2>/dev/null || true
 ```
 
-**4. Download Framer CDN `.mjs` dependencies locally** (they are NOT included in the export):
-- Extract all `framerusercontent.com/sites/…/*.mjs` URLs from the HTML and from `script_main.*.mjs`
-- `curl` each one into `public/landing/files/` using just the filename
-- Repeat for any transitive imports inside downloaded files
-- Replace all `https://framerusercontent.com/sites/[SITE_ID]/FILENAME.mjs` with `/landing/files/FILENAME.mjs` in both the HTML and all local `.mjs` files
-
-**5. Strip Framer editor UI** (not needed in production — always remove after every export):
+**4. Strip Framer editor UI** (not needed in production — always remove after every export):
 ```bash
 python3 << 'EOF'
 import re, pathlib
@@ -722,19 +720,64 @@ c = p.read_text()
 c = re.sub(r'\s*<script>try\{if\(localStorage\.get\("__framer_force_showing_editorbar_since"\).*?</script>', '', c, flags=re.DOTALL)
 # Remove editorbar CSS style block
 c = re.sub(r'<style type="text/css" data-framer-css="true"></style><style>\s*#__framer-editorbar.*?</style>(?=</head>)', '<style type="text/css" data-framer-css="true"></style>', c, flags=re.DOTALL)
-# Remove editorbar container div, iframe, and its inline script
-c = re.sub(r'<div id="__framer-editorbar-container".*?</script>', '', c, flags=re.DOTALL)
+# Remove editorbar container div, iframe (ends with </iframe>, no trailing </script>)
+c = re.sub(r'<div id="newvtPopupMenu">.*?</iframe>', '', c, flags=re.DOTALL)
 p.write_text(c)
 print("Editorbar removed. Remaining refs:", c.count('editorbar'))
 EOF
 ```
 
-**6. Re-append the custom Clerk sign-in script** before `</body>` (it is stripped by a fresh export — check git diff to restore it).
+**5. Download Framer CDN `.mjs` dependencies locally** (they are NOT included in the export):
+- Extract all `framerusercontent.com/sites/…/*.mjs` URLs from the HTML and from `script_main.*.mjs`
+- `curl` each one into `public/landing/files/` using just the filename
+- Repeat for any transitive imports inside downloaded files
+- Rewrite all `https://framerusercontent.com/sites/[SITE_ID]/` references to `/landing/files/` in both `index.html` and all downloaded `.mjs` files:
+
+```bash
+python3 -c "
+import re, pathlib
+SITE_URL = 'https://framerusercontent.com/sites/2vl5HVv15QvyxISxLnu26'
+LOCAL = '/landing/files'
+for p in [pathlib.Path('public/landing/index.html'), *pathlib.Path('public/landing/files').glob('*.mjs')]:
+    c = p.read_text()
+    if SITE_URL in c:
+        p.write_text(c.replace(SITE_URL + '/', LOCAL + '/'))
+        print(f'Rewrote: {p.name}')
+"
+```
+
+Note: `/assets/` URLs (fonts, images) in `.mjs` files are fine to leave as CDN URLs.
+
+**6. Inject Google Analytics tag** (re-add after every export — it is stripped by a fresh export):
+```bash
+python3 << 'EOF'
+import pathlib
+p = pathlib.Path('public/landing/index.html')
+c = p.read_text()
+ga_tag = """<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DNM868MDJL"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DNM868MDJL');
+</script>"""
+if 'G-DNM868MDJL' not in c:
+    c = c.replace('</head>', ga_tag + '\n</head>', 1)
+    p.write_text(c)
+    print("GA tag injected")
+else:
+    print("GA tag already present")
+EOF
+```
+
+**Sign Up / Sign In links are native Framer links** — do NOT add custom click interceptors or Clerk scripts. The Framer export handles navigation directly.
 
 **7. Verify:**
 ```bash
 grep -c 'framerusercontent.com/sites' public/landing/index.html   # should be 0
 grep -c 'editorbar' public/landing/index.html                     # should be 0
+grep -c 'G-DNM868MDJL' public/landing/index.html                  # should be 3
 ```
 
 ## Related Documentation

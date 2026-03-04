@@ -1,8 +1,9 @@
+import type { Metadata } from "next"
 import { Suspense } from "react"
 import { auth } from "@clerk/nextjs/server"
 import { SessionPageClient } from "./session-page-client"
 import { notFound } from "next/navigation"
-import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg } from "@/lib/tenant-utils"
+import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg, getOrganizationBySlug } from "@/lib/tenant-utils"
 import { getPublicSessionById, getBookingDetails } from "@/app/actions/session"
 import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
 
@@ -18,6 +19,28 @@ interface SessionPageProps {
     membership?: string // Pre-select membership option (from sign-up redirect)
     confirmed?: string
   }>
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string; sessionId: string }> }): Promise<Metadata> {
+  const { slug, sessionId } = await params
+  const [org, sessionResult] = await Promise.all([
+    getOrganizationBySlug(slug),
+    getPublicSessionById(sessionId),
+  ])
+  if (!org) return {}
+  const session = sessionResult.data
+  const sessionName = session?.name ?? "Session"
+  const description = session?.description ?? `Book ${sessionName} with ${org.name}`
+  const image = session?.image_url ?? org.headerImageUrl
+  return {
+    title: `${sessionName} – ${org.name}`,
+    description,
+    openGraph: {
+      title: `${sessionName} – ${org.name}`,
+      description,
+      ...(image ? { images: [image] } : {}),
+    },
+  }
 }
 
 export default async function SessionPage({ params, searchParams }: SessionPageProps) {

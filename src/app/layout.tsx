@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
+import Script from "next/script"
 import "@/styles/globals.css"
 import { ClerkProvider } from "@clerk/nextjs"
 import { Toaster } from "@/components/ui/toaster"
@@ -46,6 +47,16 @@ export default function RootLayout({
           {children}
         </ClerkProvider>
         <Toaster />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-DNM868MDJL"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-DNM868MDJL');`}
+        </Script>
       </body>
     </html>
   )
