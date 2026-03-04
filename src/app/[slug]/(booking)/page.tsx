@@ -15,6 +15,7 @@ import type { SessionTemplate } from "@/types/session"
 
 interface BookingPageProps {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ date?: string }>
 }
 
 export async function generateMetadata({ params }: BookingPageProps): Promise<Metadata> {
@@ -38,17 +39,19 @@ async function CalendarSection({
   slug,
   isAdmin,
   userId,
+  initialDate,
 }: {
   organizationId: string
   slug: string
   isAdmin: boolean
   userId?: string | null
+  initialDate?: string
 }) {
   const [{ data: sessions }, bookedResult] = await Promise.all([
     getPublicSessionsByOrg(organizationId),
     userId ? getUserBookedInstances(userId, organizationId) : Promise.resolve({ data: {}, error: null }),
   ])
-  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} />
+  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} initialDate={initialDate} />
 }
 
 // Async server component — streams in upcoming bookings
@@ -65,8 +68,9 @@ async function UpcomingBookingsSection({
   return <UpcomingBookings bookings={bookings || []} slug={slug} />
 }
 
-export default async function BookingPage({ params }: BookingPageProps) {
+export default async function BookingPage({ params, searchParams }: BookingPageProps) {
   const { slug } = await params
+  const { date: initialDate } = await searchParams
   const tenant = await getTenantFromHeaders()
 
   // If middleware didn't set headers, the org doesn't exist
@@ -156,6 +160,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
                     slug={slug}
                     isAdmin={isAdmin}
                     userId={userId}
+                    initialDate={initialDate}
                   />
                 </Suspense>
               </div>

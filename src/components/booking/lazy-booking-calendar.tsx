@@ -18,8 +18,9 @@ export interface LazyBookingCalendarProps {
   slug: string
   isAdmin?: boolean
   bookedInstances?: Record<string, string>
+  initialDate?: string
 }
 
-export function LazyBookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {} }: LazyBookingCalendarProps) {
-  return <BookingCalendar sessions={sessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedInstances} />
+export function LazyBookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate }: LazyBookingCalendarProps) {
+  return <BookingCalendar sessions={sessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedInstances} initialDate={initialDate} />
 }
