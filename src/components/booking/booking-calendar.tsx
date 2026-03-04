@@ -66,6 +66,7 @@ interface BookingCalendarProps {
   slug: string
   isAdmin?: boolean
   bookedInstances?: Record<string, string>
+  initialDate?: string
 }
 
 function isEventFull(event: CalendarEvent): boolean {
@@ -150,12 +151,24 @@ function EmptyStateOverlay({ isAdmin, slug }: { isAdmin: boolean; slug: string }
   )
 }
 
-export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {} }: BookingCalendarProps) {
+export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate }: BookingCalendarProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [currentView, setCurrentView] = useState<View>('week')
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (initialDate) {
+      const d = new Date(initialDate)
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (initialDate) {
+      const d = new Date(initialDate)
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
 
   // Update view based on screen size
@@ -330,7 +343,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
       const queryParams = new URLSearchParams({
         start: event.start.toISOString(),
         edit: 'true',
-        bookingId: event.bookingId
+        bookingId: event.bookingId,
+        date: currentDate.toISOString(),
       });
       router.push(`/${slug}/${event.resource.id}?${queryParams.toString()}`)
       return
@@ -338,7 +352,8 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
     if (!event.isBooked) {
       // Only allow new booking if not already booked
       const queryParams = new URLSearchParams({
-        start: event.start.toISOString()
+        start: event.start.toISOString(),
+        date: currentDate.toISOString(),
       });
       router.push(`/${slug}/${event.resource.id}?${queryParams.toString()}`)
     }

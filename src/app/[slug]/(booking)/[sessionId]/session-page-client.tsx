@@ -22,6 +22,7 @@ interface SessionPageClientProps {
     bookingId?: string
     membership?: string // Pre-select membership option (from sign-up redirect)
     confirmed?: string // Show confirmation toast
+    date?: string // Calendar date to return to when navigating back
   }
   slug: string
   organizationName: string | null
@@ -76,8 +77,10 @@ export function SessionPageClient({
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(initialPricingData ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
+  const returnDate = searchParams.date
+  const backHref = returnDate ? `/${slug}?date=${encodeURIComponent(returnDate)}` : `/${slug}`
   const handleBack = () => {
-    router.push(`/${slug}`)
+    router.push(backHref)
   }
   // Ref to track if initial session fetch has been done (prevent refetch when user changes)
   // Pre-set to true when we have server-provided data
@@ -315,7 +318,7 @@ export function SessionPageClient({
             {/* Desktop-only nav row */}
           <div className="hidden md:flex items-center justify-between h-20">
             <Link
-              href={`/${slug}`}
+              href={backHref}
               className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
             >
               <ChevronLeft className="h-6 w-6" />

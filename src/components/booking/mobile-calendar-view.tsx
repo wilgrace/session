@@ -55,24 +55,26 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
   const isSessionFullOnDay = (template: SessionTemplate, day: Date) => {
     if (!template.instances) return false
     const dateStr = format(day, 'yyyy-MM-dd')
-    const instance = template.instances.find(inst =>
+    const instancesOnDay = template.instances.filter(inst =>
       formatLocalDate(new Date(inst.start_time), SAUNA_TIMEZONE) === dateStr
     )
-    if (!instance) return false
+    if (instancesOnDay.length === 0) return false
     const totalCapacity = template.capacity || 10
-    const totalSpotsBooked = instance.bookings?.reduce((sum: number, b: { number_of_spots?: number }) => sum + (b.number_of_spots || 1), 0) || 0
-    return totalSpotsBooked >= totalCapacity
+    return instancesOnDay.every(instance => {
+      const totalSpotsBooked = instance.bookings?.reduce((sum: number, b: { number_of_spots?: number }) => sum + (b.number_of_spots || 1), 0) || 0
+      return totalSpotsBooked >= totalCapacity
+    })
   }
 
   const getSessionsForDay = (day: Date) => {
     return sessions.filter((template) => {
-      if (template.instances) {
-        const hasInstance = template.instances.some(instance =>
+      if (template.instances && template.instances.length > 0) {
+        // Template has instances — only show if there's an instance on this specific day
+        return template.instances.some(instance =>
           formatLocalDate(new Date(instance.start_time), SAUNA_TIMEZONE) === format(day, 'yyyy-MM-dd')
         )
-        if (hasInstance) return true
-        // No instance found for this day — fall through to recurring schedule check
       }
+      // No instances yet — fall back to schedule-based check
       if ((template.schedules?.length ?? 0) > 0 && template.schedules) {
         const dayName = format(day, 'EEEE').toLowerCase()
         return template.schedules.some(schedule =>

@@ -87,8 +87,8 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
       })
     }
 
-    // If no instances found, check recurring schedule
-    if (results.length === 0 && (template.schedules?.length ?? 0) > 0 && template.schedules) {
+    // If no instances found and template has no instances at all, check recurring schedule
+    if (results.length === 0 && (!template.instances || template.instances.length === 0) && (template.schedules?.length ?? 0) > 0 && template.schedules) {
       const dayName = format(selectedDate, 'EEEE').toLowerCase()
       const schedule = template.schedules.find(s =>
         s.days.some(d => d.toLowerCase() === dayName)
@@ -132,11 +132,12 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
     : sessionsForDay
 
   const handleSessionClick = (template: SessionTemplate, startTime: Date, isBooked: boolean, bookingId?: string) => {
+    const dateParam = `&date=${selectedDate.toISOString()}`
     if (isBooked && bookingId) {
-      router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}`)
+      router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}${dateParam}`)
       return
     }
-    router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}`)
+    router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}${dateParam}`)
   }
 
   const allFull = visibleSessionsForDay.length > 0 && visibleSessionsForDay.every(({ template, instance }) => {
