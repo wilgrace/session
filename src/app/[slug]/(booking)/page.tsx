@@ -106,16 +106,30 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
     <>
       {/* Fixed header image - z-0, sits behind content */}
       {hasHeaderImage && (
-        <div className="fixed top-0 left-0 right-0 h-[150px] md:h-[200px] z-0">
-          <Image
-            src={organization.headerImageUrl!}
-            alt=""
-            fill
-            className="object-cover"
-            priority
-            sizes="100vw"
+        <>
+          {/* Preload hint hoisted to <head> by React 19 — makes LCP image discoverable
+              during initial HTML parse. imageSrcSet mirrors Next.js default deviceSizes
+              so the browser reuses the preloaded response for the <img> srcset below. */}
+          <link
+            rel="preload"
+            as="image"
+            imageSrcSet={[640, 750, 828, 1080, 1200, 1920, 2048, 3840]
+              .map(w => `/_next/image?url=${encodeURIComponent(organization.headerImageUrl!)}&w=${w}&q=75 ${w}w`)
+              .join(", ")}
+            imageSizes="100vw"
+            fetchPriority="high"
           />
-        </div>
+          <div className="fixed top-0 left-0 right-0 h-[150px] md:h-[200px] z-0">
+            <Image
+              src={organization.headerImageUrl!}
+              alt=""
+              fill
+              className="object-cover"
+              priority
+              sizes="100vw"
+            />
+          </div>
+        </>
       )}
 
       {/* Main content - z-10, scrolls over header image */}
