@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import Papa from "papaparse"
 import { format, parseISO } from "date-fns"
 import { formatInTimeZone } from "date-fns-tz"
-import { Upload, FileText, AlertCircle, CheckCircle2, ArrowRight, Loader2, X } from "lucide-react"
+import { Upload, FileText, AlertCircle, CheckCircle2, ArrowRight, Loader2, X, Clock, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,7 @@ import {
 // ---------------------------------------------------------------------------
 
 type Step = "upload" | "map" | "confirm" | "done"
+type ImportSource = "acuity" | "periode" | "wix" | "other"
 
 // ---------------------------------------------------------------------------
 // Page
@@ -39,6 +40,7 @@ export default function ImportPage() {
   const params = useParams()
   const slug = params.slug as string
 
+  const [activeTab, setActiveTab] = useState<ImportSource>("acuity")
   const [step, setStep] = useState<Step>("upload")
   const [csvRows, setCsvRows] = useState<AcuityRow[]>([])
   const [slots, setSlots] = useState<AcuitySlot[]>([])
@@ -173,61 +175,116 @@ export default function ImportPage() {
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">Import from Acuity</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Upload a CSV export from Acuity Scheduling and map existing bookings to your sessions.
-          </p>
+          <h1 className="text-2xl font-semibold text-gray-900">Switching from another platform</h1>
+          <p className="text-sm text-gray-500 mt-1">Migrating to Session is a lot easier than it may seem.</p>
         </div>
 
-        {/* Progress indicator */}
-        <StepIndicator current={step} />
+        {/* Tab nav */}
+        <div className="border-b border-gray-200 mb-8">
+          <nav className="-mb-px flex gap-6">
+            {(["acuity", "periode", "wix", "other"] as ImportSource[]).map(tab => {
+              const labels: Record<ImportSource, string> = {
+                acuity: "Acuity Scheduling",
+                periode: "Periode",
+                wix: "Wix",
+                other: "Other",
+              }
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    "pb-3 text-sm font-medium border-b-2 transition-colors",
+                    activeTab === tab
+                      ? "border-gray-900 text-gray-900"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  )}
+                >
+                  {labels[tab]}
+                </button>
+              )
+            })}
+          </nav>
+        </div>
 
-        {/* Steps */}
-        {step === "upload" && (
-          <UploadStep
-            fileInputRef={fileInputRef}
-            onFile={handleFile}
-            onDrop={handleDrop}
-            parseError={parseError}
-          />
+        {/* Tab: Acuity Scheduling */}
+        {activeTab === "acuity" && (
+          <>
+            <div className="mb-8">
+              <ol className="flex flex-col gap-4 text-sm">
+                <li><span className="font-medium text-base">Billing</span><br/>If you're already using Stripe, then simply connect Session to the same account. If using Square or Paypal, you'll need to recreate Coupons and Gift Certificates in Stripe in order to honour them.</li>
+                <li><span className="font-medium text-base">Bookings</span><br/>Make the transition seamless for your customers by exporting bookings and users from <b>Reports / Import/Export</b> and following the steps below</li>
+              </ol>
+            </div>
+
+            <StepIndicator current={step} />
+
+            {step === "upload" && (
+              <UploadStep
+                fileInputRef={fileInputRef}
+                onFile={handleFile}
+                onDrop={handleDrop}
+                parseError={parseError}
+              />
+            )}
+
+            {step === "map" && (
+              <MapStep
+                slots={slots}
+                instances={instances}
+                instancesLoading={instancesLoading}
+                slotMapping={slotMapping}
+                setSlotMapping={setSlotMapping}
+                switchDate={switchDate}
+                setSwitchDate={setSwitchDate}
+                sendNotifications={sendNotifications}
+                setSendNotifications={setSendNotifications}
+                warnings={warnings}
+                onNext={() => setStep("confirm")}
+                onBack={() => setStep("upload")}
+                mappedSlotCount={mappedSlotCount}
+              />
+            )}
+
+            {step === "confirm" && (
+              <ConfirmStep
+                mappedBookings={mappedBookings}
+                skippedBookings={skippedBookings}
+                newEmailCount={newEmails.size}
+                upcomingCount={upcomingCount}
+                sendNotifications={sendNotifications}
+                switchDate={switchDate}
+                warnings={warnings}
+                onBack={() => setStep("map")}
+                onImport={handleImport}
+                importing={importing}
+                importError={importError}
+              />
+            )}
+
+            {step === "done" && summary && (
+              <DoneStep summary={summary} slug={slug} />
+            )}
+          </>
         )}
 
-        {step === "map" && (
-          <MapStep
-            slots={slots}
-            instances={instances}
-            instancesLoading={instancesLoading}
-            slotMapping={slotMapping}
-            setSlotMapping={setSlotMapping}
-            switchDate={switchDate}
-            setSwitchDate={setSwitchDate}
-            sendNotifications={sendNotifications}
-            setSendNotifications={setSendNotifications}
-            warnings={warnings}
-            onNext={() => setStep("confirm")}
-            onBack={() => setStep("upload")}
-            mappedSlotCount={mappedSlotCount}
-          />
-        )}
+        {/* Tab: Periode */}
+        {activeTab === "periode" && <ComingSoonTab />}
 
-        {step === "confirm" && (
-          <ConfirmStep
-            mappedBookings={mappedBookings}
-            skippedBookings={skippedBookings}
-            newEmailCount={newEmails.size}
-            upcomingCount={upcomingCount}
-            sendNotifications={sendNotifications}
-            switchDate={switchDate}
-            warnings={warnings}
-            onBack={() => setStep("map")}
-            onImport={handleImport}
-            importing={importing}
-            importError={importError}
-          />
-        )}
+        {/* Tab: Wix */}
+        {activeTab === "wix" && <ComingSoonTab />}
 
-        {step === "done" && summary && (
-          <DoneStep summary={summary} slug={slug} />
+        {/* Tab: Other */}
+        {activeTab === "other" && (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+              <MessageCircle className="h-6 w-6 text-gray-400" />
+            </div>
+            <h4 className="text-lg font-medium text-gray-900">Not seeing your platform?</h4>
+            <p className="text-gray-400 text-sm max-w-xs">
+              Get in touch via chat and we&apos;ll help you switch over — we can often handle the migration for you.
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -699,6 +756,18 @@ function StatCard({
       {description && (
         <div className="text-xs text-gray-400 mt-0.5">{description}</div>
       )}
+    </div>
+  )
+}
+
+function ComingSoonTab() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+      <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+        <Clock className="h-6 w-6 text-gray-400" />
+      </div>
+      <h4 className="text-lg font-medium text-gray-900">Coming soon</h4>
+      <p className="text-gray-400 text-sm">We're working on this import. Check back soon.</p>
     </div>
   )
 }

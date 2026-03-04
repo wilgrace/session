@@ -71,7 +71,7 @@ export async function generateMetadata({
     description,
     icons,
     manifest: `/${slug}/manifest.webmanifest`,
-    robots: { index: false, follow: false },
+
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",

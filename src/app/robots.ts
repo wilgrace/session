@@ -5,16 +5,16 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: [
-          '/landing/',
-          '/privacy-policy',
-          '/terms-of-service',
-        ],
         disallow: [
           '/api/',
           '/onboarding',
-          '/admin',
+          '/sign-in',
+          '/sign-up',
         ],
+      },
+      {
+        userAgent: '*',
+        disallow: '/*/admin',
       },
     ],
     sitemap: 'https://bookasession.org/sitemap.xml',
