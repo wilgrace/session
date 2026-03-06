@@ -43,6 +43,7 @@ interface CalendarEvent extends Event {
   start: Date
   end: Date
   resource: SessionTemplate
+  isCancelled?: boolean
 }
 
 interface CalendarViewProps {
@@ -56,6 +57,22 @@ interface CalendarViewProps {
 
 // Custom event component matching the public booking calendar style
 const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
+  if (event.isCancelled) {
+    return (
+      <div className="session-event-content">
+        <div className="session-meta flex justify-between items-center">
+          <span className="text-[10px] font-semibold uppercase tracking-wide">Cancelled</span>
+        </div>
+        <div className="session-name line-through opacity-60">
+          {event.resource.name}
+        </div>
+        <div className="session-meta">
+          {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+        </div>
+      </div>
+    )
+  }
+
   const totalCapacity = event.resource.capacity || 10
   // Find the instance for this event
   const instance = event.resource.instances?.find(i => {
@@ -207,19 +224,18 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               0
             );
 
-            // Skip slots that have a cancelled instance
-            const hasCancelledInstance = session.instances?.some(i =>
+            // Check for a cancelled instance at this time slot
+            const cancelledInstance = session.instances?.find(i =>
               new Date(i.start_time).getTime() === startTime.getTime() && i.status === 'cancelled'
             )
-            if (!hasCancelledInstance) {
-              events.push({
-                id: `${session.id}-${schedule.id}-${format(currentDate, 'yyyy-MM-dd')}`,
-                title: `${format(startTime, 'h:mm a')} – ${format(endTime, 'h:mm a')}: ${session.name}`,
-                start: startTime,
-                end: endTime,
-                resource: session
-              });
-            }
+            events.push({
+              id: cancelledInstance ? cancelledInstance.id : `${session.id}-${schedule.id}-${format(currentDate, 'yyyy-MM-dd')}`,
+              title: `${format(startTime, 'h:mm a')} – ${format(endTime, 'h:mm a')}: ${session.name}`,
+              start: startTime,
+              end: endTime,
+              resource: session,
+              isCancelled: !!cancelledInstance,
+            });
           }
           currentDate = addDays(currentDate, 1);
         }
@@ -230,9 +246,6 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
     if (!session.schedules?.length || (session.one_off_dates?.length ?? 0) > 0) {
       if (session.instances && session.instances.length > 0) {
         session.instances.forEach((instance) => {
-          // Skip cancelled instances
-          if (instance.status === 'cancelled') return
-
           // Parse the ISO string and create a new Date object
           const startTime = new Date(instance.start_time);
           const endTime = new Date(instance.end_time);
@@ -241,13 +254,14 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
           const formattedStartTime = format(startTime, 'h:mm a');
           const formattedEndTime = format(endTime, 'h:mm a');
 
-          // Create events with the UTC times directly
+          // Create events with the UTC times directly (include cancelled instances)
           events.push({
             id: instance.id,
             title: `${formattedStartTime} – ${formattedEndTime}: ${session.name}`,
             start: startTime,
             end: endTime,
-            resource: session
+            resource: session,
+            isCancelled: instance.status === 'cancelled',
           });
         });
       } else if (session.one_off_dates && session.one_off_dates.length > 0) {
@@ -496,6 +510,14 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
               min={timeRange.min}
               max={timeRange.max}
               eventPropGetter={(event: CalendarEvent) => {
+                // Cancelled instances get their own distinct style
+                if (event.isCancelled) {
+                  return {
+                    className: 'session-event session-cancelled',
+                    style: {},
+                  }
+                }
+
                 const customColor = event.resource.event_color
 
                 // Calculate availability for full/sold out state
@@ -513,19 +535,15 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                 const isClosed = visibility === 'closed'
 
                 // Determine session type class
-                // Priority: closed > hidden > full > default
+                // Priority: closed only (hidden/full use template color)
                 let typeClass = 'session-default'
                 if (isClosed) {
                   typeClass = 'session-closed'
-                } else if (isHidden) {
-                  typeClass = 'session-hidden'
-                } else if (isFull) {
-                  typeClass = 'session-full'
                 }
 
-                // Build style object with custom color if provided (and not overridden by special states)
+                // Build style object with custom color if provided (and not overridden by closed state)
                 const style: React.CSSProperties = {}
-                if (customColor && !isFull && !isHidden && !isClosed) {
+                if (customColor && !isClosed) {
                   const colors = getEventColorValues(customColor)
                   style.borderLeftColor = colors.color500
                   style.backgroundColor = `${colors.color500}1A` // 10% opacity

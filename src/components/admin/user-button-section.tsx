@@ -24,7 +24,7 @@ export function UserButtonSection() {
   }
 
   return (
-    <div className="p-4 pt-2">
+    <div className="py-2 pt-2">
       <UserDropdown slug={slug} variant="sidebar" />
     </div>
   )

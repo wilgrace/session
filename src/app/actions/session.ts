@@ -1171,7 +1171,8 @@ export async function updateSessionWithSchedules(params: {
   template: Omit<UpdateSessionTemplateParams, 'id'>
   schedules: Array<{ id?: string; time: string; days: string[]; duration_minutes?: number | null }>
   one_off_dates?: OneOffDateParam[]
-}): Promise<{ success: boolean; error?: string }> {
+  cancelAffectedBookings?: boolean
+}): Promise<{ success: boolean; error?: string; requiresConfirmation?: boolean; affectedBookingCount?: number }> {
   try {
     const userId = await getAuthenticatedUser()
     const supabase = createSupabaseClient()
@@ -1206,44 +1207,47 @@ export async function updateSessionWithSchedules(params: {
       return { success: false, error: "Unauthorized: Admin access required" }
     }
 
-    // Guard: check if any schedules being removed have future booked instances
+    // Check for future booked instances that will be wiped by this update.
+    // This covers both removed schedules and schedule time changes (all non-cancelled
+    // instances are regenerated, so any with bookings would be lost).
     const futureDate = new Date().toISOString()
-    const { data: bookedFutureInstances } = await supabase
+    const { data: futureInstances } = await supabase
       .from('session_instances')
-      .select('id, schedule_id')
+      .select('id')
       .eq('template_id', params.templateId)
-      .eq('status', 'scheduled')
+      .neq('status', 'cancelled')
       .gt('start_time', futureDate)
-      .not('schedule_id', 'is', null)
 
-    if (bookedFutureInstances && bookedFutureInstances.length > 0) {
-      const scheduleIdsWithInstances = new Set(
-        bookedFutureInstances.map(i => i.schedule_id).filter(Boolean)
-      )
-      if (scheduleIdsWithInstances.size > 0) {
-        const incomingScheduleIds = new Set(params.schedules.map(s => s.id).filter(Boolean))
-        const deletedSchedulesWithBookings = [...scheduleIdsWithInstances].filter(
-          id => !incomingScheduleIds.has(id as string)
-        )
-        if (deletedSchedulesWithBookings.length > 0) {
-          // Check if any of these future instances actually have bookings
-          const instanceIds = bookedFutureInstances
-            .filter(i => deletedSchedulesWithBookings.includes(i.schedule_id as string))
-            .map(i => i.id)
+    let affectedBookingCount = 0
+    let affectedBookingIds: string[] = []
 
-          const { data: existingBookings } = await supabase
-            .from('bookings')
-            .select('id')
-            .in('session_instance_id', instanceIds)
-            .in('status', ['confirmed', 'completed'])
-            .limit(1)
+    if (futureInstances && futureInstances.length > 0) {
+      const futureInstanceIds = futureInstances.map(i => i.id)
+      const { data: affectedBookings } = await supabase
+        .from('bookings')
+        .select('id')
+        .in('session_instance_id', futureInstanceIds)
+        .in('status', ['confirmed', 'completed'])
 
-          if (existingBookings && existingBookings.length > 0) {
-            return {
-              success: false,
-              error: 'Cannot delete schedules with future booked sessions. Cancel those sessions first, or use "End after date" to stop the schedule.',
-            }
+      if (affectedBookings && affectedBookings.length > 0) {
+        affectedBookingCount = affectedBookings.length
+        affectedBookingIds = affectedBookings.map(b => b.id)
+
+        if (!params.cancelAffectedBookings) {
+          // Return to the caller so it can show a confirmation dialog
+          return {
+            success: false,
+            requiresConfirmation: true,
+            affectedBookingCount,
           }
+        }
+
+        // Admin confirmed: cancel and refund all affected bookings
+        for (const bookingId of affectedBookingIds) {
+          await cancelBookingWithRefund(bookingId, {
+            cancellationReason: "Session schedule updated by admin",
+            skipWaitingList: true,
+          })
         }
       }
     }
@@ -1252,10 +1256,12 @@ export async function updateSessionWithSchedules(params: {
     const { is_recurring: _removed, ...templateFieldsWithoutIsRecurring } = params.template as any
     const updateFields = { ...templateFieldsWithoutIsRecurring, updated_at: new Date().toISOString() }
 
+    // Delete only non-cancelled instances so that previously cancelled slots
+    // are preserved and won't be regenerated (Rule 4).
     const results = await Promise.all([
       supabase.from("session_templates").update(updateFields).eq("id", params.templateId),
       supabase.from("session_schedules").delete().eq("session_template_id", params.templateId),
-      supabase.from("session_instances").delete().eq("template_id", params.templateId),
+      supabase.from("session_instances").delete().eq("template_id", params.templateId).neq("status", "cancelled"),
       supabase.from("session_one_off_dates").delete().eq("template_id", params.templateId),
     ])
 
@@ -1291,7 +1297,9 @@ export async function updateSessionWithSchedules(params: {
         }
       }
 
-      // Fire-and-forget instance generation for recurring schedules
+      // Fire-and-forget instance generation for recurring schedules.
+      // The Edge Function skips start_times where an instance already exists,
+      // so cancelled instances naturally prevent regeneration at those slots.
       fetch(functionUrl, {
         method: 'POST',
         headers: {
@@ -1318,19 +1326,18 @@ export async function updateSessionWithSchedules(params: {
         return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
       }
 
-      // Create one-off instances synchronously
+      // Create one-off instances synchronously. Use upsert with ignoreDuplicates so
+      // that cancelled instances at the same start_time are preserved (Rule 4).
       const instanceRows = buildInstancesFromOneOffDates(
         params.templateId,
         template.organization_id ?? '',
         params.template.duration_minutes ?? 75,
         params.one_off_dates
       )
-      await supabase.from("session_instances").insert(instanceRows)
-    }
-
-    // If template has both recurring + one-off, trigger generation (handles recurring part)
-    if (params.schedules.length > 0 && params.one_off_dates && params.one_off_dates.length > 0) {
-      // Already triggered above for recurring; one-off handled synchronously
+      await supabase.from("session_instances").upsert(instanceRows, {
+        onConflict: 'template_id,start_time',
+        ignoreDuplicates: true,
+      })
     }
 
     return { success: true }
@@ -1372,6 +1379,29 @@ export async function deleteSessionTemplate(templateId: string): Promise<{ succe
 
     if (template.created_by !== userData.id) {
       return { success: false, error: "Unauthorized: You can only delete your own templates" }
+    }
+
+    // Cancel and refund all confirmed/completed bookings across all instances before deleting
+    const { data: instances } = await supabase
+      .from("session_instances")
+      .select("id")
+      .eq("template_id", templateId)
+
+    if (instances && instances.length > 0) {
+      const instanceIds = instances.map(i => i.id)
+      const { data: bookings } = await supabase
+        .from("bookings")
+        .select("id")
+        .in("session_instance_id", instanceIds)
+        .in("status", ["confirmed", "completed"])
+
+      if (bookings && bookings.length > 0) {
+        for (const booking of bookings) {
+          await cancelBookingWithRefund(booking.id, {
+            cancellationReason: "Session template deleted by admin",
+          })
+        }
+      }
     }
 
     const { error } = await supabase
@@ -1507,13 +1537,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       }
     }
 
-    // Verify the user belongs to the same organization as the template
-    if (userData.organization_id !== template.organization_id) {
-      return {
-        success: false,
-        error: "You can only book sessions from your organization"
-      }
-    }
 
     // Find or create the instance for this time slot
     const startTime = new Date(params.start_time)
@@ -3651,6 +3674,78 @@ export async function cancelSessionInstance(
     }
   } catch (error: any) {
     return { success: false, cancelledBookings: 0, refundedBookings: 0, error: error.message }
+  }
+}
+
+export async function deleteSessionInstance(
+  instanceId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const userId = await getAuthenticatedUser()
+    const supabase = createSupabaseServerClient()
+
+    // Fetch instance and verify it exists and is cancelled
+    const { data: instance, error: instanceError } = await supabase
+      .from('session_instances')
+      .select('id, organization_id, status')
+      .eq('id', instanceId)
+      .single()
+
+    if (instanceError || !instance) {
+      return { success: false, error: 'Instance not found' }
+    }
+
+    if (instance.status !== 'cancelled') {
+      return { success: false, error: 'Only cancelled instances can be deleted' }
+    }
+
+    // Verify caller is an admin for this org
+    const { data: userData } = await supabase
+      .from('clerk_users')
+      .select('id, role, organization_id')
+      .eq('clerk_user_id', userId)
+      .single()
+
+    if (!userData) {
+      return { success: false, error: 'User not found' }
+    }
+
+    const hasAccess =
+      userData.role === 'superadmin' ||
+      (userData.role === 'admin' && userData.organization_id === instance.organization_id)
+
+    if (!hasAccess) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    // Block if any paid booking records exist — these are the financial audit trail
+    // (soft-deleted rows with refund_amount recorded after cancelSessionInstance ran)
+    const { data: paidBookings } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('session_instance_id', instanceId)
+      .eq('payment_status', 'completed')
+      .limit(1)
+
+    if (paidBookings && paidBookings.length > 0) {
+      return {
+        success: false,
+        error: 'This instance has paid booking records that must be kept for financial audit. It cannot be deleted.',
+      }
+    }
+
+    const { error: deleteError } = await supabase
+      .from('session_instances')
+      .delete()
+      .eq('id', instanceId)
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
   }
 }
 

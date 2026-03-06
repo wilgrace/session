@@ -100,7 +100,7 @@ export const sessionTemplates = pgTable('session_templates', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }), // soft delete
-  timezone: text('timezone').notNull().default('UTC'),
+  timezone: text('timezone').notNull().default('Europe/London'),
   // Pricing fields
   pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
   dropInPrice: integer('drop_in_price'), // Price in pence for non-members

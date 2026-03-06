@@ -133,12 +133,12 @@ export function Sidebar({ slug }: SidebarProps) {
   const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex flex-col h-full">
       {/* Org Picker at top */}
-      <div className=" py-3 px-2 h-75">
+      <div className=" py-3 px-0 h-75 border-b border-gray-200">
         <OrgPicker />
       </div>
 
       <div className="flex flex-col flex-1 py-4">
-        <nav className="space-y-2 px-2">
+        <nav className="space-y-2 px-0">
           {navItems.map((item) => {
             const isActive = item.href === `/${slug}/admin`
               ? pathname === `/${slug}/admin` || pathname === `/${slug}/admin/home`
@@ -165,7 +165,7 @@ export function Sidebar({ slug }: SidebarProps) {
 
       {/* Bottom section with Booking Page link and User Avatar */}
       <div className="border-t border-gray-200">
-        <div className="p-4 pb-2 border-b border-gray-200">
+        <div className="py-2 pb-2 border-b border-gray-200">
           <Link
             href={`/${slug}`}
             onClick={onNavigate}
@@ -190,7 +190,7 @@ export function Sidebar({ slug }: SidebarProps) {
     <>
       {/* Desktop Sidebar - Fixed position */}
       <div className="hidden md:block md:w-64 md:flex-shrink-0">
-        <div className="fixed top-0 left-0 h-screen w-64 flex flex-col border-r border-gray-200 bg-gray-50">
+        <div className="fixed top-0 left-0 h-screen w-64 flex flex-col border-r border-gray-200 bg-gray-50 px-4">
           <SidebarContent />
         </div>
       </div>

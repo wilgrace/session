@@ -574,11 +574,13 @@ async function handleOrganizationChange(organizationId: string) {
 async function updateUserOrganization(clerkUserId: string, organizationId: string) {
   try {
     const supabase = createSupabaseClient()
+    const defaultOrgId = process.env.DEFAULT_ORGANIZATION_ID
 
     const { error } = await supabase
       .from("clerk_users")
       .update({ organization_id: organizationId })
       .eq("clerk_user_id", clerkUserId)
+      .eq("organization_id", defaultOrgId) // only assign if still on default org (newly created)
 
     if (error) {
       return { success: false, error: error.message }

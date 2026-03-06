@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Loader2, AlertTriangle } from "lucide-react"
-import { cancelSessionInstance } from "@/app/actions/session"
+import { cancelSessionInstance, deleteSessionInstance } from "@/app/actions/session"
 import { useToast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 
@@ -37,8 +37,10 @@ interface InstancePanelProps {
 export function InstancePanel({ open, session, slug, onClose, onCancelled }: InstancePanelProps) {
   const { toast } = useToast()
   const [cancelling, setCancelling] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [reason, setReason] = useState("")
   const [alertOpen, setAlertOpen] = useState(false)
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
 
   const confirmedBookings = (session?.bookings ?? []).filter(
     (b) => b.status === "confirmed" || b.status === "completed"
@@ -71,6 +73,28 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
       })
     } finally {
       setCancelling(false)
+    }
+  }
+
+  const handleDeleteInstance = async () => {
+    if (!session) return
+    setDeleting(true)
+    try {
+      const result = await deleteSessionInstance(session.id)
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete instance")
+      }
+      toast({ title: "Instance deleted" })
+      setDeleteAlertOpen(false)
+      onCancelled() // reuses same close+reload callback
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete instance",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -111,17 +135,55 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
         <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
           {/* Cancelled state */}
           {isCancelled && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-1">
-              <div className="text-sm font-medium text-destructive">This session has been cancelled</div>
-              {session.cancellation_reason && (
-                <div className="text-sm text-muted-foreground">{session.cancellation_reason}</div>
-              )}
-              {session.cancelled_at && (
-                <div className="text-xs text-muted-foreground">
-                  {format(new Date(session.cancelled_at), "d MMM yyyy 'at' HH:mm")}
-                </div>
-              )}
-            </div>
+            <>
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-1">
+                <div className="text-sm font-medium text-destructive">This session has been cancelled</div>
+                {session.cancellation_reason && (
+                  <div className="text-sm text-muted-foreground">{session.cancellation_reason}</div>
+                )}
+                {session.cancelled_at && (
+                  <div className="text-xs text-muted-foreground">
+                    {format(new Date(session.cancelled_at), "d MMM yyyy 'at' HH:mm")}
+                  </div>
+                )}
+              </div>
+
+              <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                    disabled={deleting}
+                  >
+                    Delete instance
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this cancelled instance?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2">
+                        <p>This will permanently remove it from the calendar.</p>
+                        <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-sm">
+                          If this session is part of an ongoing schedule, the time slot may be recreated on the next schedule run.
+                        </p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deleting}>Keep</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDeleteInstance}
+                      disabled={deleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</> : "Delete instance"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           )}
 
           {/* Bookings summary */}
