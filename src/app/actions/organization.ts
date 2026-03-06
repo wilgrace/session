@@ -1,6 +1,7 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
+import { revalidateTag } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { getUserRoleForOrg, getTenantFromHeaders } from '@/lib/tenant-utils';
 
@@ -231,6 +232,8 @@ export async function updateOrganizationSettings(params: {
       return { success: false, error: 'Failed to update organization settings' };
     }
 
+    revalidateTag('org-by-id');
+    revalidateTag('org-by-slug');
     return { success: true };
   } catch (error) {
     console.error('[updateOrganizationSettings] Error:', error);
