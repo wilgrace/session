@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield, ArrowDownToLine } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield, ArrowDownToLine, Palette } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -30,6 +30,10 @@ export function Sidebar({ slug }: SidebarProps) {
   const [userOrgs, setUserOrgs] = useState<UserOrgAssignment[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  const settingsPaths = [`/${slug}/admin/settings`, `/${slug}/admin/billing`, `/${slug}/admin/import`, `/${slug}/admin/settings/design`]
+  const isInSettings = settingsPaths.some(p => pathname.startsWith(p))
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+
   // Fetch user's organization assignments from Supabase
   useEffect(() => {
     async function fetchOrgs() {
@@ -48,12 +52,21 @@ export function Sidebar({ slug }: SidebarProps) {
     fetchOrgs()
   }, [])
 
+  // Collapse settings when navigating away from settings pages
+  useEffect(() => {
+    if (!isInSettings) setIsSettingsOpen(false)
+  }, [isInSettings])
+
   const navItems = [
     { href: `/${slug}/admin`, icon: CalendarCheck, label: "Bookings" },
     { href: `/${slug}/admin/sessions`, icon: CalendarDays, label: "Sessions" },
     { href: `/${slug}/admin/users`, icon: Users, label: "Users" },
+  ]
+
+  const settingsSubItems = [
+    { href: `/${slug}/admin/settings`, icon: Settings, label: "General" },
+    { href: `/${slug}/admin/settings/design`, icon: Palette, label: "Design" },
     { href: `/${slug}/admin/billing`, icon: CreditCard, label: "Billing" },
-    { href: `/${slug}/admin/settings`, icon: Settings, label: "Settings" },
     { href: `/${slug}/admin/import`, icon: ArrowDownToLine, label: "Import" },
   ]
 
@@ -160,6 +173,42 @@ export function Sidebar({ slug }: SidebarProps) {
               </Link>
             )
           })}
+
+          {/* Settings expandable group */}
+          <button
+            onClick={() => setIsSettingsOpen(o => !o)}
+            className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md text-gray-800 hover:bg-gray-100 hover:text-gray-900"
+          >
+            <span className="flex items-center">
+              <Settings className="mr-3 h-5 w-5 opacity-50" />
+              Settings
+            </span>
+            <ChevronDown className={cn("h-4 w-4 opacity-50 transition-transform", isSettingsOpen && "rotate-180")} />
+          </button>
+
+          {isSettingsOpen && (
+            <div className="ml-4 space-y-1 border-l border-gray-200 pl-3">
+              {settingsSubItems.map((item) => {
+                const isActive = pathname.startsWith(item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+                      isActive
+                        ? "bg-gray-100 text-primary"
+                        : "text-gray-800 hover:bg-gray-100 hover:text-gray-900",
+                    )}
+                  >
+                    <item.icon className="mr-3 h-4 w-4 opacity-50" />
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </nav>
       </div>
 

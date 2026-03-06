@@ -30,7 +30,8 @@ export function Header({ slug }: HeaderProps) {
     if (pathname === `/${slug}/admin/users`) return "Users"
     if (pathname === `/${slug}/admin/sessions`) return "Sessions"
     if (pathname === `/${slug}/admin/billing`) return "Billing"
-    if (pathname === `/${slug}/admin/settings`) return "Settings"
+    if (pathname.startsWith(`/${slug}/admin/settings/design`)) return "Brand & Design"
+    if (pathname.startsWith(`/${slug}/admin/settings`)) return "Settings"
     return "Admin" // Default title
   }
 

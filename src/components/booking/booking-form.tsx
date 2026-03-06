@@ -61,6 +61,7 @@ interface BookingFormProps {
   isGuest?: boolean
   guestEmail?: string
   isAdmin?: boolean
+  cancellationWindowHours?: number
 }
 
 type CheckoutStepType = "form" | "checkout"
@@ -87,6 +88,7 @@ export function BookingForm({
   isGuest = false,
   guestEmail,
   isAdmin = false,
+  cancellationWindowHours = 0,
 }: BookingFormProps) {
   const { user } = useUser()
   const router = useRouter()
@@ -181,6 +183,7 @@ export function BookingForm({
         sessionId={sessionId}
         isConfirmation={mode === 'confirmation'}
         isAdmin={isAdmin}
+        cancellationWindowHours={cancellationWindowHours}
       />
     )
   }

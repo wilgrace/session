@@ -7,20 +7,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import Image from "next/image"
 import {
   getOrganizationSettings,
   updateOrganizationSettings,
   checkSlugAvailability,
   toggleCommunitySurvey,
-  applyDefaultImageToSessions,
   OrganizationSettings,
 } from "@/app/actions/organization"
 import { getWaivers } from "@/app/actions/waivers"
 import { getEmailTemplates } from "@/app/actions/email-templates"
-import { Loader2, Upload, X, Check, AlertCircle, Copy } from "lucide-react"
+import { Loader2, Check, AlertCircle, Copy } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
 import { WaiversList } from "@/components/admin/waivers-list"
 import { WaiverForm } from "@/components/admin/waiver-form"
 import { EmailTemplatesList } from "@/components/admin/email-templates-list"
@@ -60,6 +57,7 @@ function SettingsPageContent() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [formSlug, setFormSlug] = useState("")
+  // Design fields kept in state for pass-through on save (not editable here)
   const [logoUrl, setLogoUrl] = useState("")
   const [faviconUrl, setFaviconUrl] = useState("")
   const [headerImageUrl, setHeaderImageUrl] = useState("")
@@ -76,13 +74,15 @@ function SettingsPageContent() {
 
   // Email templates state
   const [emailTemplates, setEmailTemplates] = useState<OrgEmailTemplate[]>([])
+  const [adminNotificationEmail, setAdminNotificationEmail] = useState("")
 
   // Waivers state
   const [waivers, setWaivers] = useState<Waiver[]>([])
   const [waiverFormOpen, setWaiverFormOpen] = useState(false)
   const [editingWaiver, setEditingWaiver] = useState<Waiver | null>(null)
 
-  const [adminNotificationEmail, setAdminNotificationEmail] = useState("")
+  // Cancellations state
+  const [cancellationWindowHours, setCancellationWindowHours] = useState(0)
 
   // Community survey state
   const [communitySurveyEnabled, setCommunitySurveyEnabled] = useState(true)
@@ -101,12 +101,10 @@ function SettingsPageContent() {
     setLoading(true)
     setError(null)
 
-    // Get organization settings (org ID is retrieved from headers in the server action)
     const result = await getOrganizationSettings()
 
     if (result.success && result.data) {
       setSettings(result.data)
-      // Initialize form state
       setName(result.data.name)
       setDescription(result.data.description || "")
       setFormSlug(result.data.slug)
@@ -120,9 +118,9 @@ function SettingsPageContent() {
       setInstagramUrl(result.data.instagramUrl || "")
       setFacebookUrl(result.data.facebookUrl || "")
       setAdminNotificationEmail(result.data.adminNotificationEmail || "")
+      setCancellationWindowHours(result.data.cancellationWindowHours ?? 0)
       setCommunitySurveyEnabled(result.data.communitySurveyEnabled)
 
-      // Load waivers and email templates in parallel
       const [waiversResult, emailTemplatesResult] = await Promise.all([
         getWaivers(),
         getEmailTemplates(),
@@ -140,7 +138,6 @@ function SettingsPageContent() {
     setLoading(false)
   }
 
-  // Waiver handlers
   async function handleWaiverRefresh() {
     const result = await getWaivers()
     if (result.success && result.data) {
@@ -165,7 +162,6 @@ function SettingsPageContent() {
     setWaiverFormOpen(true)
   }
 
-  // Community survey handlers
   async function handleToggleCommunitySurvey(enabled: boolean) {
     if (!settings) return
     const result = await toggleCommunitySurvey(settings.id, enabled)
@@ -177,7 +173,6 @@ function SettingsPageContent() {
     }
   }
 
-  // Check slug availability when it changes
   useEffect(() => {
     if (!settings) return
     if (formSlug === settings.slug) {
@@ -203,7 +198,6 @@ function SettingsPageContent() {
   async function handleSave() {
     if (!settings) return
 
-    // Validate required fields
     if (!name.trim()) {
       toast.error("Organization name is required")
       return
@@ -235,17 +229,12 @@ function SettingsPageContent() {
       homepageUrl: homepageUrl.trim() || null,
       instagramUrl: instagramUrl.trim() || null,
       facebookUrl: facebookUrl.trim() || null,
+      cancellationWindowHours: cancellationWindowHours,
     })
 
     if (result.success) {
-      // Backfill sessions that have no image with the new default
-      if (defaultSessionImageUrl) {
-        await applyDefaultImageToSessions(settings.id)
-      }
-
       toast.success("Settings saved successfully")
 
-      // If slug changed, redirect to new URL
       if (formSlug !== settings.slug) {
         router.push(`/${formSlug}/admin/settings`)
       } else {
@@ -279,74 +268,9 @@ function SettingsPageContent() {
 
   return (
     <div className="flex-1 space-y-6 pb-6">
-      {/* Emails */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Emails</h3>
-          <p className="text-sm text-gray-500 mt-1">
-            Configure notification emails sent to your users automatically.
-          </p>
-        </div>
-
-        <EmailTemplatesList
-          templates={emailTemplates}
-          orgName={settings?.name || ""}
-          orgLogoUrl={settings?.logoUrl || null}
-          brandColor={brandColor}
-          brandTextColor={brandTextColor}
-          adminNotificationEmail={adminNotificationEmail}
-          onRefresh={handleEmailTemplatesRefresh}
-        />
-      </div>
-
-      {/* Waivers */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Waivers</h3>
-        </div>
-        <WaiversList
-          waivers={waivers}
-          onEdit={handleEditWaiver}
-          onCreate={handleCreateWaiver}
-          onRefresh={handleWaiverRefresh}
-        />
-      </div>
-
-      {/* Waiver Form Sheet */}
-      <WaiverForm
-        open={waiverFormOpen}
-        onClose={() => {
-          setWaiverFormOpen(false)
-          setEditingWaiver(null)
-        }}
-        waiver={editingWaiver}
-        onSuccess={handleWaiverRefresh}
-      />
-
-      {/* Community Survey */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Surveys</h3>
-        </div>
-        <CommunitySurveySection
-          enabled={communitySurveyEnabled}
-          onToggle={handleToggleCommunitySurvey}
-          onViewSurvey={() => setSurveyPreviewOpen(true)}
-        />
-      </div>
-
-      {/* Survey Preview Overlay */}
-      <CommunityProfileOverlay
-        isOpen={surveyPreviewOpen}
-        onComplete={() => setSurveyPreviewOpen(false)}
-        onSkip={() => setSurveyPreviewOpen(false)}
-      />
-
       {/* General */}
       <div className="border-b border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-lg font-medium text-gray-900">General</h3>
-
-        <div className="space-y-8 max-w-xl ">
+        <div className="space-y-8 max-w-xl">
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Organisation Name</Label>
@@ -374,7 +298,7 @@ function SettingsPageContent() {
           </div>
 
           {/* Slug */}
-          <div className="space-y-2 ">
+          <div className="space-y-2">
             <Label htmlFor="slug">Booking URL (Slug)</Label>
             <div className="flex items-center gap-0">
               <span className="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 h-10 whitespace-nowrap">
@@ -478,247 +402,111 @@ function SettingsPageContent() {
         </div>
       </div>
 
-      {/* Brand & Design */}
-      <div className="border-b border-gray-200 bg-white p-6 space-y-6">
-        <h3 className="text-lg font-medium text-gray-900">Brand & Design</h3>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Logo */}
-          <BrandingImageUpload
-            label="Logo"
-            value={logoUrl}
-            onChange={setLogoUrl}
-            description="Displayed in the booking calendar header. Recommended: 200x200px"
-            aspectRatio="square"
-          />
-
-          {/* Favicon */}
-          <BrandingImageUpload
-            label="Favicon"
-            value={faviconUrl}
-            onChange={setFaviconUrl}
-            description="Browser tab icon. Recommended: 32x32px or 48x48px"
-            aspectRatio="square"
-          />
-        </div>
-
-      {/* Images */}
-
-        <div className="space-y-6">
-          {/* Header Image */}
-          <BrandingImageUpload
-            label="Header Image"
-            value={headerImageUrl}
-            onChange={setHeaderImageUrl}
-            description="Banner at the top of your booking page. Recommended: 1600x300 (16:3 aspect ratio), max 2MB"
-            aspectRatio="banner"
-          />
-
-          {/* Default Session Image */}
-          <BrandingImageUpload
-            label="Default Session Image"
-            value={defaultSessionImageUrl}
-            onChange={setDefaultSessionImageUrl}
-            description="Used by default when creating new sessions. Recommended: 4:3 aspect ratio, max 2MB"
-            aspectRatio="standard"
-          />
-        </div>
-
-      {/* Brand Colors */}
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Button Color */}
-          <div className="space-y-2">
-            <Label htmlFor="brandColor">Brand Colour</Label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                id="brandColor"
-                value={brandColor}
-                onChange={(e) => setBrandColor(e.target.value)}
-                className="h-10 w-14 rounded border border-gray-200 cursor-pointer"
-              />
-              <Input
-                value={brandColor}
-                onChange={(e) => setBrandColor(e.target.value)}
-                placeholder="#6c47ff"
-                className="flex-1 font-mono"
-              />
-            </div>
-            <p className="text-sm text-gray-500">
-              Brand color used for buttons, links, and accents. Default: #6c47ff
-            </p>
-          </div>
-
-          {/* Button Text Color */}
-          <div className="space-y-2">
-            <Label htmlFor="brandTextColor">Brand Text Colour</Label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                id="brandTextColor"
-                value={brandTextColor}
-                onChange={(e) => setBrandTextColor(e.target.value)}
-                className="h-10 w-14 rounded border border-gray-200 cursor-pointer"
-              />
-              <Input
-                value={brandTextColor}
-                onChange={(e) => setBrandTextColor(e.target.value)}
-                placeholder="#ffffff"
-                className="flex-1 font-mono"
-              />
-            </div>
-            <p className="text-sm text-gray-500">
-              Text color on brand-colored elements. Default: #ffffff (white)
-            </p>
-          </div>
-
-        {/* Preview */}
-        <div className="pt-1">
-          <Label className="mb-3 block">Preview</Label>
-          <Button
-            style={{
-              backgroundColor: brandColor,
-              color: brandTextColor,
-              borderColor: brandColor,
-            }}
-            className="hover:opacity-90"
-          >
-            Book Now
-          </Button>
-        </div>
-      </div>
-      </div>
-
-    </div>
-  )
-}
-
-// Image upload component for branding
-interface BrandingImageUploadProps {
-  label: string
-  value: string
-  onChange: (url: string) => void
-  description: string
-  aspectRatio: "square" | "wide" | "banner" | "standard"
-}
-
-function BrandingImageUpload({
-  label,
-  value,
-  onChange,
-  description,
-  aspectRatio,
-}: BrandingImageUploadProps) {
-  const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const aspectRatioClasses = {
-    square: "aspect-square w-24",
-    wide: "aspect-[3/1] w-48",
-    banner: "aspect-[16/3] w-full max-w-lg",
-    standard: "aspect-[4/3] w-48",
-  }
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsUploading(true)
-    setError(null)
-
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!result.success) {
-        setError(result.error || "Upload failed")
-        return
-      }
-
-      if (result.url) {
-        onChange(result.url)
-      }
-    } catch {
-      setError("Failed to upload image")
-    } finally {
-      setIsUploading(false)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
-    }
-  }
-
-  const handleRemove = () => {
-    onChange("")
-    setError(null)
-  }
-
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      <p className="text-sm text-gray-500">{description}</p>
-
-      {value ? (
-        <div className="relative">
-          <div
-            className={cn(
-              "relative rounded-lg overflow-hidden border bg-gray-50",
-              aspectRatioClasses[aspectRatio]
-            )}
-          >
-            <Image
-              src={value}
-              alt={label}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 400px"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="destructive"
-            size="icon"
-            className="absolute -top-0 -right-0 h-6 w-6"
-            onClick={handleRemove}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      ) : (
-        <div
-          className={cn(
-            "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors",
-            "hover:border-primary hover:bg-primary/5",
-            isUploading && "opacity-50 cursor-not-allowed",
-            aspectRatioClasses[aspectRatio],
-            "flex flex-col items-center justify-center"
-          )}
-          onClick={() => !isUploading && fileInputRef.current?.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            onChange={handleFileSelect}
-            className="hidden"
-            disabled={isUploading}
-          />
-          <Upload className="h-6 w-6 text-muted-foreground mb-1" />
-          <p className="text-xs text-muted-foreground">
-            {isUploading ? "Uploading..." : "Click to upload"}
+      {/* Emails */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Emails</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Configure notification emails sent to your users automatically.
           </p>
         </div>
-      )}
+        <EmailTemplatesList
+          templates={emailTemplates}
+          types={['booking_confirmation', 'membership_confirmation', 'waiting_list']}
+          orgName={settings?.name || ""}
+          orgLogoUrl={settings?.logoUrl || null}
+          brandColor={brandColor}
+          brandTextColor={brandTextColor}
+          adminNotificationEmail={adminNotificationEmail}
+          onRefresh={handleEmailTemplatesRefresh}
+        />
+      </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {/* Cancellations */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-6">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Cancellations</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Control how far in advance users can cancel or change their booking.
+          </p>
+        </div>
+
+        <div className="max-w-xl space-y-2">
+          <Label htmlFor="cancellationWindow">Cancellation Window (hours)</Label>
+          <div className="flex items-center gap-3 max-w-xs">
+            <Input
+              id="cancellationWindow"
+              type="number"
+              min={0}
+              step={1}
+              value={cancellationWindowHours}
+              onChange={(e) => setCancellationWindowHours(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-32"
+            />
+            <span className="text-sm text-gray-500">hours before session</span>
+          </div>
+          <p className="text-sm text-gray-500">
+            {cancellationWindowHours === 0
+              ? "Users can cancel or change their booking up until the session starts."
+              : `Users can cancel or change their booking up to ${cancellationWindowHours} hour${cancellationWindowHours === 1 ? "" : "s"} before the session. After that, changes are locked.`}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-3">Cancellation emails</p>
+          <EmailTemplatesList
+            templates={emailTemplates}
+            types={['booking_cancellation', 'booking_cancellation_notification', 'session_cancellation']}
+            orgName={settings?.name || ""}
+            orgLogoUrl={settings?.logoUrl || null}
+            brandColor={brandColor}
+            brandTextColor={brandTextColor}
+            adminNotificationEmail={adminNotificationEmail}
+            onRefresh={handleEmailTemplatesRefresh}
+          />
+        </div>
+      </div>
+
+      {/* Waivers */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Waivers</h3>
+        </div>
+        <WaiversList
+          waivers={waivers}
+          onEdit={handleEditWaiver}
+          onCreate={handleCreateWaiver}
+          onRefresh={handleWaiverRefresh}
+        />
+      </div>
+
+      <WaiverForm
+        open={waiverFormOpen}
+        onClose={() => {
+          setWaiverFormOpen(false)
+          setEditingWaiver(null)
+        }}
+        waiver={editingWaiver}
+        onSuccess={handleWaiverRefresh}
+      />
+
+      {/* Community Survey */}
+      <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Surveys</h3>
+        </div>
+        <CommunitySurveySection
+          enabled={communitySurveyEnabled}
+          onToggle={handleToggleCommunitySurvey}
+          onViewSurvey={() => setSurveyPreviewOpen(true)}
+        />
+      </div>
+
+      <CommunityProfileOverlay
+        isOpen={surveyPreviewOpen}
+        onComplete={() => setSurveyPreviewOpen(false)}
+        onSkip={() => setSurveyPreviewOpen(false)}
+      />
     </div>
   )
 }

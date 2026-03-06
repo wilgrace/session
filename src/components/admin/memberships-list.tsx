@@ -186,21 +186,19 @@ export function MembershipsList({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      {membership.showOnMembershipPage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleCopyLink(membership.id)}
-                          className="h-8 w-8"
-                          title="Copy membership link"
-                        >
-                          {copiedId === membership.id ? (
-                            <Check className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleCopyLink(membership.id)}
+                        className="h-8 w-8"
+                        title="Copy membership link"
+                      >
+                        {copiedId === membership.id ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
