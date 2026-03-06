@@ -297,14 +297,14 @@ export function SessionPageClient({
   return (
     <div className="mobile-slide-in">
       {/* Mobile header - always visible on mobile */}
-      <div className="flex items-center justify-between px-4 py-4 md:hidden">
+      <div className="flex items-center justify-between px-4 py-2 md:hidden">
         <button
           onClick={handleBack}
           className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
-        <span className="font-medium text-sm">{organizationName}</span>
+        <span className="font-medium text-md">{organizationName}</span>
         <SessionAuthControls isAdmin={isAdmin} slug={slug} />
       </div>
 
@@ -314,7 +314,7 @@ export function SessionPageClient({
           "flex justify-center",
           (checkoutStep === "checkout" || mode !== "new") && "hidden md:flex"
         )}>
-          <div className="w-full max-w-[550px] px-4 md:px-8 md:pt-[60px]">
+          <div className="w-full max-w-[550px] md:px-4  md:px-8 md:pt-[60px]">
             {/* Desktop-only nav row */}
           <div className="hidden md:flex items-center justify-between h-20">
             <Link

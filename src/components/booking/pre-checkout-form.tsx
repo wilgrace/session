@@ -676,7 +676,7 @@ export function PreCheckoutForm({
 
         {/* Proceed Button */}
         <div className={cn(
-          isLoggedIn && "fixed bottom-0 left-0 right-0 z-50 p-4 bg-background border-t sm:static sm:p-0 sm:bg-transparent sm:border-0 sm:z-auto"
+          isLoggedIn && "fixed bottom-0 left-0 right-0 z-50 p-4 md:bg-background border-t sm:static sm:p-0 bg-muted/30 sm:border-0 sm:z-auto"
         )}>
           <Button
             type="button"

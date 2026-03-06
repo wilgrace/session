@@ -43,7 +43,7 @@ export function SessionDetails({
     <div>
       {/* Session Image */}
       {session.image_url && (
-        <div className="relative w-full h-48 md:h-64 rounded-lg overflow-hidden">
+        <div className="relative w-full h-48 md:h-64 md:rounded-lg overflow-hidden md:px-4">
           <Image
             src={session.image_url}
             alt={session.name}
@@ -53,7 +53,7 @@ export function SessionDetails({
           />
         </div>
       )}
-      <div className="pt-4 space-y-4">
+      <div className="pt-4 md:pt-6 space-y-4 px-4 md:px-0">
         <div>
           {startTime && (
             <h2 className="text-2xl font-bold">

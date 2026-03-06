@@ -322,6 +322,11 @@
   --session-booked-border: hsl(var(--primary));
   --session-booked-bg: hsl(var(--primary) / 0.1);
   --session-booked-text: hsl(var(--primary));
+
+  /* Cancelled session (grey/white, admin only) */
+  --session-cancelled-border: #9CA3AF;
+  --session-cancelled-bg: rgba(255, 255, 255, 0.6);
+  --session-cancelled-text: #6B7280;
 }
 
 /* Base session event styling */
@@ -370,6 +375,13 @@
   background-color: var(--session-closed-bg);
   border-left-color: var(--session-closed-border);
   color: var(--session-closed-text);
+}
+
+/* Session type: Cancelled (admin only) */
+.rbc-event.session-cancelled {
+  background-color: var(--session-cancelled-bg);
+  border-left-color: var(--session-cancelled-border);
+  color: var(--session-cancelled-text);
 }
 
 /* Session event typography */

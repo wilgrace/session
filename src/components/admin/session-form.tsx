@@ -138,6 +138,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   const [pendingDeleteScheduleId, setPendingDeleteScheduleId] = useState<string | null>(null)
   const [pendingDeleteDateId, setPendingDeleteDateId] = useState<string | null>(null)
   const [pendingDeleteRepeat, setPendingDeleteRepeat] = useState(false)
+  const [isScheduleConfirmDialogOpen, setIsScheduleConfirmDialogOpen] = useState(false)
+  const [affectedBookingCount, setAffectedBookingCount] = useState(0)
+  const [pendingScheduleParams, setPendingScheduleParams] = useState<Parameters<typeof updateSessionWithSchedules>[0] | null>(null)
 
   // Pricing state
   const [pricingType, setPricingType] = useState<'free' | 'paid'>('paid')
@@ -480,36 +483,93 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         : []
 
       if (template) {
-        // Update existing template (single action: auth once, ownership check once,
-        // update + delete + batch insert schedules + fire-and-forget generation)
-        const result = await updateSessionWithSchedules({
-          templateId: template.id,
-          template: {
-            name,
-            description,
-            capacity: parseInt(capacity),
-            duration_minutes: durationMinutes,
-            visibility: visibility,
-            recurrence_start_date: showRepeatSection && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
-            recurrence_end_date: showRepeatSection && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
-            pricing_type: pricingType,
-            drop_in_price: pricingType === 'paid' && dropInEnabled && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
-            drop_in_enabled: pricingType === 'paid' ? dropInEnabled : true,
-            member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
-            booking_instructions: bookingInstructions || null,
-            image_url: imageUrl || null,
-            event_color: eventColor,
-          },
-          schedules: showRepeatSection ? schedules.map((s: any) => ({
-            time: s.time,
-            days: (s.days || []).map((d: string) => d.toLowerCase()),
-            duration_minutes: s.durationMinutes || null,
-          })) : [],
-          one_off_dates: oneOffDatesParam,
-        });
+        const sharedTemplateFields = {
+          name,
+          description,
+          capacity: parseInt(capacity),
+          duration_minutes: durationMinutes,
+          visibility: visibility,
+          recurrence_start_date: showRepeatSection && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null,
+          recurrence_end_date: showRepeatSection && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null,
+          pricing_type: pricingType,
+          drop_in_price: pricingType === 'paid' && dropInEnabled && dropInPrice ? Math.round(parseFloat(dropInPrice) * 100) : null,
+          drop_in_enabled: pricingType === 'paid' ? dropInEnabled : true,
+          member_price: pricingType === 'paid' && memberPrice ? Math.round(parseFloat(memberPrice) * 100) : null,
+          booking_instructions: bookingInstructions || null,
+          image_url: imageUrl || null,
+          event_color: eventColor,
+        }
 
-        if (!result.success) {
-          throw new Error(`Failed to update session: ${result.error}`);
+        // Detect if schedule-related fields changed. If only general/pricing/visibility
+        // changed, update the template row only — no need to wipe and regenerate instances.
+        const originalSchedules = (template.schedules ?? []).map((s: any) => ({
+          time: s.time,
+          days: [...(s.days ?? [])].map((d: string) => convertDayFormat(d, false)).sort().join(','),
+          duration: s.duration_minutes ?? null,
+        })).sort((a: any, b: any) => (a.time + a.days).localeCompare(b.time + b.days))
+
+        const currentSchedules = showRepeatSection ? schedules.map((s: any) => ({
+          time: s.time,
+          days: [...(s.days || [])].map((d: string) => d.toLowerCase()).sort().join(','),
+          duration: s.durationMinutes ?? null,
+        })).sort((a: any, b: any) => (a.time + a.days).localeCompare(b.time + b.days)) : []
+
+        const originalOneOffDates = (template.one_off_dates ?? []).map((d: any) => ({
+          date: d.date,
+          time: d.time,
+          duration: d.duration_minutes ?? null,
+        })).sort((a: any, b: any) => (a.date + a.time).localeCompare(b.date + b.time))
+
+        const currentOneOffDates = oneOffDatesParam.map((d: any) => ({
+          date: d.date,
+          time: d.time,
+          duration: d.duration_minutes ?? null,
+        })).sort((a: any, b: any) => (a.date + a.time).localeCompare(b.date + b.time))
+
+        const origStartDate = template.recurrence_start_date ?? null
+        const origEndDate = template.recurrence_end_date ?? null
+        const newStartDate = showRepeatSection && recurrenceStartDate ? format(recurrenceStartDate, 'yyyy-MM-dd') : null
+        const newEndDate = showRepeatSection && recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : null
+
+        const schedulesChanged =
+          JSON.stringify(originalSchedules) !== JSON.stringify(currentSchedules) ||
+          JSON.stringify(originalOneOffDates) !== JSON.stringify(currentOneOffDates) ||
+          origStartDate !== newStartDate ||
+          origEndDate !== newEndDate
+
+        if (!schedulesChanged) {
+          // Only general/pricing/visibility changed — update template fields only.
+          // Instances inherit from the template via null-override, so this propagates immediately.
+          const result = await updateSessionTemplate({ id: template.id, ...sharedTemplateFields })
+          if (!result.success) {
+            throw new Error(`Failed to update session: ${result.error}`)
+          }
+        } else {
+          // Schedules or dates changed — rebuild instances. Check for affected bookings first.
+          const scheduleParams = {
+            templateId: template.id,
+            template: sharedTemplateFields,
+            schedules: showRepeatSection ? schedules.map((s: any) => ({
+              time: s.time,
+              days: (s.days || []).map((d: string) => d.toLowerCase()),
+              duration_minutes: s.durationMinutes || null,
+            })) : [],
+            one_off_dates: oneOffDatesParam,
+          }
+          const result = await updateSessionWithSchedules(scheduleParams)
+
+          if (result.requiresConfirmation) {
+            // There are booked instances that will be cancelled — ask for confirmation.
+            setLoading(false)
+            setAffectedBookingCount(result.affectedBookingCount ?? 0)
+            setPendingScheduleParams(scheduleParams)
+            setIsScheduleConfirmDialogOpen(true)
+            return
+          }
+
+          if (!result.success) {
+            throw new Error(`Failed to update session: ${result.error}`)
+          }
         }
 
         templateId = template.id;
@@ -680,6 +740,43 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     } finally {
       setLoading(false)
       setIsDeleteDialogOpen(false)
+    }
+  }
+
+  const handleConfirmedScheduleUpdate = async () => {
+    if (!pendingScheduleParams) return
+    setIsScheduleConfirmDialogOpen(false)
+    setLoading(true)
+    try {
+      const result = await updateSessionWithSchedules({ ...pendingScheduleParams, cancelAffectedBookings: true })
+      if (!result.success) {
+        throw new Error(`Failed to update session: ${result.error}`)
+      }
+      setPendingScheduleParams(null)
+      // Save membership prices
+      if (pricingType === 'paid') {
+        const activeMemberships = memberships.filter(m => m.isActive)
+        if (activeMemberships.length > 0) {
+          const membershipSettings = activeMemberships.map((m) => {
+            const isEnabled = membershipEnabled[m.id] ?? true
+            const priceStr = membershipPrices[m.id]
+            const overridePrice = priceStr && parseFloat(priceStr) >= 0
+              ? Math.round(parseFloat(priceStr) * 100)
+              : null
+            return { membershipId: m.id, isEnabled, overridePrice }
+          })
+          await updateSessionMembershipPrices(template!.id, membershipSettings)
+        }
+      } else {
+        await updateSessionMembershipPrices(template!.id, [])
+      }
+      toast({ title: "Success", description: "Session updated successfully" })
+      onSuccess?.()
+      onClose()
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to update session.", variant: "destructive" })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -1472,7 +1569,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                           )
                           return activeBookings.length > 0 ? (
                             <p className="font-medium text-destructive">
-                              {activeBookings.length} active booking{activeBookings.length !== 1 ? 's' : ''} will also be permanently deleted.
+                              {activeBookings.length} active booking{activeBookings.length !== 1 ? 's' : ''} will be cancelled and refunded.
                             </p>
                           ) : null
                         })()}
@@ -1503,6 +1600,31 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </div>
         </form>
       </SheetContent>
+
+      {/* Confirmation dialog shown when saving a schedule change would cancel existing bookings */}
+      <AlertDialog open={isScheduleConfirmDialogOpen} onOpenChange={setIsScheduleConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel affected bookings?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Updating this schedule will affect <span className="font-medium">{affectedBookingCount} booking{affectedBookingCount !== 1 ? 's' : ''}</span> on future sessions.
+                </p>
+                <p>
+                  Those bookings will be cancelled and refunded, and users will be notified by email.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingScheduleParams(null)}>Keep current schedule</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedScheduleUpdate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Cancel bookings &amp; update
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   )
 }
