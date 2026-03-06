@@ -76,6 +76,10 @@ async function getOrganizationBySlug(slug: string): Promise<{ id: string; slug: 
     const data = await response.json();
     const org = data?.[0] || null;
 
+    if (!org) {
+      console.error('[Middleware] Org not found for slug:', slug, '| Response data:', JSON.stringify(data));
+    }
+
     // Cache the result
     orgCache.set(slug, { data: org, expiry: Date.now() + CACHE_TTL });
 
