@@ -22,6 +22,7 @@ export interface TenantOrganization {
   homepageUrl: string | null;
   instagramUrl: string | null;
   facebookUrl: string | null;
+  cancellationWindowHours: number;
 }
 
 /**
@@ -53,6 +54,7 @@ const mapOrgData = (data: {
   default_session_image_url: string | null; button_color: string | null;
   button_text_color: string | null; homepage_url: string | null;
   instagram_url: string | null; facebook_url: string | null;
+  cancellation_window_hours: number;
 }): TenantOrganization => ({
   id: data.id,
   name: data.name,
@@ -67,9 +69,10 @@ const mapOrgData = (data: {
   homepageUrl: data.homepage_url,
   instagramUrl: data.instagram_url,
   facebookUrl: data.facebook_url,
+  cancellationWindowHours: data.cancellation_window_hours ?? 0,
 });
 
-const ORG_SELECT = 'id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url';
+const ORG_SELECT = 'id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url, cancellation_window_hours';
 
 /**
  * Get organization by slug from the database.

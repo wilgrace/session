@@ -29,6 +29,7 @@ export interface OrganizationSettings {
   defaultDropinPrice: number | null;
   communitySurveyEnabled: boolean;
   adminNotificationEmail: string | null;
+  cancellationWindowHours: number;
 }
 
 /**
@@ -86,7 +87,8 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         member_fixed_price,
         default_dropin_price,
         community_survey_enabled,
-        admin_notification_email
+        admin_notification_email,
+        cancellation_window_hours
       `)
       .eq('id', orgId)
       .single();
@@ -118,6 +120,7 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         defaultDropinPrice: data.default_dropin_price,
         communitySurveyEnabled: data.community_survey_enabled ?? true,
         adminNotificationEmail: data.admin_notification_email ?? null,
+        cancellationWindowHours: data.cancellation_window_hours ?? 0,
       },
     };
   } catch (error) {
@@ -145,6 +148,7 @@ export async function updateOrganizationSettings(params: {
   instagramUrl?: string | null;
   facebookUrl?: string | null;
   adminNotificationEmail?: string | null;
+  cancellationWindowHours?: number | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const { userId } = await auth();
@@ -215,6 +219,7 @@ export async function updateOrganizationSettings(params: {
     if (params.instagramUrl !== undefined) updateData.instagram_url = params.instagramUrl;
     if (params.facebookUrl !== undefined) updateData.facebook_url = params.facebookUrl;
     if (params.adminNotificationEmail !== undefined) updateData.admin_notification_email = params.adminNotificationEmail;
+    if (params.cancellationWindowHours !== undefined) updateData.cancellation_window_hours = params.cancellationWindowHours ?? 0;
 
     const { error } = await supabase
       .from('organizations')

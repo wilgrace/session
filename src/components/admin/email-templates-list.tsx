@@ -22,6 +22,7 @@ import { EmailTemplatePreviewModal } from "./email-template-preview-modal"
 
 interface EmailTemplatesListProps {
   templates: OrgEmailTemplate[]
+  types?: string[]
   orgName: string
   orgLogoUrl: string | null
   brandColor: string
@@ -32,6 +33,7 @@ interface EmailTemplatesListProps {
 
 export function EmailTemplatesList({
   templates,
+  types,
   orgName,
   orgLogoUrl,
   brandColor,
@@ -39,6 +41,8 @@ export function EmailTemplatesList({
   adminNotificationEmail,
   onRefresh,
 }: EmailTemplatesListProps) {
+  const visibleTemplates = types ? templates.filter(t => types.includes(t.type)) : templates
+
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<OrgEmailTemplate | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<OrgEmailTemplate | null>(null)
@@ -55,7 +59,7 @@ export function EmailTemplatesList({
     setTogglingId(null)
   }
 
-  if (templates.length === 0) {
+  if (visibleTemplates.length === 0) {
     return (
       <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg">
         <Mail className="h-8 w-8 text-gray-300 mx-auto mb-3" />
@@ -76,7 +80,7 @@ export function EmailTemplatesList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {templates.map((template) => (
+            {visibleTemplates.map((template) => (
               <TableRow key={template.id}>
                 <TableCell>
                   <p className="font-medium text-sm">{EMAIL_TEMPLATE_LABELS[template.type as keyof typeof EMAIL_TEMPLATE_LABELS] ?? template.type}</p>

@@ -57,6 +57,7 @@ interface BookingPanelProps {
   isConfirmation?: boolean
   organizationId?: string
   isAdmin?: boolean
+  cancellationWindowHours?: number
 }
 
 type DateOption = { id: string; start_time: string; end_time: string; available_spots: number }
@@ -159,6 +160,7 @@ export function BookingPanel({
   isConfirmation = false,
   organizationId,
   isAdmin = false,
+  cancellationWindowHours = 0,
 }: BookingPanelProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -185,6 +187,14 @@ export function BookingPanel({
   const canAct = isGuest || !!userDetails || isAdmin
   const isFuture = startTime > new Date()
   const canChangeDate = !isConfirmation && isFuture && canAct
+
+  // Cancellation window enforcement
+  const cancellationWindowMs = (cancellationWindowHours ?? 0) * 60 * 60 * 1000
+  const cutoffTime = cancellationWindowMs > 0
+    ? new Date(startTime.getTime() - cancellationWindowMs)
+    : null
+  // Whether the window has actually elapsed (independent of admin status)
+  const pastCancellationWindow = cutoffTime !== null && new Date() >= cutoffTime
 
   const handleCancel = async () => {
     setLoading(true)
@@ -311,51 +321,106 @@ export function BookingPanel({
       {/* Action buttons — only for authorized viewers */}
       {canAct && (
         <div className="space-y-2">
-          <div className="flex gap-2">
-            {canChangeDate && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full gap-2"
-                onClick={handleOpenChangeDateSheet}
-                disabled={loading}
-              >
-                <CalendarDays className="h-4 w-4" />
-                Change Date
-              </Button>
-            )}
-                      {!isConfirmation && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
+          {!pastCancellationWindow ? (
+            <div className="flex gap-2">
+              {canChangeDate && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="w-full gap-2"
+                  onClick={handleOpenChangeDateSheet}
                   disabled={loading}
                 >
-                  <X className="h-4 w-4" />
-                  Cancel Booking
+                  <CalendarDays className="h-4 w-4" />
+                  Change Date
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. Your booking will be cancelled and you will receive a full refund if a payment was made.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>No, keep booking</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              )}
+              {!isConfirmation && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2"
+                      disabled={loading}
+                    >
+                      <X className="h-4 w-4" />
+                      Cancel Booking
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. Your booking will be cancelled and you will receive a full refund if a payment was made.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>No, keep booking</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          ) : isAdmin ? (
+            <>
+              <div className="flex gap-2">
+                {canChangeDate && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={handleOpenChangeDateSheet}
+                    disabled={loading}
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Change Date
+                  </Button>
+                )}
+                {!isConfirmation && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2"
+                        disabled={loading}
+                      >
+                        <X className="h-4 w-4" />
+                        Cancel Booking
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. The booking will be cancelled and the user will receive a full refund if a payment was made.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>No, keep booking</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleCancel}>Yes, cancel booking</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The cancellation window has passed for this booking. Users cannot make changes, but you can as an admin.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              The cancellation window for this booking has passed. Changes can no longer be made.
+            </p>
           )}
-          </div>
           <div className="flex gap-2">
-          <Button
+            <Button
               type="button"
               variant="outline"
               size="sm"
@@ -374,7 +439,7 @@ export function BookingPanel({
                 </>
               )}
             </Button>
-            </div>
+          </div>
         </div>
       )}
 

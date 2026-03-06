@@ -27,6 +27,7 @@ interface SessionPageClientProps {
   slug: string
   organizationName: string | null
   isAdmin: boolean
+  cancellationWindowHours?: number
   // Server-prefetched initial data (eliminates client-side spinner)
   initialSession?: SessionTemplate | null
   initialBookingDetails?: any
@@ -50,6 +51,7 @@ export function SessionPageClient({
   slug,
   organizationName,
   isAdmin,
+  cancellationWindowHours = 0,
   initialSession,
   initialBookingDetails,
   initialStartTimeStr,
@@ -382,6 +384,7 @@ export function SessionPageClient({
               guestEmail={guestEmail}
               onStepChange={setCheckoutStep}
               isAdmin={isAdmin}
+              cancellationWindowHours={cancellationWindowHours}
             />
           )}
         </div>

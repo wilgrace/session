@@ -113,6 +113,7 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
         searchParams={resolvedSearchParams}
         slug={resolvedParams.slug}
         organizationName={organization?.name || null}
+        cancellationWindowHours={organization?.cancellationWindowHours ?? 0}
         isAdmin={isAdmin}
         initialSession={initialSession}
         initialBookingDetails={initialBookingDetails}

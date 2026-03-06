@@ -33,6 +33,7 @@ export const organizations = pgTable('organizations', {
   communitySurveyEnabled: boolean('community_survey_enabled').notNull().default(true),
   notificationFromEmail: text('notification_from_email'),
   adminNotificationEmail: text('admin_notification_email'),
+  cancellationWindowHours: integer('cancellation_window_hours').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
