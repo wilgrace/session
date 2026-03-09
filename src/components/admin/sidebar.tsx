@@ -189,7 +189,9 @@ export function Sidebar({ slug }: SidebarProps) {
           {isSettingsOpen && (
             <div className="ml-4 space-y-1 border-l border-gray-200 pl-3">
               {settingsSubItems.map((item) => {
-                const isActive = pathname.startsWith(item.href)
+                const isActive = item.href === `/${slug}/admin/settings`
+                  ? pathname === `/${slug}/admin/settings`
+                  : pathname.startsWith(item.href)
                 return (
                   <Link
                     key={item.href}

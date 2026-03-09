@@ -357,7 +357,7 @@ export function CommunityProfileOverlay({
   // Desktop: Centered dialog
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onSkip()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader className="sr-only">
           <DialogTitle>Community Profile</DialogTitle>
           <DialogDescription>
