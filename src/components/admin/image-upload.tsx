@@ -126,39 +126,6 @@ export function ImageUpload({ value, onChange, disabled }: ImageUploadProps) {
             </p>
           </div>
 
-          {/* URL input toggle */}
-          <div className="flex items-center justify-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowUrlInput(!showUrlInput)}
-              disabled={disabled}
-            >
-              <LinkIcon className="h-4 w-4 mr-2" />
-              {showUrlInput ? "Hide URL input" : "Or use a URL"}
-            </Button>
-          </div>
-
-          {/* URL input */}
-          {showUrlInput && (
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                disabled={disabled}
-              />
-              <Button
-                type="button"
-                onClick={handleUrlSubmit}
-                disabled={!urlInput.trim() || disabled}
-              >
-                Add
-              </Button>
-            </div>
-          )}
         </div>
       )}
 
@@ -166,9 +133,6 @@ export function ImageUpload({ value, onChange, disabled }: ImageUploadProps) {
         <p className="text-sm text-destructive">{error}</p>
       )}
 
-      <p className="text-sm text-gray-500">
-        Optional image displayed on the booking page for this session.
-      </p>
     </div>
   )
 }
