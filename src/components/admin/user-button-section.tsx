@@ -2,14 +2,18 @@
 
 import { useUser } from "@clerk/nextjs"
 import { useParams } from "next/navigation"
+import { useEffect, useState } from "react"
 import { UserDropdown } from "@/components/booking/user-dropdown"
 
 export function UserButtonSection() {
   const { isLoaded, user } = useUser()
   const params = useParams()
   const slug = params.slug as string
+  const [mounted, setMounted] = useState(false)
 
-  if (!isLoaded || !user) {
+  useEffect(() => setMounted(true), [])
+
+  if (!mounted || !isLoaded || !user) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-3 px-3 py-2">

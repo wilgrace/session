@@ -918,7 +918,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   {fieldErrors.name ? (
                     <p className="text-sm text-red-500">{fieldErrors.name}</p>
                   ) : (
-                    <p className="text-sm text-gray-500">Descriptive names are good - avoid words like Sauna and Session.</p>
+                    <p className="text-sm text-gray-500">Descriptive names are good</p>
                   )}
                 </div>
 

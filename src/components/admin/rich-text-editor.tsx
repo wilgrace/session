@@ -1,6 +1,7 @@
 "use client"
 
-import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react"
+import { useEditor, EditorContent } from "@tiptap/react"
+import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import Link from "@tiptap/extension-link"
 import { useEffect, useRef, useState } from "react"
@@ -22,6 +23,7 @@ export function RichTextEditor({ value, onChange, disabled, placeholder, classNa
   const linkInputRef = useRef<HTMLInputElement>(null)
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         // Disable everything except bold, italic, bulletList, listItem, paragraph, text, hardBreak
