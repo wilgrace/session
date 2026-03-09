@@ -888,7 +888,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </SheetClose>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4 pb-0">
           {/* General Section */}
           <div className="overflow-hidden">
             <button
@@ -923,7 +923,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 </div>
 
                 {/* Capacity */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex flex-col">
                   <Label htmlFor="capacity" className="text-sm font-medium">
                     Capacity <span className="text-red-500">*</span>
                   </Label>
@@ -933,7 +933,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     min="1"
                     value={capacity}
                     onChange={(e) => { setCapacity(e.target.value); clearError("capacity") }}
-                    className={cn(fieldErrors.capacity && "border-red-500 focus-visible:ring-red-500")}
+                    className={cn("max-w-xs", fieldErrors.capacity && "border-red-500 focus-visible:ring-red-500")}
                   />
                   {fieldErrors.capacity ? (
                     <p className="text-sm text-red-500">{fieldErrors.capacity}</p>
@@ -954,10 +954,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     value={description}
                     onChange={setDescription}
                     disabled={loading}
-                    placeholder="Provide details about what participants can expect."
                     minRows={3}
                   />
-                  <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
+                  <p className="text-sm text-gray-500">Supports links, lists, bold & italic</p>
                 </div>
 
                 {/* Booking Instructions - moved from Payment section */}
@@ -969,10 +968,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     value={bookingInstructions}
                     onChange={setBookingInstructions}
                     disabled={loading}
-                    placeholder="Displayed on the booking confirmation page and email."
                     minRows={4}
                   />
-                  <p className="text-sm text-gray-500">Displayed on the booking confirmation page and email.</p>
+                  <p className="text-sm text-gray-500">Displayed on the booking confirmation page and email. Supports links, lists, bold & italic</p>
                 </div>
 
                 {/* Image Upload */}
