@@ -182,7 +182,7 @@ export function WaiverAgreementOverlay({
   // Desktop: Centered dialog
   return (
     <Dialog open={isOpen}>
-      <DialogContent className="sm:max-w-lg" hideCloseButton>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" hideCloseButton>
         <DialogHeader className="sr-only">
           <DialogTitle>{waiver.title}</DialogTitle>
           <DialogDescription>Agreement required to continue</DialogDescription>

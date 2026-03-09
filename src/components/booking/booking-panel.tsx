@@ -435,7 +435,7 @@ export function BookingPanel({
               ) : (
                 <>
                   <Copy className="h-4 w-4" />
-                  Copy Link
+                  Copy Link & Share with Friends
                 </>
               )}
             </Button>
@@ -505,9 +505,7 @@ export function BookingPanel({
       {session.booking_instructions && (
         <div className="space-y-1">
           <h3 className="text-sm font-medium text-muted-foreground">Good to know</h3>
-          <p className="text-foreground whitespace-pre-wrap font-medium ">
-            {session.booking_instructions}
-          </p>
+          <div className="text-foreground font-medium prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: session.booking_instructions }} />
         </div>
       )}
 

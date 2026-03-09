@@ -7,7 +7,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetCl
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -32,6 +31,7 @@ import { getStripeConnectStatus } from "@/app/actions/stripe"
 import { useSlug } from "@/lib/slug-context"
 import Link from "next/link"
 import { ImageUpload } from "@/components/admin/image-upload"
+import { RichTextEditor } from "@/components/admin/rich-text-editor"
 import { getMemberships, getSessionMembershipPrices, updateSessionMembershipPrices } from "@/app/actions/memberships"
 import type { Membership } from "@/lib/db/schema"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -950,10 +950,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                       Description
                     </Label>
                   </div>
-                  <Textarea
-                    id="description"
+                  <RichTextEditor
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={setDescription}
+                    disabled={loading}
+                    placeholder="Provide details about what participants can expect."
+                    minRows={3}
                   />
                   <p className="text-sm text-gray-500">Provide details about what participants can expect.</p>
                 </div>
@@ -963,11 +965,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   <Label htmlFor="bookingInstructions" className="text-sm font-medium">
                     Booking Instructions
                   </Label>
-                  <Textarea
-                    id="bookingInstructions"
+                  <RichTextEditor
                     value={bookingInstructions}
-                    onChange={(e) => setBookingInstructions(e.target.value)}
-                    rows={4}
+                    onChange={setBookingInstructions}
+                    disabled={loading}
+                    placeholder="Displayed on the booking confirmation page and email."
+                    minRows={4}
                   />
                   <p className="text-sm text-gray-500">Displayed on the booking confirmation page and email.</p>
                 </div>

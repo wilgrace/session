@@ -311,7 +311,7 @@ export function AuthOverlay() {
   // Desktop: Centered dialog
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <VisuallyHidden.Root>
           <DialogTitle>
             {mode === 'sign-in' ? 'Sign In' : 'Create Account'}

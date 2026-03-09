@@ -9,6 +9,7 @@ import {
   buildCtaButton,
   buildDetailRow,
 } from './email-html';
+import { generateICS } from './ics-utils';
 
 // Re-export preview builders so callers can import from a single place
 export {
@@ -33,6 +34,7 @@ export async function sendEmail({
   html,
   replyTo,
   idempotencyKey,
+  attachments,
 }: {
   from: string;
   to: string;
@@ -40,6 +42,7 @@ export async function sendEmail({
   html: string;
   replyTo?: string | null;
   idempotencyKey: string;
+  attachments?: { filename: string; content: Buffer }[];
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await resend.emails.send(
@@ -49,6 +52,7 @@ export async function sendEmail({
         subject,
         html,
         ...(replyTo ? { replyTo } : {}),
+        ...(attachments ? { attachments } : {}),
       },
       { idempotencyKey }
     );
@@ -176,9 +180,13 @@ export async function sendBookingConfirmationEmail(
     const brandTextColor = org.button_text_color || '#ffffff';
     const eventColor = sessionTemplate.event_color || brandColor;
 
-    const gcalStart = formatInTimeZone(startTime, 'UTC', "yyyyMMdd'T'HHmmss") + 'Z';
-    const gcalEnd = formatInTimeZone(endTime, 'UTC', "yyyyMMdd'T'HHmmss") + 'Z';
-    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(sessionTemplate.name)}&dates=${gcalStart}/${gcalEnd}&details=${encodeURIComponent(`View booking: ${bookingLink}`)}`;
+    const icsContent = generateICS({
+      title: sessionTemplate.name,
+      startTime,
+      endTime,
+      description: `View booking: ${bookingLink}`,
+      uid: `booking-${bookingId}@bookasession.org`,
+    });
 
     const firstName = user.first_name || 'there';
     const renderedContent = renderTemplate(template.content, {
@@ -195,7 +203,7 @@ export async function sendBookingConfirmationEmail(
       ? `<tr>
           <td style="padding:16px 20px;background:#fafafa;border-top:1px solid #f0f0f0">
             <p style="margin:0 0 6px;font-size:12px;color:#71717a;text-transform:uppercase;letter-spacing:0.05em">Important Information</p>
-            <p style="margin:0;font-size:14px;color:#444;white-space:pre-wrap">${escapeHtml(sessionTemplate.booking_instructions)}</p>
+            <div style="margin:0;font-size:14px;color:#444;">${sessionTemplate.booking_instructions}</div>
           </td>
         </tr>`
       : '';
@@ -230,28 +238,7 @@ export async function sendBookingConfirmationEmail(
         </tr>
         ${instructionsHtml}
       </table>
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px">
-      <tr>
-        <td width="50%" style="padding:0 6px 0 0">
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="border-radius:6px;background:${brandColor}">
-                <a href="${bookingLink}" style="display:block;padding:12px 16px;color:${brandTextColor};font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;text-align:center">Manage Booking</a>
-              </td>
-            </tr>
-          </table>
-        </td>
-        <td width="50%" style="padding:0 0 0 6px">
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="border-radius:6px;background:#f4f4f5">
-                <a href="${gcalUrl}" style="display:block;padding:12px 16px;color:#333;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;text-align:center">Add to Calendar</a>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
+      ${buildCtaButton(bookingLink, 'Manage Booking', brandColor, brandTextColor)}
     `;
 
     const body = `
@@ -283,6 +270,7 @@ export async function sendBookingConfirmationEmail(
       html,
       replyTo: template.reply_to,
       idempotencyKey: `booking-confirmation/${bookingId}`,
+      attachments: [{ filename: 'event.ics', content: Buffer.from(icsContent) }],
     });
   } catch (err) {
     console.error('[sendBookingConfirmationEmail] Error:', err);

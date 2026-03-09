@@ -76,7 +76,9 @@ export function SessionDetails({
           </div>
         </div>
 
-        <p className="text-muted-foreground">{session.description}</p>
+        {session.description && (
+          <div className="text-muted-foreground prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: session.description }} />
+        )}
       </div>
     </div>
   )

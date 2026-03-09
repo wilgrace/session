@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Copy, CalendarPlus, Check } from "lucide-react"
-import { format } from "date-fns"
+import { generateICS } from "@/lib/ics-utils"
 
 interface ShareActionsProps {
   sessionName: string
@@ -29,30 +29,6 @@ export function ShareActions({
   // Calculate end time if not provided
   const calculatedEndTime = endTime || new Date(startTime.getTime() + duration * 60 * 1000)
 
-  // Generate ICS file content
-  const generateICS = () => {
-    const formatICSDate = (date: Date) => {
-      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-    }
-
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Sawna//Booking//EN',
-      'BEGIN:VEVENT',
-      `DTSTART:${formatICSDate(startTime)}`,
-      `DTEND:${formatICSDate(calculatedEndTime)}`,
-      `SUMMARY:${sessionName}`,
-      location ? `LOCATION:${location}` : '',
-      description ? `DESCRIPTION:${description.replace(/\n/g, '\\n')}` : '',
-      `UID:${Date.now()}@sawna.app`,
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].filter(Boolean).join('\r\n')
-
-    return icsContent
-  }
-
   // Handle copy link
   const handleCopyLink = async () => {
     const url = bookingUrl || (typeof window !== 'undefined' ? window.location.href : '')
@@ -68,7 +44,13 @@ export function ShareActions({
 
   // Handle add to calendar
   const handleAddToCalendar = () => {
-    const icsContent = generateICS()
+    const icsContent = generateICS({
+      title: sessionName,
+      startTime,
+      endTime: calculatedEndTime,
+      location,
+      description,
+    })
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
 
@@ -97,7 +79,7 @@ export function ShareActions({
         ) : (
           <>
             <Copy className="h-4 w-4" />
-            Copy Link & Share
+            Copy Link & Share with Friends
           </>
         )}
       </Button>
