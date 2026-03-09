@@ -432,7 +432,7 @@ function SettingsPageContent() {
         </div>
 
         <div className="max-w-xl space-y-2">
-          <Label htmlFor="cancellationWindow">Cancellation Window (hours)</Label>
+          <Label htmlFor="cancellationWindow">Lock booking</Label>
           <div className="flex items-center gap-3 max-w-xs">
             <Input
               id="cancellationWindow"

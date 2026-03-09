@@ -918,7 +918,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                   {fieldErrors.name ? (
                     <p className="text-sm text-red-500">{fieldErrors.name}</p>
                   ) : (
-                    <p className="text-sm text-gray-500">Descriptive names are good</p>
+                    <p className="text-sm text-gray-500"></p>
                   )}
                 </div>
 
@@ -970,7 +970,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                     disabled={loading}
                     minRows={4}
                   />
-                  <p className="text-sm text-gray-500">Displayed on the booking confirmation page and email. Supports links, lists, bold & italic</p>
+                  <p className="text-sm text-gray-500">Displayed on the confirmation page and email - include directions and tips on what to bring. Supports links, lists, bold & italic</p>
                 </div>
 
                 {/* Image Upload */}

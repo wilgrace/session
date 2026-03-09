@@ -296,18 +296,25 @@ export function SessionPageClient({
     email: bookingDetails.user.email || '',
   } : null
 
+  const hasImage = !!session.image_url
+
   return (
-    <div className="mobile-slide-in">
+    <div className={cn("mobile-slide-in", hasImage && "relative")}>
       {/* Mobile header - always visible on mobile */}
-      <div className="flex items-center justify-between px-4 py-2 md:hidden">
+      <div className={cn(
+        "flex items-center justify-between px-4 py-2 md:hidden",
+        hasImage && "absolute top-0 left-0 right-0 z-10"
+      )}>
         <button
           onClick={handleBack}
-          className="flex items-center justify-center h-11 w-11 -ml-2 rounded-md hover:bg-black/5"
+          className={cn(
+            "flex items-center justify-center h-9 w-9 rounded-full",
+            hasImage ? "bg-white/60 hover:bg-white/70" : "-ml-2 hover:bg-black/5"
+          )}
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
-        <span className="font-medium text-md">{organizationName}</span>
-        <SessionAuthControls isAdmin={isAdmin} slug={slug} />
+        <SessionAuthControls isAdmin={isAdmin} slug={slug} overlayMode={hasImage} />
       </div>
 
       <div className="md:grid md:grid-cols-2 min-h-screen">

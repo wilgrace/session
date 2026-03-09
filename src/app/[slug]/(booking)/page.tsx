@@ -135,7 +135,48 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
       {/* Main content - z-10, scrolls over header image */}
       <div className="relative z-10">
         {/* Transparent spacer so logo overlaps header image */}
-        {hasHeaderImage && <div className="h-[150px] md:h-[200px]" />}
+        {hasHeaderImage && (
+          <div className="relative h-[150px] md:h-[200px]">
+            {/* Mobile-only social links overlay — shown over the header image */}
+            {(organization?.homepageUrl || organization?.instagramUrl || organization?.facebookUrl) && (
+              <div className="md:hidden absolute inset-x-0 top-0 flex items-center justify-between px-3 pt-3 z-10">
+                {/* Left: Home */}
+                <div>
+                  {organization.homepageUrl && (
+                    <a href={organization.homepageUrl} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center justify-center h-9 w-9 rounded-full bg-white/60 backdrop-blur-sm hover:bg-white/80 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                        <polyline points="9 22 9 12 15 12 15 22" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+                {/* Right: Social links */}
+                <div className="flex gap-2">
+                  {organization.instagramUrl && (
+                    <a href={organization.instagramUrl} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center justify-center h-9 w-9 rounded-full bg-white/60 backdrop-blur-sm hover:bg-white/80 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+                      </svg>
+                    </a>
+                  )}
+                  {organization.facebookUrl && (
+                    <a href={organization.facebookUrl} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center justify-center h-9 w-9 rounded-full bg-white/60 backdrop-blur-sm hover:bg-white/80 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <BookingHeader
           isAdmin={isAdmin}

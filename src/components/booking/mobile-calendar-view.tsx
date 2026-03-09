@@ -87,8 +87,8 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
     })
   }
 
-  const handlePrevWeek = () => setWeekOffset(prev => Math.max(0, prev - 1))
-  const handleNextWeek = () => setWeekOffset(prev => prev + 1)
+  const handlePrevWeek = () => setWeekOffset(prev => Math.max(0, prev - 3))
+  const handleNextWeek = () => setWeekOffset(prev => prev + 3)
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX
