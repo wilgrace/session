@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 import { isProfileComplete } from "@/app/actions/user"
 import { getCommunitySurveyEnabled } from "@/app/actions/organization"
 import { CommunityProfileOverlay } from "@/components/auth/community-profile-overlay"
@@ -20,9 +21,10 @@ interface UserDropdownProps {
   isAdmin?: boolean
   slug: string
   variant?: "compact" | "sidebar"
+  overlayMode?: boolean
 }
 
-export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: UserDropdownProps) {
+export function UserDropdown({ isAdmin = false, slug, variant = "compact", overlayMode }: UserDropdownProps) {
   const { user } = useUser()
   const clerk = useClerk()
   const [profileIncomplete, setProfileIncomplete] = useState(false)
@@ -83,7 +85,7 @@ export function UserDropdown({ isAdmin = false, slug, variant = "compact" }: Use
             </button>
           ) : (
             <button className="flex items-center gap-2 rounded-full p-1 hover:bg-black/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Avatar className="h-8 w-8">
+              <Avatar className={cn("h-8 w-8", overlayMode && "ring-2 ring-white")}>
                 <AvatarImage src={user?.imageUrl} alt={firstName} />
                 <AvatarFallback className="text-xs font-medium">
                   {initials}

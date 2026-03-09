@@ -750,7 +750,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         )
       `)
       .in('template_id', templateIds)
-      .gte('start_time', new Date().toISOString())
+      .gte('end_time', new Date().toISOString())
       .order('start_time', { ascending: true })
 
     if (instancesError) {

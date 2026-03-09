@@ -67,10 +67,7 @@ export function MembersPage({
           <div className="w-11" />
         </div>
 
-        <h1 className="text-3xl font-bold mt-4 mb-2">Memberships</h1>
-        <p className="text-muted-foreground mb-6">
-          Join as a member and get discounted access to sessions.
-        </p>
+        <h1 className="text-3xl font-bold mt-4 mb-4">Offers</h1>
 
         {/* Existing member banner */}
         {userHasActiveMembership && (

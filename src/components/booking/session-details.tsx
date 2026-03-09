@@ -3,6 +3,7 @@
 import { format } from "date-fns"
 import Image from "next/image"
 import { SessionTemplate } from "@/types/session"
+import { getEventColorValues } from "@/lib/event-colors"
 
 interface SessionDetailsProps {
   session: SessionTemplate
@@ -39,6 +40,8 @@ export function SessionDetails({
   // Calculate spots remaining
   const spotsRemaining = session.capacity - totalSpotsBooked
 
+  const eventColor = getEventColorValues(session.event_color)
+
   return (
     <div>
       {/* Session Image */}
@@ -53,23 +56,29 @@ export function SessionDetails({
           />
         </div>
       )}
-      <div className="pt-4 md:pt-6 space-y-4 px-4 md:px-0">
-        <div>
+      <div className="pt-4 md:pt-6 space-y-2 px-4 md:px-0">
+        <div className="flex flex-col gap-1">
+          <p className="font-medium text-muted-foreground flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: eventColor.color500 }}
+            />
+            {session.name}
+          </p>
           {startTime && (
             <h2 className="text-2xl font-bold">
-              {format(startTime, "HH:mm")} - {format(startTime, "EEEE d MMMM")}
+              {format(startTime, "HH:mm")} {format(startTime, "EEEE, d MMMM")}
             </h2>
           )}
-          <p className="text-muted-foreground text-lg">{session.name}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Duration</h3>
+            <h3 className="text-sm text-muted-foreground">Duration</h3>
             <p className="font-medium">{durationMinutes} minutes</p>
           </div>
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Availability</h3>
+            <h3 className="text-sm text-muted-foreground">Availability</h3>
             <p className="font-medium">
               {spotsRemaining > 0 ? `${spotsRemaining} of ${session.capacity}` : 'Full'}
             </p>

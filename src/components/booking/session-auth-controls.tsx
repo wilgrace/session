@@ -8,9 +8,10 @@ import { UserDropdown } from "@/components/booking/user-dropdown"
 interface SessionAuthControlsProps {
   isAdmin: boolean
   slug: string
+  overlayMode?: boolean
 }
 
-export function SessionAuthControls({ isAdmin, slug }: SessionAuthControlsProps) {
+export function SessionAuthControls({ isAdmin, slug, overlayMode }: SessionAuthControlsProps) {
   const { openSignIn } = useAuthOverlay()
   const { isLoaded } = useAuth()
 
@@ -19,7 +20,7 @@ export function SessionAuthControls({ isAdmin, slug }: SessionAuthControlsProps)
   return (
     <div className="flex items-center gap-3">
       <SignedIn>
-        <UserDropdown isAdmin={isAdmin} slug={slug} />
+        <UserDropdown isAdmin={isAdmin} slug={slug} overlayMode={overlayMode} />
       </SignedIn>
       <SignedOut>
         <Button
