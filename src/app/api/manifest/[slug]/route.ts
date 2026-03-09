@@ -11,8 +11,9 @@ export async function GET(
   const baseUrl = getBaseUrl()
 
   const manifest = {
-    name: org?.name ?? "Sawna",
-    short_name: org?.name?.slice(0, 12) ?? "Sawna",
+    id: `/${slug}`,
+    name: org?.name ?? "Session",
+    short_name: org?.name?.slice(0, 12) ?? "Session",
     description: "Book your sessions",
     start_url: `${baseUrl}/${slug}`,
     scope: `${baseUrl}/${slug}`,
