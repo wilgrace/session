@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { notFound } from "next/navigation"
 import { getTenantFromHeaders, getOrganizationBySlug } from "@/lib/tenant-utils"
 import { SlugProvider } from "@/lib/slug-context"
@@ -43,6 +43,18 @@ interface SlugLayoutProps {
   params: Promise<{ slug: string }>
 }
 
+export async function generateViewport({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Viewport> {
+  const { slug } = await params
+  const org = await getOrganizationBySlug(slug)
+  return {
+    themeColor: org?.brandColor ?? "#0ea5e9",
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -66,6 +78,19 @@ export async function generateMetadata({
   // Use the generated PWA icon as the apple touch icon so it uses brand colours
   icons.apple = `/api/og/pwa-icon/${slug}?size=512`
 
+  // Build deduped splash list for metadata (must be done here so Next.js places
+  // <link rel="apple-touch-startup-image"> tags in <head>, not <body>)
+  const seen = new Set<string>()
+  const startupImage = SPLASH_SIZES.filter(({ w, h, dpr }) => {
+    const key = `${w}x${h}x${dpr}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).map(({ w, h, dpr }) => ({
+    url: `/api/og/splash/${slug}?width=${w * dpr}&height=${h * dpr}`,
+    media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)`,
+  }))
+
   return {
     title,
     description,
@@ -76,10 +101,8 @@ export async function generateMetadata({
       capable: true,
       statusBarStyle: "default",
       title: org.name,
+      startupImage,
     },
-    ...(org.brandColor && {
-      other: { "theme-color": org.brandColor },
-    }),
     openGraph: {
       title,
       description,
@@ -127,33 +150,12 @@ export default async function SlugLayout({
       } as React.CSSProperties
     : undefined
 
-  // Deduplicate splash sizes — same logical dimensions at same DPR = same image
-  const seen = new Set<string>()
-  const uniqueSplashSizes = SPLASH_SIZES.filter(({ w, h, dpr }) => {
-    const key = `${w}x${h}x${dpr}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-
   return (
-    <>
-      {/* iOS PWA splash screens — rendered as direct Server Component output so
-          Next.js SSRs them into <head> reliably, outside the Client Component wrapper */}
-      {uniqueSplashSizes.map(({ w, h, dpr }) => (
-        <link
-          key={`${w}x${h}x${dpr}`}
-          rel="apple-touch-startup-image"
-          href={`/api/og/splash/${slug}?width=${w * dpr}&height=${h * dpr}`}
-          media={`(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)`}
-        />
-      ))}
-      <SlugProvider slug={slug}>
-        <div style={brandStyle}>
-          <SplashWarmer />
-          {children}
-        </div>
-      </SlugProvider>
-    </>
+    <SlugProvider slug={slug}>
+      <div style={brandStyle}>
+        <SplashWarmer />
+        {children}
+      </div>
+    </SlugProvider>
   )
 }
