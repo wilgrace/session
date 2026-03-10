@@ -93,6 +93,7 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
         organizationId: tenant.organizationId,
         dropInPrice: 0,
         sessionTemplateId: resolvedParams.sessionId,
+        sessionInstanceId: instanceId,
       }),
       instanceId
         ? getBookingPriceOptionsData({

@@ -45,7 +45,10 @@ function calculateSpotsRemaining(session: SessionTemplate, currentUserSpots: num
       return total + (instance.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
     }, 0) || 0) + currentUserSpots
 
-  return session.capacity - totalSpotsBooked
+  // Use instance-level capacity override if present, otherwise fall back to template capacity
+  const instance = session.instances?.[0]
+  const effectiveCapacity = instance?.capacity_override ?? session.capacity
+  return effectiveCapacity - totalSpotsBooked
 }
 
 export function SessionPageClient({
@@ -208,10 +211,12 @@ export function SessionPageClient({
   useEffect(() => {
     if (!session || pricingFetchedRef.current) return
     pricingFetchedRef.current = true
+    const instanceId = session.instances?.[0]?.id
     getBookingMembershipPricingData({
       organizationId: session.organization_id,
       dropInPrice: 0,
       sessionTemplateId: sessionId,
+      sessionInstanceId: instanceId,
     }).then(result => {
       if (result.success && result.data) {
         setPricingData(result.data)

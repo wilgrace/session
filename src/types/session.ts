@@ -63,6 +63,8 @@ export interface SessionInstance {
   status: string
   cancelled_at?: string | null
   cancellation_reason?: string | null
+  /** Raw instance-level capacity override (null = use schedule/template default) */
+  capacity_override?: number | null
   /** Resolved capacity: instance_override ?? schedule_default ?? template_default */
   effectiveCapacity?: number
   /** Remaining spots = effectiveCapacity - sum(active bookings) */

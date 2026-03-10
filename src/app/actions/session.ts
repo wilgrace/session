@@ -2016,11 +2016,11 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         .order('start_time', { ascending: true }),
       supabase
         .from("session_price_options")
-        .select("session_template_id, price_option_id, is_enabled")
+        .select("session_template_id, price_option_id, is_enabled, override_spaces")
         .in("session_template_id", templateIds),
       supabase
         .from("price_options")
-        .select("id")
+        .select("id, spaces")
         .eq("organization_id", organizationId)
         .eq("is_active", true),
       supabase
@@ -2136,10 +2136,16 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
       // Compute resolvedPriceOptions for calendar filter
       const templatePriceOptionRows = (sessionPriceOptionRows || []).filter(r => r.session_template_id === template.id)
       const hasTemplateConfig = templatePriceOptionRows.length > 0
-      const activeOrgOptionIds = (orgPriceOptionRows || []).map(o => o.id)
+      const orgOptionSpacesMap = new Map((orgPriceOptionRows || []).map(o => [o.id, (o as any).spaces as number ?? 1]))
       const resolvedPriceOptions = hasTemplateConfig
-        ? templatePriceOptionRows.filter(r => r.is_enabled).map(r => ({ priceOption: { id: r.price_option_id } }))
-        : activeOrgOptionIds.map(id => ({ priceOption: { id } }))
+        ? templatePriceOptionRows.filter(r => r.is_enabled).map(r => ({
+            priceOption: { id: r.price_option_id },
+            effectiveSpaces: (r as any).override_spaces ?? orgOptionSpacesMap.get(r.price_option_id) ?? 1,
+          }))
+        : (orgPriceOptionRows || []).map(o => ({
+            priceOption: { id: o.id },
+            effectiveSpaces: (o as any).spaces as number ?? 1,
+          }))
 
       // Compute availableMembershipIds for calendar filter
       // undefined = no per-session config, all memberships available by default
@@ -3058,6 +3064,7 @@ export async function getPublicSessionById(
           start_time,
           end_time,
           status,
+          capacity_override,
           bookings (
             id,
             number_of_spots,
@@ -3084,6 +3091,7 @@ export async function getPublicSessionById(
           start_time: instanceData.start_time,
           end_time: instanceData.end_time,
           status: instanceData.status,
+          capacity_override: instanceData.capacity_override ?? null,
           bookings: (instanceData.bookings || []).map((booking: any) => ({
             id: booking.id,
             number_of_spots: booking.number_of_spots || 1,

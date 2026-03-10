@@ -188,9 +188,16 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
 
     if (selectedPriceOptionIds.length > 0) {
       result = result.filter(s => {
-        const opts = (s as any).resolvedPriceOptions as Array<{ priceOption: { id: string } }> | undefined
+        const opts = (s as any).resolvedPriceOptions as Array<{ priceOption: { id: string }, effectiveSpaces: number }> | undefined
         if (!opts || opts.length === 0) return false
-        return selectedPriceOptionIds.some(id => opts.some(o => o.priceOption.id === id))
+        const instances = (s as any).instances as Array<{ spotsRemaining: number }> | undefined
+        return selectedPriceOptionIds.some(id => {
+          const opt = opts.find(o => o.priceOption.id === id)
+          if (!opt) return false
+          // If no instances yet (schedule-based), assume available
+          if (!instances || instances.length === 0) return true
+          return instances.some(i => i.spotsRemaining >= opt.effectiveSpaces)
+        })
       })
     }
 
@@ -210,7 +217,24 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
   // Memoize to prevent expensive recalculation on every render
   const events = useMemo(() => filteredSessions.flatMap((template): CalendarEvent[] => {
     if (template.instances && template.instances.length > 0) {
-      return template.instances.map(instance => {
+      // When a price option filter is active, exclude instances that don't have
+      // enough capacity for any of the selected price options
+      let instancesForEvents = template.instances
+      if (selectedPriceOptionIds.length > 0) {
+        const opts = (template as any).resolvedPriceOptions as Array<{ priceOption: { id: string }, effectiveSpaces: number }> | undefined
+        if (opts && opts.length > 0) {
+          instancesForEvents = template.instances.filter(instance => {
+            const spotsRemaining = (instance as any).spotsRemaining as number | undefined
+            if (spotsRemaining === undefined) return true
+            return selectedPriceOptionIds.some(id => {
+              const opt = opts.find(o => o.priceOption.id === id)
+              return opt ? spotsRemaining >= opt.effectiveSpaces : false
+            })
+          })
+        }
+      }
+
+      return instancesForEvents.map(instance => {
         const startTime = new Date(instance.start_time);
         const endTime = new Date(instance.end_time);
         const formattedStartTime = format(startTime, 'h:mm a');
@@ -293,7 +317,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
     }
 
     return []
-  }), [filteredSessions, bookedInstances])
+  }), [filteredSessions, bookedInstances, selectedPriceOptionIds])
 
   // Calculate time range based on sessions
   const calculateTimeRange = () => {
