@@ -9,7 +9,7 @@ export default async function SignUpPage({
   const fallbackRedirectUrl = redirect_url || "/onboarding"
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="flex flex-col items-center">
         <SignUp
           routing="path"
