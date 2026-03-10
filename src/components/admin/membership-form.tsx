@@ -72,6 +72,7 @@ export function MembershipForm({
   const [discountPercent, setDiscountPercent] = useState("")
   const [fixedPrice, setFixedPrice] = useState("")
   const [showOnMembershipPage, setShowOnMembershipPage] = useState(true)
+  const [includeInFilter, setIncludeInFilter] = useState(false)
   const [isActive, setIsActive] = useState(true)
 
   // Inline validation
@@ -99,6 +100,7 @@ export function MembershipForm({
           : ""
       )
       setShowOnMembershipPage(membership.showOnMembershipPage ?? true)
+      setIncludeInFilter(membership.includeInFilter ?? false)
       setIsActive(membership.isActive)
       setFieldErrors({})
     } else {
@@ -113,6 +115,7 @@ export function MembershipForm({
       setDiscountPercent("20")
       setFixedPrice("")
       setShowOnMembershipPage(true)
+      setIncludeInFilter(false)
       setIsActive(true)
       setFieldErrors({})
     }
@@ -160,6 +163,7 @@ export function MembershipForm({
         memberPriceType === "discount" ? parseInt(discountPercent) : undefined,
       memberFixedPrice: fixedPriceInPence,
       showOnMembershipPage,
+      includeInFilter,
       isActive,
     }
 
@@ -408,6 +412,24 @@ export function MembershipForm({
                   disabled={loading}
                 />
               </div>
+            </div>
+
+            {/* Calendar filter toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="includeInFilter" className="font-normal">
+                  Show in calendar filter
+                </Label>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Adds this membership as a filter option on the booking calendar.
+                </p>
+              </div>
+              <Switch
+                id="includeInFilter"
+                checked={includeInFilter}
+                onCheckedChange={setIncludeInFilter}
+                disabled={loading}
+              />
             </div>
 
             {/* Direct link — always shown for existing memberships */}

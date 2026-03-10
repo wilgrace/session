@@ -194,7 +194,8 @@ export async function createCheckoutSession(
       return { success: false, error: "Session not found" }
     }
 
-    if (template.pricing_type !== "paid" || !template.drop_in_price) {
+    // TODO: use price options to determine if session requires payment
+    if (!template.organization_id) {
       return { success: false, error: "This session does not require payment" }
     }
 
@@ -325,8 +326,8 @@ export async function createCheckoutSession(
       instance = newInstance
     }
 
-    // Calculate total amount
-    const totalAmount = template.drop_in_price * params.numberOfSpots
+    // TODO: use price options to determine amount
+    const totalAmount = 0 * params.numberOfSpots
 
     // Create pending booking
     const { data: booking, error: bookingError } = await supabase
@@ -375,7 +376,7 @@ export async function createCheckoutSession(
                 minute: "2-digit",
               })}`,
             },
-            unit_amount: template.drop_in_price,
+            unit_amount: 0, // TODO: use price options
           },
           quantity: params.numberOfSpots,
         },
@@ -542,6 +543,7 @@ export interface CreateEmbeddedCheckoutParams {
   pricingType?: "drop_in" | "membership"
   isNewMembership?: boolean // True if user is signing up for membership
   membershipId?: string // Selected membership ID for multi-membership support
+  priceOptionId?: string // Selected price option ID for price options flow
   slug: string // Organization slug for return URL
 }
 
@@ -611,9 +613,7 @@ export async function createEmbeddedCheckoutSession(
       return { success: false, error: "Session not found" }
     }
 
-    if (template.pricing_type !== "paid") {
-      return { success: false, error: "This session does not require payment" }
-    }
+    // TODO: use price options to determine if session requires payment
 
     // Get the organization's Stripe account with membership info
     const { data: stripeAccount, error: stripeError } = await supabase
@@ -696,10 +696,11 @@ export async function createEmbeddedCheckoutSession(
     }
 
     // Calculate member price using pricing utilities
+    // TODO: use price options instead of legacy drop_in_price / member_price
     const { calculateMemberPrice, calculateBookingPrice } = await import("@/lib/pricing-utils")
     let memberPrice = calculateMemberPrice({
-      dropInPrice: template.drop_in_price ?? 0,
-      templateMemberPrice: template.member_price,
+      dropInPrice: 0,
+      templateMemberPrice: null,
       orgMemberPriceType: org?.member_price_type as "discount" | "fixed" | null,
       orgMemberDiscountPercent: org?.member_discount_percent,
       orgMemberFixedPrice: org?.member_fixed_price,
@@ -730,7 +731,8 @@ export async function createEmbeddedCheckoutSession(
         } else if (membershipData.member_price_type === "fixed" && membershipData.member_fixed_price !== null) {
           memberPrice = membershipData.member_fixed_price
         } else if (membershipData.member_price_type === "discount" && membershipData.member_discount_percent !== null) {
-          memberPrice = Math.round((template.drop_in_price ?? 0) * (1 - membershipData.member_discount_percent / 100))
+          // TODO: use price options for drop-in price
+          memberPrice = Math.round(0 * (1 - membershipData.member_discount_percent / 100))
         }
       }
     }
@@ -742,7 +744,7 @@ export async function createEmbeddedCheckoutSession(
         numberOfSpots: params.numberOfSpots,
         isMember: isActiveMember,
         isNewMembership: params.isNewMembership || false,
-        dropInPrice: template.drop_in_price ?? 0,
+        dropInPrice: 0, // TODO: use price options
         memberPrice,
       },
       selectedMembership?.price ?? null
@@ -905,7 +907,7 @@ export async function createEmbeddedCheckoutSession(
         clerk_user_id: userId || "",
         duration_minutes: template.duration_minutes.toString(),
         customer_email: customerEmail || "",
-        pricing_type: params.pricingType || "drop_in",
+        pricing_type: params.pricingType ?? "drop_in",
         is_new_membership: isNewMembership ? "true" : "false",
         promotion_code: params.promotionCode || "",
         // Price breakdown for confirmation display
@@ -947,7 +949,7 @@ export async function createEmbeddedCheckoutSession(
           clerk_user_id: userId || "",
           duration_minutes: template.duration_minutes.toString(),
           customer_email: customerEmail || "",
-          pricing_type: params.pricingType || "drop_in",
+          pricing_type: params.pricingType ?? "drop_in",
           promotion_code: params.promotionCode || "",
         },
       }

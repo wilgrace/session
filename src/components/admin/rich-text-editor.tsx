@@ -111,7 +111,6 @@ export function RichTextEditor({ value, onChange, disabled, placeholder, classNa
       {editor && (
         <BubbleMenu
           editor={editor}
-          tippyOptions={{ duration: 100, placement: "top-start" }}
           className="flex items-center gap-0.5 rounded-md border bg-white shadow-md p-1"
         >
           {linkInputVisible ? (

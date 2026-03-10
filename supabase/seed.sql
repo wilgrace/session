@@ -490,8 +490,6 @@ INSERT INTO public.session_templates (
   recurrence_end_date,
   created_by,
   timezone,
-  pricing_type,
-  drop_in_price,
   booking_instructions,
   image_url,
   event_color
@@ -510,8 +508,6 @@ VALUES
     CURRENT_DATE + INTERVAL '6 months',
     '4e376853-0880-4b3e-a669-edf561e116dc',
     'Europe/London',
-    'paid',
-    1000, -- £10.00 in pence
     'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
     NULL,
     'blue'
@@ -529,8 +525,6 @@ VALUES
     CURRENT_DATE + INTERVAL '6 months',
     '4e376853-0880-4b3e-a669-edf561e116dc',
     'Europe/London',
-    'paid',
-    1500, -- £15.00 in pence
     'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
     NULL,
     'green'
@@ -548,8 +542,6 @@ VALUES
     CURRENT_DATE + INTERVAL '6 months',
     '4e376853-0880-4b3e-a669-edf561e116dc',
     'Europe/London',
-    'paid',
-    500, -- £5.00 in pence
     'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
     NULL,
     'yellow'
@@ -567,12 +559,30 @@ VALUES
     CURRENT_DATE + INTERVAL '6 months',
     '4e376853-0880-4b3e-a669-edf561e116dc',
     'Europe/London',
-    'free',
-    NULL,
     'Please arrive 10 minutes early. Bring swimwear and flip-flops. Towels are provided. The sauna is located at Pontcanna Fields car park.',
     NULL,
     'blue'
   );
+
+-- ============================================================================
+-- PRICE OPTIONS
+-- Org-level ticket types. Templates link to these via session_price_options.
+-- ============================================================================
+INSERT INTO public.price_options (id, organization_id, name, description, price, spaces, include_in_filter, is_active, sort_order)
+VALUES
+  -- Standard: 1 space at £10 (templates override this per their own price)
+  ('a0000001-0000-0000-0000-000000000001', 'org_2wzj16iQknhJygxeSYnYoOX2MO4', 'Standard', 'Price per space', 1000, 1, false, true, 0);
+
+-- Link paid templates to the Standard price option with their specific prices
+INSERT INTO public.session_price_options (id, session_template_id, price_option_id, is_enabled, override_price)
+VALUES
+  -- Off-Peak: £10
+  ('b0000001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'a0000001-0000-0000-0000-000000000001', true, 1000),
+  -- Peak: £15
+  ('b0000001-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'a0000001-0000-0000-0000-000000000001', true, 1500),
+  -- Concessions: £5
+  ('b0000001-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'a0000001-0000-0000-0000-000000000001', true, 500);
+  -- Friends & Family is free, no price option needed
 
 -- ============================================================================
 -- SESSION SCHEDULES

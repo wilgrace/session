@@ -29,7 +29,6 @@ export const organizations = pgTable('organizations', {
   memberPriceType: text('member_price_type').default('discount'), // 'discount' | 'fixed'
   memberDiscountPercent: integer('member_discount_percent'), // e.g., 20 for 20% off
   memberFixedPrice: integer('member_fixed_price'), // fixed price in pence (if type='fixed')
-  defaultDropinPrice: integer('default_dropin_price'), // default drop-in price in pence for new sessions
   communitySurveyEnabled: boolean('community_survey_enabled').notNull().default(true),
   notificationFromEmail: text('notification_from_email'),
   adminNotificationEmail: text('admin_notification_email'),
@@ -102,11 +101,6 @@ export const sessionTemplates = pgTable('session_templates', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }), // soft delete
   timezone: text('timezone').notNull().default('Europe/London'),
-  // Pricing fields
-  pricingType: text('pricing_type').notNull().default('free'), // 'free' | 'paid'
-  dropInPrice: integer('drop_in_price'), // Price in pence for non-members
-  memberPrice: integer('member_price'), // Override org-level member pricing (if set)
-  dropInEnabled: boolean('drop_in_enabled').notNull().default(true), // Whether drop-in pricing is available for this session
   bookingInstructions: text('booking_instructions'), // Instructions shown on confirmation page
   // Image field
   imageUrl: text('image_url'), // Optional image URL for the session
@@ -120,6 +114,7 @@ export const sessionSchedules = pgTable('session_schedules', {
   dayOfWeek: integer('day_of_week').notNull(), // 0-6
   time: time('time').notNull(),
   durationMinutes: integer('duration_minutes'), // Optional per-schedule duration; falls back to template duration
+  capacity: integer('capacity'), // Optional per-schedule capacity; falls back to template capacity
   isActive: boolean('is_active').notNull().default(true),
   endedAt: date('ended_at'), // schedule stops generating instances after this date
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -154,15 +149,28 @@ export const sessionInstances = pgTable('session_instances', {
   nameOverride: text('name_override'),
   descriptionOverride: text('description_override'),
   bookingInstructionsOverride: text('booking_instructions_override'),
-  pricingTypeOverride: text('pricing_type_override'), // 'free' | 'paid' | null
-  dropInPriceOverride: integer('drop_in_price_override'), // pence
-  memberPriceOverride: integer('member_price_override'), // pence
+  capacityOverride: integer('capacity_override'), // null = inherit from schedule → template
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   clerkUserId: text('clerk_user_id'),
 }, (table) => ({
   uniqueTemplateStartTime: unique().on(table.templateId, table.startTime),
 }));
+
+// Org-level ticket types (e.g. Standard, Bring a Friend, Private Hire)
+export const priceOptions = pgTable('price_options', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  price: integer('price').notNull().default(0),        // in pence
+  spaces: integer('spaces').notNull().default(1),      // capacity slots consumed per booking
+  includeInFilter: boolean('include_in_filter').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const bookings = pgTable('bookings', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -187,6 +195,7 @@ export const bookings = pgTable('bookings', {
   cancelledByUserId: text('cancelled_by_user_id'),
   cancellationReason: text('cancellation_reason'),
   refundAmount: integer('refund_amount'), // pence; may differ from amountPaid
+  priceOptionId: uuid('price_option_id').references(() => priceOptions.id, { onDelete: 'set null' }),
 });
 
 export const stripeConnectAccounts = pgTable('stripe_connect_accounts', {
@@ -236,6 +245,9 @@ export const memberships = pgTable('memberships', {
   stripeProductId: text('stripe_product_id'),
   stripePriceId: text('stripe_price_id'),
 
+  // Calendar filter
+  includeInFilter: boolean('include_in_filter').notNull().default(false),
+
   // Status
   isActive: boolean('is_active').notNull().default(true),
   sortOrder: integer('sort_order').notNull().default(0),
@@ -255,6 +267,47 @@ export const sessionMembershipPrices = pgTable('session_membership_prices', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Template-level enable/price/spaces overrides per price option
+export const sessionPriceOptions = pgTable('session_price_options', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionTemplateId: uuid('session_template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
+  priceOptionId: uuid('price_option_id').notNull().references(() => priceOptions.id, { onDelete: 'cascade' }),
+  isEnabled: boolean('is_enabled').notNull().default(true),
+  overridePrice: integer('override_price'),   // null = use price_options.price
+  overrideSpaces: integer('override_spaces'), // null = use price_options.spaces
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  uniqueTemplateOption: unique().on(table.sessionTemplateId, table.priceOptionId),
+}));
+
+// Instance-level overrides per price option (null = inherit from template/global)
+export const instancePriceOptions = pgTable('instance_price_options', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionInstanceId: uuid('session_instance_id').notNull().references(() => sessionInstances.id, { onDelete: 'cascade' }),
+  priceOptionId: uuid('price_option_id').notNull().references(() => priceOptions.id, { onDelete: 'cascade' }),
+  isEnabled: boolean('is_enabled'),   // null = inherit; false = disabled for this instance
+  overridePrice: integer('override_price'), // null = inherit
+  overrideSpaces: integer('override_spaces'), // null = inherit
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  uniqueInstanceOption: unique().on(table.sessionInstanceId, table.priceOptionId),
+}));
+
+// Instance-level overrides per membership (null = inherit from template)
+export const instanceMembershipOverrides = pgTable('instance_membership_overrides', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionInstanceId: uuid('session_instance_id').notNull().references(() => sessionInstances.id, { onDelete: 'cascade' }),
+  membershipId: uuid('membership_id').notNull().references(() => memberships.id, { onDelete: 'cascade' }),
+  isEnabled: boolean('is_enabled'),    // null = inherit; false = disabled for this instance
+  overridePrice: integer('override_price'), // null = inherit
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  uniqueInstanceMembership: unique().on(table.sessionInstanceId, table.membershipId),
+}));
 
 // Agreement type for waivers
 export type AgreementType = 'checkbox' | 'signature';
@@ -309,6 +362,14 @@ export type Membership = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
 export type SessionMembershipPrice = typeof sessionMembershipPrices.$inferSelect;
 export type NewSessionMembershipPrice = typeof sessionMembershipPrices.$inferInsert;
+
+// Price option types
+export type PriceOption = typeof priceOptions.$inferSelect;
+export type NewPriceOption = typeof priceOptions.$inferInsert;
+export type SessionPriceOption = typeof sessionPriceOptions.$inferSelect;
+export type NewSessionPriceOption = typeof sessionPriceOptions.$inferInsert;
+export type InstancePriceOption = typeof instancePriceOptions.$inferSelect;
+export type InstanceMembershipOverride = typeof instanceMembershipOverrides.$inferSelect;
 
 // Role type for convenience
 export type UserRole = 'guest' | 'user' | 'admin' | 'superadmin';

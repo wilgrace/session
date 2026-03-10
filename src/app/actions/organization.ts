@@ -27,7 +27,6 @@ export interface OrganizationSettings {
   memberPriceType: string | null;
   memberDiscountPercent: number | null;
   memberFixedPrice: number | null;
-  defaultDropinPrice: number | null;
   communitySurveyEnabled: boolean;
   adminNotificationEmail: string | null;
   cancellationWindowHours: number;
@@ -86,7 +85,6 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         member_price_type,
         member_discount_percent,
         member_fixed_price,
-        default_dropin_price,
         community_survey_enabled,
         admin_notification_email,
         cancellation_window_hours
@@ -118,7 +116,6 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
         memberPriceType: data.member_price_type,
         memberDiscountPercent: data.member_discount_percent,
         memberFixedPrice: data.member_fixed_price,
-        defaultDropinPrice: data.default_dropin_price,
         communitySurveyEnabled: data.community_survey_enabled ?? true,
         adminNotificationEmail: data.admin_notification_email ?? null,
         cancellationWindowHours: data.cancellation_window_hours ?? 0,
@@ -445,45 +442,6 @@ export async function getCommunitySurveyEnabled(organizationId?: string): Promis
   } catch (error) {
     console.error('[getCommunitySurveyEnabled] Error:', error);
     return { success: true, enabled: true };
-  }
-}
-
-/**
- * Update the default drop-in price for an organization.
- * This value is used to pre-populate the drop-in price when creating new sessions.
- */
-export async function updateDefaultDropinPrice(
-  organizationId: string,
-  priceInPence: number | null
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    const role = await getUserRoleForOrg(userId, organizationId);
-    if (role !== 'admin' && role !== 'superadmin') {
-      return { success: false, error: 'Not authorized' };
-    }
-
-    const supabase = createSupabaseServerClient();
-
-    const { error } = await supabase
-      .from('organizations')
-      .update({ default_dropin_price: priceInPence, updated_at: new Date().toISOString() })
-      .eq('id', organizationId);
-
-    if (error) {
-      console.error('[updateDefaultDropinPrice] Error:', error);
-      return { success: false, error: 'Failed to update default session price' };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('[updateDefaultDropinPrice] Error:', error);
-    return { success: false, error: 'Failed to update default session price' };
   }
 }
 

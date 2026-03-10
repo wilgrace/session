@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,11 +16,13 @@ import {
   StripeConnectStatus,
   PromotionCodeInfo,
 } from "@/app/actions/stripe"
-import { getOrganizationSettings, updateDefaultDropinPrice } from "@/app/actions/organization"
 import { getMemberships } from "@/app/actions/memberships"
-import type { Membership } from "@/lib/db/schema"
+import { getPriceOptions } from "@/app/actions/price-options"
+import type { Membership, PriceOption } from "@/lib/db/schema"
 import { MembershipsList } from "@/components/admin/memberships-list"
 import { MembershipForm } from "@/components/admin/membership-form"
+import { PriceOptionsList } from "@/components/admin/price-options-list"
+import { PriceOptionForm } from "@/components/admin/price-option-form"
 import { CheckCircle, AlertCircle, ExternalLink, Loader2, CreditCard, Unlink, Ticket, Tag, Copy, Check } from "lucide-react"
 import { toast } from "sonner"
 import { usePageHeaderAction } from "@/hooks/use-page-header-action"
@@ -40,6 +42,9 @@ export default function BillingPage() {
 function BillingPageContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<StripeConnectStatus | null>(null)
+  const [priceOptions, setPriceOptions] = useState<PriceOption[]>([])
+  const [priceOptionFormOpen, setPriceOptionFormOpen] = useState(false)
+  const [editingPriceOption, setEditingPriceOption] = useState<PriceOption | null>(null)
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [promotionCodes, setPromotionCodes] = useState<PromotionCodeInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,14 +58,7 @@ function BillingPageContent() {
   const [membershipFormOpen, setMembershipFormOpen] = useState(false)
   const [editingMembership, setEditingMembership] = useState<Membership | null>(null)
 
-  // Default drop-in price state
-  const [defaultDropinPrice, setDefaultDropinPrice] = useState('10.00')
-  const [orgId, setOrgId] = useState<string | null>(null)
-  const [savingDropinPrice, setSavingDropinPrice] = useState(false)
-
   const { setAction } = usePageHeaderAction()
-  const handleSaveDropinPriceRef = useRef<() => void>(() => {})
-  handleSaveDropinPriceRef.current = handleSaveDropinPrice
 
   const success = searchParams.get("success")
   const refresh = searchParams.get("refresh")
@@ -69,21 +67,15 @@ function BillingPageContent() {
     loadData()
   }, [])
 
-  useEffect(() => {
-    if (!status?.chargesEnabled) return
-    setAction({ label: "Save Changes", onClick: () => handleSaveDropinPriceRef.current(), loading: savingDropinPrice })
-    return () => setAction(null)
-  }, [status?.chargesEnabled, savingDropinPrice])
-
   async function loadData() {
     setLoading(true)
     setError(null)
 
-    const [statusResult, membershipsResult, promoCodesResult, orgSettingsResult] = await Promise.all([
+    const [statusResult, membershipsResult, promoCodesResult, priceOptionsResult] = await Promise.all([
       getStripeConnectStatus(),
       getMemberships(),
       getPromotionCodes(),
-      getOrganizationSettings(),
+      getPriceOptions(),
     ])
 
     if (statusResult.success && statusResult.data) {
@@ -100,19 +92,35 @@ function BillingPageContent() {
       setPromotionCodes(promoCodesResult.data)
     }
 
-    if (orgSettingsResult.success && orgSettingsResult.data) {
-      const orgId = orgSettingsResult.data.id
-      setOrgId(orgId)
-      if (orgSettingsResult.data.defaultDropinPrice != null) {
-        setDefaultDropinPrice((orgSettingsResult.data.defaultDropinPrice / 100).toFixed(2))
-      } else {
-        // No default set yet — persist £10 so new sessions get pre-populated correctly
-        setDefaultDropinPrice('10.00')
-        updateDefaultDropinPrice(orgId, 1000).catch(() => {})
-      }
+    if (priceOptionsResult.success && priceOptionsResult.data) {
+      setPriceOptions(priceOptionsResult.data)
     }
 
+    // orgSettings loaded but defaultDropinPrice column removed; no action needed
+
     setLoading(false)
+  }
+
+  function handleEditPriceOption(option: PriceOption) {
+    setEditingPriceOption(option)
+    setPriceOptionFormOpen(true)
+  }
+
+  function handleCreatePriceOption() {
+    setEditingPriceOption(null)
+    setPriceOptionFormOpen(true)
+  }
+
+  function handlePriceOptionFormClose() {
+    setPriceOptionFormOpen(false)
+    setEditingPriceOption(null)
+  }
+
+  async function handlePriceOptionSuccess() {
+    const result = await getPriceOptions()
+    if (result.success && result.data) {
+      setPriceOptions(result.data)
+    }
   }
 
   function handleEditMembership(membership: Membership) {
@@ -136,19 +144,6 @@ function BillingPageContent() {
     if (result.success && result.data) {
       setMemberships(result.data)
     }
-  }
-
-  async function handleSaveDropinPrice() {
-    if (!orgId) return
-    setSavingDropinPrice(true)
-    const pence = Math.round(parseFloat(defaultDropinPrice) * 100)
-    const result = await updateDefaultDropinPrice(orgId, isNaN(pence) ? null : pence)
-    if (result.success) {
-      toast.success("Default drop-in price saved")
-    } else {
-      toast.error(result.error || "Failed to save")
-    }
-    setSavingDropinPrice(false)
   }
 
   async function loadStatus() {
@@ -369,47 +364,36 @@ function BillingPageContent() {
         </div>
       )}
 
-      {/* CONNECTED: Show Memberships, Coupons, then Stripe at bottom */}
+      {/* CONNECTED: Show Prices, Memberships, Coupons, then Stripe at bottom */}
       {status?.chargesEnabled && (
         <>
-          {/* Session Pricing */}
-          <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-            <div className="flex items-center gap-2">
-              <Ticket className="h-5 w-5 text-gray-400" />
-              <h3 className="text-base font-medium text-gray-900">
-                Session Pricing
-              </h3>
-            </div>
+          {/* Price Options */}
+          <div className="">
 
-            {/* Default Drop-in Price */}
-            <div className="space-y-1.5 flex justify-between">
-              <div className="">
-              <Label htmlFor="default-dropin-price">Default Drop-in Price</Label>
-              <p className="text-xs text-gray-500 max-w-[400px]">
-                Pre-fills the price when creating new sessions. Can be overridden per session or with membership pricing.
-              </p>
-              </div>
-              <div className="relative w-48">
-                <span className="absolute left-3 top-5 -translate-y-1/2 text-sm text-gray-500">£</span>
-                <Input
-                  id="default-dropin-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={defaultDropinPrice}
-                  onChange={e => setDefaultDropinPrice(e.target.value)}
-                  className="pl-7"
-                />
-              </div>
-            </div>
-
-            <MembershipsList
-              memberships={memberships}
-              onEdit={handleEditMembership}
-              onCreate={handleCreateMembership}
-              onRefresh={handleMembershipSuccess}
+            <PriceOptionsList
+              priceOptions={priceOptions}
+              onEdit={handleEditPriceOption}
+              onCreate={handleCreatePriceOption}
+              onRefresh={handlePriceOptionSuccess}
             />
+
+            <div className="pt-4">
+              <MembershipsList
+                memberships={memberships}
+                onEdit={handleEditMembership}
+                onCreate={handleCreateMembership}
+                onRefresh={handleMembershipSuccess}
+              />
+            </div>
           </div>
+
+          {/* Price Option Form Sheet */}
+          <PriceOptionForm
+            open={priceOptionFormOpen}
+            onClose={handlePriceOptionFormClose}
+            priceOption={editingPriceOption}
+            onSuccess={handlePriceOptionSuccess}
+          />
 
           {/* Membership Form Sheet */}
           <MembershipForm
@@ -420,17 +404,29 @@ function BillingPageContent() {
           />
 
           {/* Coupons & Promotion Codes */}
-          <div className="border-b border-gray-200 bg-white p-6 space-y-4">
-            <div className="flex items-center gap-2">
-              <Tag className="h-5 w-5 text-gray-400" />
-              <h3 className="text-base font-medium text-gray-900">
-                Coupons & Promotion Codes
-              </h3>
-            </div>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Coupons & Promotion Codes
+                  </h3>
+                </div>
 
-            <p className="text-sm text-gray-500">
-              Promotion codes let customers apply discounts at checkout. Create and manage them in your Stripe Dashboard.
-            </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Promotion codes let customers apply discounts at checkout. Create and manage them in your Stripe Dashboard.
+                </p>
+              </div>
+
+              <Button
+                variant="outline"
+                onClick={() => window.open("https://dashboard.stripe.com/coupons", "_blank")}
+                className="gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Manage on Stripe
+              </Button>
+            </div>
 
             {promotionCodes.length > 0 ? (
               <div className="space-y-2">
@@ -476,22 +472,13 @@ function BillingPageContent() {
                 No promotion codes yet. Create one in Stripe to offer discounts.
               </div>
             )}
-
-            <Button
-              variant="outline"
-              onClick={() => window.open("https://dashboard.stripe.com/coupons", "_blank")}
-              className="gap-2"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Manage on Stripe
-            </Button>
           </div>
 
           {/* Stripe Section (at bottom when connected) */}
-          <div className="border-b border-gray-200 bg-white p-6 space-y-4">
+          <div className="border-t border-gray-200 bg-white p-6 space-y-4">
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-gray-400" />
-              <h3 className="text-base font-medium text-gray-900">Stripe</h3>
+              <h3 className="text-lg font-medium text-gray-900">Stripe</h3>
             </div>
 
             <p className="text-sm text-gray-500">

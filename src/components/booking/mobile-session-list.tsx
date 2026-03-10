@@ -6,8 +6,9 @@ import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 import { SessionTemplate, SessionInstance } from "@/types/session"
 import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { Users, EyeOff } from "lucide-react"
+import { Users, EyeOff, ChevronRight } from "lucide-react"
 import { getEventColorValues } from "@/lib/event-colors"
+
 
 interface MobileSessionListProps {
   sessions: SessionTemplate[]
@@ -153,12 +154,12 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
       <div className="p-4 text-center text-muted-foreground space-y-1">
         {nextDate ? (
           <>
-            <p className="text-sm">No sessions on this day</p>
+            <p className="text-sm">No sessions</p>
             <button
               onClick={() => onDateSelect?.(nextDate)}
-              className="text-primary underline-offset-4 hover:underline"
+              className="text-primary underline-offset-4 hover:underline inline-flex items-center"
             >
-              Skip to the next available session →
+              Next available session <ChevronRight className="h-4 w-4 ml-1" />
             </button>
           </>
         ) : (
@@ -184,7 +185,8 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
         </div>
       )}
       {visibleSessionsForDay.map(({ template, startTime, endTime, key, instance, isBooked, bookingId }) => {
-        const isFreeSession = template.pricing_type === 'free'
+        // TODO: use price options to determine free sessions
+        const isFreeSession = false
         const isHidden = template.visibility === 'hidden'
         const totalCapacity = template.capacity || 10
         const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0

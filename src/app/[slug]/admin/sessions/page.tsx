@@ -1,5 +1,4 @@
 import { getSessions } from "@/app/actions/session"
-import { getOrganizationSettings } from "@/app/actions/organization"
 import { CalendarPage } from "@/components/admin/calendar-page"
 import { getTenantFromHeaders, getOrganizationById } from "@/lib/tenant-utils"
 
@@ -8,10 +7,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function Page() {
   const tenant = await getTenantFromHeaders()
-  const [{ data: sessions, error }, org, orgSettings] = await Promise.all([
+  const [{ data: sessions, error }, org] = await Promise.all([
     getSessions(),
     tenant ? getOrganizationById(tenant.organizationId) : Promise.resolve(null),
-    getOrganizationSettings(),
   ])
 
   if (error) {
@@ -29,7 +27,6 @@ export default async function Page() {
     <CalendarPage
       initialSessions={sessions || []}
       defaultSessionImageUrl={org?.defaultSessionImageUrl ?? null}
-      defaultDropinPrice={orgSettings.data?.defaultDropinPrice ?? null}
     />
   )
 }
