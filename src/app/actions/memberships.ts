@@ -1100,20 +1100,30 @@ export async function getBookingMembershipPricingData(params: {
   organizationId: string
   dropInPrice: number
   sessionTemplateId: string
+  sessionInstanceId?: string
 }): Promise<ActionResult<BookingMembershipPricingData>> {
   try {
     const supabase = createSupabaseServerClient()
 
-    // Get visible memberships
-    const membershipsResult = await getVisibleMemberships(params.organizationId)
+    // Get visible memberships (and instance overrides if instanceId provided) in parallel
+    const [membershipsResult, pricesResult, instanceOverridesData] = await Promise.all([
+      getVisibleMemberships(params.organizationId),
+      getSessionMembershipPrices(params.sessionTemplateId),
+      params.sessionInstanceId
+        ? supabase
+            .from("instance_membership_overrides")
+            .select("membership_id, is_enabled, override_price")
+            .eq("session_instance_id", params.sessionInstanceId)
+        : Promise.resolve({ data: [] }),
+    ])
+
     if (!membershipsResult.success || !membershipsResult.data) {
       return { success: false, error: membershipsResult.error || "Failed to fetch memberships" }
     }
 
     const memberships = membershipsResult.data
 
-    // Get session membership price overrides and availability
-    const pricesResult = await getSessionMembershipPrices(params.sessionTemplateId)
+    // Build template-level overrides and enabled set
     const overrides: Record<string, number | null> = {}
     const hasPerSessionSettings = !!(pricesResult.success && pricesResult.data && pricesResult.data.length > 0)
     const enabledMembershipIds = new Set<string>()
@@ -1125,20 +1135,31 @@ export async function getBookingMembershipPricingData(params: {
       })
     }
 
+    // Apply instance-level overrides on top of template settings
+    const instanceRows = (instanceOverridesData as { data: { membership_id: string; is_enabled: boolean | null; override_price: number | null }[] | null }).data ?? []
+    const instanceDisabledIds = new Set<string>()
+    for (const row of instanceRows) {
+      // Instance price override takes priority over template override
+      if (row.override_price != null) overrides[row.membership_id] = row.override_price
+      // Explicit instance-level disable
+      if (row.is_enabled === false) instanceDisabledIds.add(row.membership_id)
+    }
+
     // Identify user's own membership before filtering
     const userOwnMembership = memberships.find(m => m.isUserMembership)
 
-    // Detect if user's membership is specifically blocked by per-session config
-    const userMembershipDisabled = hasPerSessionSettings &&
-      !!userOwnMembership &&
-      !enabledMembershipIds.has(userOwnMembership.id)
+    // Detect if user's membership is specifically blocked by per-session or per-instance config
+    const userMembershipDisabled =
+      (hasPerSessionSettings && !!userOwnMembership && !enabledMembershipIds.has(userOwnMembership.id)) ||
+      (!!userOwnMembership && instanceDisabledIds.has(userOwnMembership.id))
 
-    // Filter memberships by per-session availability
-    // If no per-session rows exist (legacy session), show all memberships
-    // Do NOT include the user's membership if it's been explicitly disabled for this session
-    const filteredMemberships = hasPerSessionSettings
+    // Filter memberships by availability:
+    // - Template filter: if template has settings, only show enabled ones
+    // - Instance filter: remove any explicitly disabled at instance level
+    const filteredMemberships = (hasPerSessionSettings
       ? memberships.filter((m) => enabledMembershipIds.has(m.id))
       : memberships
+    ).filter((m) => !instanceDisabledIds.has(m.id))
 
     // Calculate session price for each membership
     const { calculateMembershipSessionPrice } = await import("@/lib/pricing-utils")
