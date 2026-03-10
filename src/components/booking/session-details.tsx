@@ -72,7 +72,7 @@ export function SessionDetails({
           </p>
           {startTime && (
             <h2 className="text-2xl font-bold">
-              {format(startTime, "HH:mm")} {format(startTime, "EEEE, d MMMM")}
+              {format(startTime, "HH:mm")} • {format(startTime, "EEEE d MMMM")}
             </h2>
           )}
         </div>

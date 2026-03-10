@@ -131,9 +131,9 @@ export function PreCheckoutForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedPriceOptions])
 
-  // Form state - default to "membership" if user is already a member, returning from sign-up, or drop-in is disabled
+  // Form state - default to "membership" if user is already a member (and their membership is valid for this session), returning from sign-up, or drop-in is disabled
   const [pricingType, setPricingType] = useState<"drop_in" | "membership">(
-    isActiveMember || defaultToMembership || dropInEnabled === false ? "membership" : "drop_in"
+    (isActiveMember && !userMembershipDisabled) || defaultToMembership || dropInEnabled === false ? "membership" : "drop_in"
   )
   const [selectedMembershipId, setSelectedMembershipId] = useState<string | null>(
     userMembershipId || (memberships.length > 0 ? memberships[0].membership.id : null)
@@ -160,12 +160,12 @@ export function PreCheckoutForm({
   // Get current URL for sign-in redirect
   const currentUrl = typeof window !== "undefined" ? window.location.href : ""
 
-  // Reset to membership pricing when user becomes a member
+  // Reset to membership pricing when user becomes a member (unless their membership is disabled for this session)
   useEffect(() => {
-    if (isActiveMember) {
+    if (isActiveMember && !userMembershipDisabled) {
       setPricingType("membership")
     }
-  }, [isActiveMember])
+  }, [isActiveMember, userMembershipDisabled])
 
   // When auth flow completes and we have saved form data, proceed to checkout
   // This ONLY triggers when awaitingAuthComplete becomes false (set by onComplete callback)
@@ -361,10 +361,7 @@ export function PreCheckoutForm({
       {/* Membership not valid for this session */}
       {userMembershipDisabled && (
         <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-4">
-          <p className="font-medium text-amber-900">Membership not valid for this session</p>
-          <p className="text-sm text-amber-700 mt-1">
-            Your {userMembershipName ?? "membership"} is not available for this session.
-          </p>
+          <p className="text-amber-900">{userMembershipName ?? "membership"} isn't available for this session</p>
         </div>
       )}
       {/* Pricing Options */}
@@ -385,8 +382,8 @@ export function PreCheckoutForm({
           </div>
         ) : (
         <>
-        {/* User's Current Membership - show first if they have one */}
-        {userMembership && (
+        {/* User's Current Membership - show first if they have one and it's valid for this session */}
+        {userMembership && !userMembershipDisabled && (
           <button
             type="button"
             onClick={() => {
@@ -417,7 +414,7 @@ export function PreCheckoutForm({
         )}
 
                 {/* Price option cards (new system) — shown if price options are available */}
-                {!isActiveMember && hasPriceOptions && resolvedPriceOptions.map((opt) => {
+                {(!isActiveMember || userMembershipDisabled) && hasPriceOptions && resolvedPriceOptions.map((opt) => {
                   const isSelected = pricingType === "drop_in" && selectedPriceOptionId === opt.priceOption.id
                   return (
                     <button
@@ -449,7 +446,7 @@ export function PreCheckoutForm({
                 })}
 
                 {/* Legacy Drop-in Option — only shown when no price options are configured */}
-                {!isActiveMember && !hasPriceOptions && dropInEnabled !== false && (
+                {(!isActiveMember || userMembershipDisabled) && !hasPriceOptions && dropInEnabled !== false && (
           <button
             type="button"
             onClick={() => setPricingType("drop_in")}
