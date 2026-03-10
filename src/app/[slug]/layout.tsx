@@ -103,6 +103,12 @@ export async function generateMetadata({
       title: org.name,
       startupImage,
     },
+
+    // Explicitly set apple-mobile-web-app-capable — Next.js appleWebApp.capable
+    // should handle this but it's not appearing in the rendered head
+    other: {
+      "apple-mobile-web-app-capable": "yes",
+    },
     openGraph: {
       title,
       description,

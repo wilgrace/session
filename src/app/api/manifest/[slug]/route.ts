@@ -13,7 +13,7 @@ export async function GET(
   const manifest = {
     id: `/${slug}`,
     name: org?.name ?? "Session",
-    short_name: org?.name?.slice(0, 12) ?? "Session",
+    short_name: org?.name ?? "Session",
     description: "Book your sessions",
     start_url: `${baseUrl}/${slug}`,
     scope: `${baseUrl}/${slug}`,
