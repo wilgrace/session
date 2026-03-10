@@ -19,9 +19,9 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
 // Clerk appearance - no card styling since we're in a dialog/sheet
 const clerkAppearance = {
   elements: {
-    rootBox: "w-full",
-    card: "shadow-none border-none w-full p-0",
-    cardBox: "shadow-none border-none w-full",
+    rootBox: "",
+    card: "shadow-none border-none p-0",
+    cardBox: "shadow-none border-none overflow-visible",
     formButtonPrimary: "bg-primary text-primary-foreground hover:bg-primary/90",
     formFieldInput: "bg-muted/50 border-muted rounded-xl",
     formFieldLabel: "text-foreground",
@@ -308,7 +308,7 @@ export function AuthOverlay() {
   return (
     <>
       <Dialog open={isOpen && !showProfileOverlay} onOpenChange={(open) => !open && close()}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[440px] max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-hidden flex flex-col items-center p-6">
           <VisuallyHidden.Root>
             <DialogTitle>
               {mode === 'sign-in' ? 'Sign In' : 'Create Account'}
