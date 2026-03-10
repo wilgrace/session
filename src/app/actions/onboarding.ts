@@ -97,7 +97,7 @@ export async function checkOnboardingStatus(): Promise<{
  * - Creates the organization row
  * - Updates clerk_users: sets organization_id + role = 'admin'
  * - Seeds all 6 email templates
- * - Seeds a default waiver (inactive — admin activates from Settings > Waivers)
+ * - Seeds a default waiver (active by default — admin can edit from Settings > Waivers)
  */
 export async function createOrganizationForUser(params: {
   // Step 1 (required)
@@ -219,7 +219,7 @@ export async function createOrganizationForUser(params: {
       title: 'Health & Safety Waiver',
       content: DEFAULT_WAIVER_CONTENT,
       agreement_type: 'checkbox',
-      is_active: false,
+      is_active: true,
       version: 1,
     });
 

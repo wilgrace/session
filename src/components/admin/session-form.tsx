@@ -200,7 +200,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setGeneralExpanded(true)
       setFieldErrors({})
       // Pricing fields
-      setPricingType('paid')
+      setPricingType('free')
       setDropInEnabled(true)
       setMemberPrice("")
       setDropInPrice('')
@@ -426,8 +426,8 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     getStripeConnectStatus().then(result => {
       const enabled = !!(result.success && result.data?.chargesEnabled)
       setStripeChargesEnabled(enabled)
-      if (!enabled && !template) {
-        setPricingType('free')
+      if (!template) {
+        setPricingType(enabled ? 'paid' : 'free')
       }
     }).catch(() => {
       setStripeChargesEnabled(true) // fail open on error
