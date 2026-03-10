@@ -29,9 +29,10 @@ import { formatPrice } from "@/components/booking/price-display"
 interface AccountPageClientProps {
   slug: string
   organizationId: string
+  hasMemberships?: boolean
 }
 
-export function AccountPageClient({ slug, organizationId }: AccountPageClientProps) {
+export function AccountPageClient({ slug, organizationId, hasMemberships = false }: AccountPageClientProps) {
   const router = useRouter()
   const { user } = useUser()
   const [membership, setMembership] = useState<MembershipStatus | null>(null)
@@ -113,9 +114,9 @@ export function AccountPageClient({ slug, organizationId }: AccountPageClientPro
                 <p className="text-sm text-muted-foreground">
                   Become a member to get discounted rates on all sessions.
                 </p>
-                <Link href={`/${slug}`}>
+                <Link href={hasMemberships ? `/${slug}/members` : `/${slug}`}>
                   <Button variant="outline" size="sm" className="mt-3">
-                    View Sessions
+                    {hasMemberships ? "View Offers" : "View Sessions"}
                   </Button>
                 </Link>
               </div>
@@ -205,9 +206,9 @@ export function AccountPageClient({ slug, organizationId }: AccountPageClientPro
                   Your membership has ended. Book a session and select the membership option to
                   reactivate.
                 </p>
-                <Link href={`/${slug}`}>
+                <Link href={hasMemberships ? `/${slug}/members` : `/${slug}`}>
                   <Button variant="outline" size="sm" className="mt-3">
-                    View Sessions
+                    {hasMemberships ? "View Offers" : "View Sessions"}
                   </Button>
                 </Link>
               </div>

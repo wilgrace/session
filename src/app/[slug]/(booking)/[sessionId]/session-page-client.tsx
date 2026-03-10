@@ -9,7 +9,7 @@ import { BookingForm } from "@/components/booking/booking-form"
 import { SessionAuthControls } from "@/components/booking/session-auth-controls"
 import { SessionTemplate } from "@/types/session"
 import { useUser } from "@clerk/nextjs"
-import { getBookingDetails, getPublicSessionById, checkUserExistingBooking } from "@/app/actions/session"
+import { getBookingDetails, getPublicSessionById } from "@/app/actions/session"
 import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
 import { getBookingPriceOptionsData } from "@/app/actions/price-options"
 import type { ResolvedPriceOption } from "@/lib/pricing-utils"
@@ -35,6 +35,7 @@ interface SessionPageClientProps {
   initialBookingDetails?: any
   initialStartTimeStr?: string
   initialPricingData?: BookingMembershipPricingData | null
+  initialPriceOptions?: ResolvedPriceOption[]
 }
 
 // Calculate spots remaining for a session
@@ -58,6 +59,7 @@ export function SessionPageClient({
   initialBookingDetails,
   initialStartTimeStr,
   initialPricingData,
+  initialPriceOptions,
 }: SessionPageClientProps) {
   const { user } = useUser()
   const router = useRouter()
@@ -80,8 +82,8 @@ export function SessionPageClient({
   const [bookingDetails, setBookingDetails] = useState<any>(initialBookingDetails ?? null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(initialPricingData ?? null)
-  const [resolvedPriceOptions, setResolvedPriceOptions] = useState<ResolvedPriceOption[]>([])
-  const priceOptionsFetchedRef = useRef(false)
+  const [resolvedPriceOptions, setResolvedPriceOptions] = useState<ResolvedPriceOption[]>(initialPriceOptions ?? [])
+  const priceOptionsFetchedRef = useRef(!!(initialPriceOptions?.length))
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
   const returnDate = searchParams.date
   const backHref = returnDate ? `/${slug}?date=${encodeURIComponent(returnDate)}` : `/${slug}`
@@ -93,8 +95,6 @@ export function SessionPageClient({
   const initialFetchDoneRef = useRef(!!initialSession)
   // Ref to prevent fetching pricing more than once (pre-set when server provided pricing data)
   const pricingFetchedRef = useRef(!!initialPricingData)
-  // Track the user ID that was used for the last booking check
-  const lastBookingCheckUserIdRef = useRef<string | null>(null)
 
   // Determine the mode based on URL params and booking state
   const isEditMode = searchParams.edit === 'true' && searchParams.bookingId
@@ -116,37 +116,7 @@ export function SessionPageClient({
         }
 
         const startParam = searchParams.start
-
-        // Check if we're in edit mode
-        const edit = searchParams.edit
         const bookingId = searchParams.bookingId
-
-        // Only check for existing booking if:
-        // 1. Not in edit mode
-        // 2. User is logged in
-        // 3. We have a start time
-        // 4. We haven't already checked for this user (prevent duplicate checks when user reference changes)
-        if (!edit && !bookingId && user && startParam && lastBookingCheckUserIdRef.current !== user.id) {
-          lastBookingCheckUserIdRef.current = user.id
-          // Check if user already has a booking for this session instance
-          const bookingCheck = await checkUserExistingBooking(
-            user.id,
-            sessionId,
-            decodeURIComponent(startParam)
-          )
-
-          if (bookingCheck.success && bookingCheck.booking) {
-            isRedirecting = true
-            // Redirect to edit mode
-            const params = new URLSearchParams({
-              edit: 'true',
-              bookingId: bookingCheck.booking.id,
-              start: decodeURIComponent(startParam)
-            })
-            router.replace(`/${slug}/${sessionId}?${params.toString()}`)
-            return
-          }
-        }
 
         // Skip session fetch if we've already done it (server data or previous fetch)
         if (initialFetchDoneRef.current) {
@@ -372,6 +342,7 @@ export function SessionPageClient({
               src={session.image_url}
               alt={session.name}
               fill
+              priority
               className="object-cover"
               sizes="100vw"
             />

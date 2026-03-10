@@ -213,17 +213,6 @@ export function AuthOverlay() {
     )
   }
 
-  // If showing community profile overlay, render that
-  if (showProfileOverlay) {
-    return (
-      <CommunityProfileOverlay
-        isOpen={true}
-        onComplete={handleProfileComplete}
-        onSkip={handleProfileComplete}
-      />
-    )
-  }
-
   // Render content for auth forms
   const renderContent = () => {
     // Show syncing state
@@ -285,45 +274,59 @@ export function AuthOverlay() {
   // Mobile: Bottom sheet
   if (isMobile) {
     return (
-      <Sheet open={isOpen} onOpenChange={(open) => !open && close()}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[90vh] overflow-y-auto rounded-t-2xl"
-        >
-          <VisuallyHidden.Root>
-            <SheetTitle>
-              {mode === 'sign-in' ? 'Sign In' : 'Create Account'}
-            </SheetTitle>
-            <SheetDescription>
-              {mode === 'sign-in'
-                ? 'Sign in to your account'
-                : 'Create an account to continue'}
-            </SheetDescription>
-          </VisuallyHidden.Root>
-          <div className="pt-2">
-            {renderContent()}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <>
+        <Sheet open={isOpen && !showProfileOverlay} onOpenChange={(open) => !open && close()}>
+          <SheetContent
+            side="bottom"
+            className="max-h-[90vh] overflow-y-auto rounded-t-2xl"
+          >
+            <VisuallyHidden.Root>
+              <SheetTitle>
+                {mode === 'sign-in' ? 'Sign In' : 'Create Account'}
+              </SheetTitle>
+              <SheetDescription>
+                {mode === 'sign-in'
+                  ? 'Sign in to your account'
+                  : 'Create an account to continue'}
+              </SheetDescription>
+            </VisuallyHidden.Root>
+            <div className="pt-2">
+              {renderContent()}
+            </div>
+          </SheetContent>
+        </Sheet>
+        <CommunityProfileOverlay
+          isOpen={showProfileOverlay}
+          onComplete={handleProfileComplete}
+          onSkip={handleProfileComplete}
+        />
+      </>
     )
   }
 
   // Desktop: Centered dialog
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <VisuallyHidden.Root>
-          <DialogTitle>
-            {mode === 'sign-in' ? 'Sign In' : 'Create Account'}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === 'sign-in'
-              ? 'Sign in to your account'
-              : 'Create an account to continue'}
-          </DialogDescription>
-        </VisuallyHidden.Root>
-        {renderContent()}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={isOpen && !showProfileOverlay} onOpenChange={(open) => !open && close()}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <VisuallyHidden.Root>
+            <DialogTitle>
+              {mode === 'sign-in' ? 'Sign In' : 'Create Account'}
+            </DialogTitle>
+            <DialogDescription>
+              {mode === 'sign-in'
+                ? 'Sign in to your account'
+                : 'Create an account to continue'}
+            </DialogDescription>
+          </VisuallyHidden.Root>
+          {renderContent()}
+        </DialogContent>
+      </Dialog>
+      <CommunityProfileOverlay
+        isOpen={showProfileOverlay}
+        onComplete={handleProfileComplete}
+        onSkip={handleProfileComplete}
+      />
+    </>
   )
 }

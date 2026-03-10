@@ -319,18 +319,6 @@ function BillingPageContent() {
               </Button>
             </div>
           </div>
-
-          {/* How Payments Work - only show when not connected */}
-          <div className="border-b border-gray-200 bg-white p-6">
-            <h3 className="text-base font-medium text-gray-900 mb-2">
-              How Payments Work
-            </h3>
-            <p className="text-sm text-gray-500">
-              Once your Stripe account is connected and verified, customers will be able to pay
-              for session bookings. Payments are deposited directly to your bank account
-              through Stripe, typically within 2-7 business days.
-            </p>
-          </div>
         </>
       )}
 
