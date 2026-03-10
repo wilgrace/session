@@ -16,7 +16,7 @@ export function SplashWarmer() {
     )
     links.forEach((link) => {
       if (link.media && window.matchMedia(link.media).matches) {
-        fetch(link.href, { cache: "force-cache" }).catch(() => {
+        fetch(link.href).catch(() => {
           // Silent failure — non-critical prefetch
         })
       }

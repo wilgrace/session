@@ -11,7 +11,21 @@ const withPWA = withPWAInit({
   },
   workboxOptions: {
     runtimeCaching: [
-      // Cache generated OG images (splash screens, PWA icons) — stable PNG assets
+      // Splash screen images — NetworkFirst so the browser's HTTP cache is also
+      // populated (iOS reads startup images from HTTP cache before SW activates)
+      {
+        urlPattern: /\/api\/og\/splash\//,
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "splash-images",
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxEntries: 16,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          },
+        },
+      },
+      // Other generated OG images (PWA icons) — stable, cache-first is fine
       // Must come BEFORE the /api/ NetworkOnly rule since Workbox matches in order
       {
         urlPattern: /\/api\/og\//,
