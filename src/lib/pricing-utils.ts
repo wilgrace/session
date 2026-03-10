@@ -1,4 +1,4 @@
-import type { UserMembership, Membership } from "@/lib/db/schema"
+import type { UserMembership, Membership, PriceOption, SessionPriceOption, InstancePriceOption } from "@/lib/db/schema"
 
 /**
  * Parameters for calculating member price
@@ -236,4 +236,107 @@ export function calculateAllMembershipPrices(params: {
     }),
     isUserMembership: membership.id === userMembershipId,
   }))
+}
+
+// ============================================
+// Price Options & Capacity Resolution
+// ============================================
+
+/**
+ * A fully-resolved price option ready to display in the booking form.
+ * Only options that pass all availability checks are returned — nothing
+ * is greyed out; unavailable options are excluded entirely.
+ */
+export interface ResolvedPriceOption {
+  priceOption: PriceOption
+  /** Effective price in pence after template/instance overrides */
+  effectivePrice: number
+  /** Effective spaces consumed after template/instance overrides */
+  effectiveSpaces: number
+}
+
+/**
+ * Resolve the effective capacity for a session instance.
+ * Hierarchy: instance override → schedule → template.
+ */
+export function resolveInstanceCapacity(params: {
+  templateCapacity: number
+  scheduleCapacity?: number | null
+  instanceCapacityOverride?: number | null
+}): number {
+  const { templateCapacity, scheduleCapacity, instanceCapacityOverride } = params
+  return instanceCapacityOverride ?? scheduleCapacity ?? templateCapacity
+}
+
+/**
+ * Resolve the effective price for a price option on a specific template/instance.
+ * Instance override beats template override beats global option price.
+ */
+export function resolveEffectivePriceOptionPrice(
+  option: PriceOption,
+  templateOverride?: SessionPriceOption | null,
+  instanceOverride?: InstancePriceOption | null,
+): number {
+  if (instanceOverride?.overridePrice != null) return instanceOverride.overridePrice
+  if (templateOverride?.overridePrice != null) return templateOverride.overridePrice
+  return option.price
+}
+
+/**
+ * Resolve the effective spaces consumed for a price option on a specific template.
+ * Template override beats global option spaces.
+ */
+export function resolveEffectivePriceOptionSpaces(
+  option: PriceOption,
+  templateOverride?: SessionPriceOption | null,
+): number {
+  return templateOverride?.overrideSpaces ?? option.spaces
+}
+
+/**
+ * Resolve all available price options for a given instance.
+ * Returns only options that the user can actually select (enabled + sufficient capacity).
+ */
+export function resolvePriceOptions(params: {
+  orgPriceOptions: PriceOption[]
+  sessionOverrides: SessionPriceOption[]   // rows for this template
+  instanceOverrides: InstancePriceOption[] // rows for this instance
+  spotsRemaining: number
+  /** If true, only return options with spaces = 1 (for membership discount eligibility check) */
+  onlyStandardSpaces?: boolean
+}): ResolvedPriceOption[] {
+  const { orgPriceOptions, sessionOverrides, instanceOverrides, spotsRemaining } = params
+
+  const sessionOverrideMap = new Map(sessionOverrides.map((r) => [r.priceOptionId, r]))
+  const instanceOverrideMap = new Map(instanceOverrides.map((r) => [r.priceOptionId, r]))
+
+  // If any session_price_options rows exist for this template, only show those
+  // that are explicitly enabled. If no rows exist, all active options are shown.
+  const hasTemplateConfig = sessionOverrides.length > 0
+
+  const resolved: ResolvedPriceOption[] = []
+
+  for (const option of orgPriceOptions) {
+    if (!option.isActive) continue
+
+    const templateRow = sessionOverrideMap.get(option.id)
+    const instanceRow = instanceOverrideMap.get(option.id)
+
+    // Template-level enable check
+    if (hasTemplateConfig && templateRow && !templateRow.isEnabled) continue
+    if (hasTemplateConfig && !templateRow) continue // not configured for this template
+
+    // Instance-level enable check (explicit false = disabled)
+    if (instanceRow?.isEnabled === false) continue
+
+    const effectivePrice = resolveEffectivePriceOptionPrice(option, templateRow, instanceRow)
+    const effectiveSpaces = resolveEffectivePriceOptionSpaces(option, templateRow)
+
+    // Capacity check — exclude if not enough spots remaining
+    if (spotsRemaining < effectiveSpaces) continue
+
+    resolved.push({ priceOption: option, effectivePrice, effectiveSpaces })
+  }
+
+  return resolved
 }

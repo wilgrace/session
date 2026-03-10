@@ -12,6 +12,7 @@ import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { Loader2, Check, AlertCircle, BadgeCheck, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Membership } from "@/lib/db/schema"
+import type { ResolvedPriceOption } from "@/lib/pricing-utils"
 
 export interface CheckoutFormData {
   numberOfSpots: number
@@ -20,6 +21,8 @@ export interface CheckoutFormData {
   pricingType: "drop_in" | "membership"
   isNewMembership?: boolean
   membershipId?: string // The selected membership ID
+  priceOptionId?: string // Selected price option ID
+  quantity?: number // Quantity of the selected price option
   promotionCode?: string
   discountAmount?: number
 }
@@ -57,6 +60,8 @@ interface PreCheckoutFormProps {
   userMembershipName?: string | null
   // Free session — show a single "Free" pricing button, hide coupon/price summary
   isFreeSession?: boolean
+  // Resolved price options from the price options system
+  resolvedPriceOptions?: ResolvedPriceOption[]
 }
 
 interface AppliedCoupon {
@@ -73,7 +78,7 @@ interface EmailValidation {
 }
 
 export function PreCheckoutForm({
-  session,
+  session: _session,
   startTime,
   spotsRemaining,
   userEmail,
@@ -93,6 +98,7 @@ export function PreCheckoutForm({
   userMembershipDisabled = false,
   userMembershipName = null,
   isFreeSession = false,
+  resolvedPriceOptions = [],
 }: PreCheckoutFormProps) {
   const { openSignUp, openSignIn } = useAuthOverlay()
 
@@ -103,10 +109,27 @@ export function PreCheckoutForm({
   // Get best member price from available memberships (for backward compat)
   const bestMemberPrice = memberships.length > 0
     ? Math.min(...memberships.map(m => m.sessionPrice))
-    : (legacyMemberPrice ?? session.drop_in_price ?? 0)
+    : (legacyMemberPrice ?? 0)
 
   // Get monthly price for showing on new membership options
   const getMonthlyPrice = (membership: Membership) => membership.price
+
+  // Price option state
+  const hasPriceOptions = resolvedPriceOptions.length > 0
+  const [selectedPriceOptionId, setSelectedPriceOptionId] = useState<string | null>(
+    resolvedPriceOptions[0]?.priceOption.id ?? null
+  )
+  const [quantity, setQuantity] = useState(1)
+  const selectedPriceOption = resolvedPriceOptions.find(o => o.priceOption.id === selectedPriceOptionId) ?? resolvedPriceOptions[0] ?? null
+
+  // Select first price option when options load async (they arrive after component mounts)
+  useEffect(() => {
+    if (resolvedPriceOptions.length > 0 && selectedPriceOptionId === null) {
+      setSelectedPriceOptionId(resolvedPriceOptions[0].priceOption.id)
+      if (!isActiveMember) setPricingType("drop_in")
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedPriceOptions])
 
   // Form state - default to "membership" if user is already a member, returning from sign-up, or drop-in is disabled
   const [pricingType, setPricingType] = useState<"drop_in" | "membership">(
@@ -115,6 +138,7 @@ export function PreCheckoutForm({
   const [selectedMembershipId, setSelectedMembershipId] = useState<string | null>(
     userMembershipId || (memberships.length > 0 ? memberships[0].membership.id : null)
   )
+  // numberOfSpots is derived from price option quantity when using price options
   const [numberOfSpots, setNumberOfSpots] = useState(1)
   const [email, setEmail] = useState(userEmail || "")
   const [name, setName] = useState("")
@@ -170,15 +194,22 @@ export function PreCheckoutForm({
   // Check if guest is trying to purchase membership (needs to create account first)
   const guestNeedsAccountForMembership = !isLoggedIn && isNewMembership
 
-  // Calculate prices - person 1 gets member rate, additional people pay drop-in
-  const dropInPrice = session.drop_in_price || 0
+  // With price options: spots = effectiveSpaces * quantity; unit price = effectivePrice
+  const effectiveSpaces = selectedPriceOption?.effectiveSpaces ?? 1
+  const effectiveUnitPrice = selectedPriceOption?.effectivePrice ?? 0
+  const derivedSpots = hasPriceOptions ? effectiveSpaces * quantity : numberOfSpots
+
+  // Calculate prices
+  const dropInPrice = hasPriceOptions ? effectiveUnitPrice : 0
   const memberPrice = selectedMembershipPrice
   const person1Price = (pricingType === "membership" || isActiveMember) ? memberPrice : dropInPrice
-  const additionalPersonPrice = dropInPrice // Additional people always pay drop-in
-  const additionalPeople = Math.max(0, numberOfSpots - 1)
+  const additionalPersonPrice = hasPriceOptions ? 0 : dropInPrice
+  const additionalPeople = hasPriceOptions ? Math.max(0, quantity - 1) : Math.max(0, derivedSpots - 1)
 
   // Calculate session subtotal
-  const sessionSubtotal = person1Price + (additionalPersonPrice * additionalPeople)
+  const sessionSubtotal = hasPriceOptions && pricingType !== "membership"
+    ? effectiveUnitPrice * quantity
+    : person1Price + (additionalPersonPrice * additionalPeople)
 
   // Add membership fee for new signups
   const membershipFee = isNewMembership ? selectedMonthlyPrice : 0
@@ -297,12 +328,14 @@ export function PreCheckoutForm({
     if (!canProceed) return
 
     onProceedToCheckout({
-      numberOfSpots,
+      numberOfSpots: derivedSpots,
       email: isLoggedIn ? (userEmail || "") : email,
       name: isLoggedIn ? undefined : (name.trim() || undefined),
       pricingType,
       isNewMembership,
       membershipId: pricingType === "membership" ? (selectedMembershipId || undefined) : undefined,
+      priceOptionId: hasPriceOptions && pricingType !== "membership" ? (selectedPriceOptionId ?? undefined) : undefined,
+      quantity: hasPriceOptions && pricingType !== "membership" ? quantity : undefined,
       promotionCode: appliedCoupon?.id,
       discountAmount: discount,
     })
@@ -310,12 +343,15 @@ export function PreCheckoutForm({
 
   // Enforce quantity limit for new membership signups
   const effectiveSpotsRemaining = isNewMembership ? 1 : spotsRemaining
+  // Max quantity for price options (how many of this option fit in remaining spots)
+  const maxQuantity = hasPriceOptions && effectiveSpaces > 0
+    ? Math.floor(effectiveSpotsRemaining / effectiveSpaces)
+    : effectiveSpotsRemaining
 
   // Determine if form is valid
   // Allow guests with membership to proceed (they'll be asked to create account)
   const canProceed =
-    numberOfSpots >= 1 &&
-    numberOfSpots <= effectiveSpotsRemaining &&
+    (hasPriceOptions ? quantity >= 1 && quantity <= maxQuantity : (numberOfSpots >= 1 && numberOfSpots <= effectiveSpotsRemaining)) &&
     (isLoggedIn || guestNeedsAccountForMembership || (email && emailValidation?.valid && name.trim().length > 0)) &&
     !emailValidation?.requiresSignIn &&
     !isLoading
@@ -380,8 +416,40 @@ export function PreCheckoutForm({
           </button>
         )}
 
-                {/* Drop-in Option - show unless user has membership or drop-in is disabled for this session */}
-                {!isActiveMember && dropInEnabled !== false && (
+                {/* Price option cards (new system) — shown if price options are available */}
+                {!isActiveMember && hasPriceOptions && resolvedPriceOptions.map((opt) => {
+                  const isSelected = pricingType === "drop_in" && selectedPriceOptionId === opt.priceOption.id
+                  return (
+                    <button
+                      key={opt.priceOption.id}
+                      type="button"
+                      onClick={() => { setPricingType("drop_in"); setSelectedPriceOptionId(opt.priceOption.id); setQuantity(1) }}
+                      className={cn(
+                        "w-full flex items-start justify-between rounded-xl border-2 p-4 text-left transition-all",
+                        isSelected ? "bg-black/5 border-primary" : "border-muted hover:border-muted-foreground/30"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                          isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
+                        )}>
+                          {isSelected && <Check className="h-3 w-3" />}
+                        </div>
+                        <div>
+                          <div className="font-medium">{opt.priceOption.name}</div>
+                          {opt.priceOption.description && (
+                            <div className="text-sm text-muted-foreground">{opt.priceOption.description}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xl font-bold">{formatPrice(opt.effectivePrice)}</div>
+                    </button>
+                  )
+                })}
+
+                {/* Legacy Drop-in Option — only shown when no price options are configured */}
+                {!isActiveMember && !hasPriceOptions && dropInEnabled !== false && (
           <button
             type="button"
             onClick={() => setPricingType("drop_in")}
@@ -472,45 +540,73 @@ export function PreCheckoutForm({
         )}
       </div>
 
-        {/* Number of Spaces */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-base font-semibold">Number of spaces</Label>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 rounded-full"
-                onClick={() => setNumberOfSpots(Math.max(1, numberOfSpots - 1))}
-                disabled={numberOfSpots <= 1 || isNewMembership}
-              >
-                <span className="text-lg">−</span>
-              </Button>
-              <span className="w-8 text-center text-xl font-bold">{numberOfSpots}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 rounded-full"
-                onClick={() => setNumberOfSpots(Math.min(effectiveSpotsRemaining, numberOfSpots + 1))}
-                disabled={numberOfSpots >= effectiveSpotsRemaining || isNewMembership}
-              >
-                <span className="text-lg">+</span>
-              </Button>
+        {/* Quantity / Number of Spaces picker */}
+        {hasPriceOptions && pricingType === "drop_in" ? (() => {
+          const isGroupTicket = effectiveSpaces > 1
+          const displayValue = isGroupTicket ? effectiveSpaces : quantity
+          return (
+            <div className="flex items-center justify-between">
+              <Label className="font-medium text-md">Number of Spaces</Label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-full"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={isGroupTicket || quantity <= 1}
+                >
+                  <span className="text-lg">−</span>
+                </Button>
+                <span className="w-8 text-center text-xl font-bold">{displayValue}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-full"
+                  onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
+                  disabled={isGroupTicket || quantity >= maxQuantity}
+                >
+                  <span className="text-lg">+</span>
+                </Button>
+              </div>
             </div>
+          )
+        })() : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Number of spaces</Label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-full"
+                  onClick={() => setNumberOfSpots(Math.max(1, numberOfSpots - 1))}
+                  disabled={numberOfSpots <= 1 || isNewMembership}
+                >
+                  <span className="text-lg">−</span>
+                </Button>
+                <span className="w-8 text-center text-xl font-bold">{numberOfSpots}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-full"
+                  onClick={() => setNumberOfSpots(Math.min(effectiveSpotsRemaining, numberOfSpots + 1))}
+                  disabled={numberOfSpots >= effectiveSpotsRemaining || isNewMembership}
+                >
+                  <span className="text-lg">+</span>
+                </Button>
+              </div>
+            </div>
+            {isNewMembership && !guestNeedsAccountForMembership && (
+              <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
+                Memberships are individual. Complete this purchase first to book for a group.
+              </p>
+            )}
           </div>
-          {isNewMembership && !guestNeedsAccountForMembership && (
-            <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
-              Memberships are individual. Complete this purchase first to book for a group.
-            </p>
-          )}
-          {!isNewMembership && isActiveMember && numberOfSpots > 1 && (
-            <p className="text-sm text-muted-foreground">
-              You get member price. Additional spaces pay session price.
-            </p>
-          )}
-        </div>
+        )}
 
         {/* Email + Name Inputs - only shown to guests */}
         {!isLoggedIn && (
@@ -568,75 +664,6 @@ export function PreCheckoutForm({
           </div>
         )}
 
-        {/* Coupon Code */}
-        {!isFreeSession && <div className="space-y-2">
-          <button
-            type="button"
-            className="flex items-center gap-1 text-base font-semibold hover:opacity-70 transition-opacity"
-            onClick={() => setShowCoupon(v => !v)}
-          >
-            Coupon code
-            <ChevronDown className={cn("h-4 w-4 transition-transform", showCoupon && "rotate-180")} />
-          </button>
-          {showCoupon && (
-            <>
-              <div className="flex gap-2">
-                <Input
-                  id="coupon"
-                  value={couponCode}
-                  onChange={(e) => {
-                    setCouponCode(e.target.value.toUpperCase())
-                    setCouponError(null)
-                  }}
-                  placeholder="Enter code"
-                  disabled={!!appliedCoupon}
-                  className="h-12 rounded-xl bg-muted/50 flex-1"
-                />
-                {appliedCoupon ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleRemoveCoupon}
-                    className="h-12 rounded-xl px-6"
-                  >
-                    Remove
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleApplyCoupon}
-                    disabled={!couponCode.trim() || isValidatingCoupon}
-                    className="h-12 rounded-xl px-6"
-                  >
-                    {isValidatingCoupon ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Apply"
-                    )}
-                  </Button>
-                )}
-              </div>
-              {couponError && (
-                <p className="text-sm text-destructive">{couponError}</p>
-              )}
-              {appliedCoupon && (
-                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded-lg">
-                  <Check className="h-4 w-4 flex-shrink-0" />
-                  <span>
-                    {appliedCoupon.name || "Coupon applied"}
-                    {appliedCoupon.percentOff
-                      ? `: ${appliedCoupon.percentOff}% off`
-                      : appliedCoupon.amountOff
-                      ? `: ${formatPrice(appliedCoupon.amountOff)} off`
-                      : ""}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
-        </div>}
-
         {/* Price Summary */}
         {!isFreeSession && <div className="bg-muted/30 rounded-xl p-4 space-y-3">
           {/* Session pricing */}
@@ -659,6 +686,70 @@ export function PreCheckoutForm({
               <span className="font-medium">{formatPrice(membershipFee)}</span>
             </div>
           )}
+          {/* Coupon code — inline within the price breakdown */}
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowCoupon(v => !v)}
+            >
+              Coupon code
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showCoupon && "rotate-180")} />
+            </button>
+            {showCoupon && (
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <Input
+                    id="coupon"
+                    value={couponCode}
+                    onChange={(e) => {
+                      setCouponCode(e.target.value.toUpperCase())
+                      setCouponError(null)
+                    }}
+                    placeholder="Enter code"
+                    disabled={!!appliedCoupon}
+                    className="h-8 rounded-lg bg-background text-sm flex-1"
+                  />
+                  {appliedCoupon ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRemoveCoupon}
+                      className="h-8 rounded-lg px-3 text-sm"
+                    >
+                      Remove
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleApplyCoupon}
+                      disabled={!couponCode.trim() || isValidatingCoupon}
+                      className="h-8 rounded-lg px-3 text-sm"
+                    >
+                      {isValidatingCoupon ? <Loader2 className="h-3 w-3 animate-spin" /> : "Apply"}
+                    </Button>
+                  )}
+                </div>
+                {couponError && <p className="text-xs text-destructive">{couponError}</p>}
+              </div>
+            )}
+            {appliedCoupon && (
+              <div className="flex items-center gap-1.5 text-xs text-green-600">
+                <Check className="h-3 w-3 flex-shrink-0" />
+                <span>
+                  {appliedCoupon.name || "Coupon applied"}
+                  {appliedCoupon.percentOff
+                    ? `: ${appliedCoupon.percentOff}% off`
+                    : appliedCoupon.amountOff
+                    ? `: ${formatPrice(appliedCoupon.amountOff)} off`
+                    : ""}
+                </span>
+              </div>
+            )}
+          </div>
           {appliedCoupon && discount > 0 && (
             <div className="flex justify-between text-sm text-green-600">
               <span>Discount</span>

@@ -35,6 +35,7 @@ export interface CreateMembershipParams {
   displayToNonMembers?: boolean // Deprecated
   showOnBookingPage?: boolean // Deprecated: per-session control now handled in session settings
   showOnMembershipPage: boolean
+  includeInFilter?: boolean
   isActive?: boolean
 }
 
@@ -75,6 +76,7 @@ function mapDbMembershipToMembership(dbRow: any): Membership {
     showOnMembershipPage: dbRow.show_on_membership_page ?? true,
     stripeProductId: dbRow.stripe_product_id,
     stripePriceId: dbRow.stripe_price_id,
+    includeInFilter: dbRow.include_in_filter ?? false,
     isActive: dbRow.is_active,
     sortOrder: dbRow.sort_order,
     createdAt: dbRow.created_at,
@@ -334,6 +336,7 @@ export async function createMembership(
         display_to_non_members: params.showOnBookingPage ?? true, // Backward compat
         show_on_booking_page: params.showOnBookingPage ?? true,
         show_on_membership_page: params.showOnMembershipPage,
+        include_in_filter: params.includeInFilter ?? false,
         stripe_product_id: stripeProductId,
         stripe_price_id: stripePriceId,
         is_active: params.isActive ?? true,
@@ -402,6 +405,7 @@ export async function updateMembership(
       updateData.display_to_non_members = params.showOnBookingPage // Backward compat
     }
     if (params.showOnMembershipPage !== undefined) updateData.show_on_membership_page = params.showOnMembershipPage
+    if (params.includeInFilter !== undefined) updateData.include_in_filter = params.includeInFilter
     if (params.isActive !== undefined) updateData.is_active = params.isActive
 
     // Handle price changes - need to create new Stripe price
@@ -628,11 +632,6 @@ export async function updateSessionMembershipPrices(
   prices: SessionMembershipPriceInput[]
 ): Promise<ActionResult> {
   try {
-    const authResult = await getAuthenticatedAdmin()
-    if ("error" in authResult) {
-      return { success: false, error: authResult.error }
-    }
-
     const supabase = createSupabaseServerClient()
 
     // Delete existing prices
@@ -815,6 +814,30 @@ export async function getPublicMembershipsForListing(
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
     }
+  }
+}
+
+/**
+ * Get active memberships with includeInFilter = true for the booking calendar filter.
+ * No auth required — public data.
+ */
+export async function getFilterableMemberships(
+  organizationId: string
+): Promise<ActionResult<Membership[]>> {
+  try {
+    const supabase = createSupabaseServerClient()
+    const { data, error } = await supabase
+      .from("memberships")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .eq("include_in_filter", true)
+      .order("sort_order", { ascending: true })
+
+    if (error) return { success: false, error: error.message }
+    return { success: true, data: (data || []).map(mapDbMembershipToMembership) }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 

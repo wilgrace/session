@@ -70,11 +70,6 @@ interface CreateSessionTemplateParams {
   recurrence_end_date: string | null
   created_by: string
   schedules?: SessionSchedule[]
-  // Pricing fields
-  pricing_type?: 'free' | 'paid'
-  drop_in_price?: number | null
-  member_price?: number | null
-  drop_in_enabled?: boolean
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
@@ -123,11 +118,6 @@ interface UpdateSessionTemplateParams {
   visibility?: 'open' | 'hidden' | 'closed'
   recurrence_start_date?: string | null
   recurrence_end_date?: string | null
-  // Pricing fields
-  pricing_type?: 'free' | 'paid'
-  drop_in_price?: number | null
-  member_price?: number | null
-  drop_in_enabled?: boolean
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
@@ -188,12 +178,17 @@ interface BookingResponse {
 interface DBSessionInstance {
   id: string;
   template_id: string;
+  schedule_id: string | null;
   start_time: string;
   end_time: string;
   status: string;
+  name_override: string | null;
+  description_override: string | null;
+  capacity_override: number | null;
   bookings: {
     id: string;
     number_of_spots: number;
+    cancelled_at: string | null;
     user: {
       id: string;
       clerk_user_id: string;
@@ -222,10 +217,6 @@ interface DBSessionTemplate {
   updated_at: string;
   created_by: string;
   organization_id: string;
-  // Pricing fields
-  pricing_type: string;
-  drop_in_price: number | null;
-  drop_in_enabled: boolean;
   booking_instructions: string | null;
   // Image field
   image_url: string | null;
@@ -295,11 +286,6 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         recurrence_end_date: params.recurrence_end_date,
         created_by: userData.id,
         organization_id: organizationId,
-        // Pricing fields
-        pricing_type: params.pricing_type || 'paid',
-        drop_in_price: params.drop_in_price,
-        member_price: params.member_price,
-        drop_in_enabled: params.drop_in_enabled ?? true,
         booking_instructions: params.booking_instructions,
         // Image field
         image_url: params.image_url,
@@ -679,9 +665,6 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         updated_at,
         created_by,
         organization_id,
-        pricing_type,
-        drop_in_price,
-        drop_in_enabled,
         booking_instructions,
         image_url,
         event_color
@@ -831,10 +814,6 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         organization_id: template.organization_id,
         schedules: Object.values(scheduleGroups),
         instances: transformedInstances,
-        // Pricing fields
-        pricing_type: template.pricing_type,
-        drop_in_price: template.drop_in_price,
-        drop_in_enabled: template.drop_in_enabled ?? true,
         booking_instructions: template.booking_instructions,
         // Image field
         image_url: template.image_url,
@@ -901,9 +880,6 @@ export async function getSession(id: string): Promise<{ data: SessionTemplate | 
         updated_at,
         created_by,
         organization_id,
-        pricing_type,
-        drop_in_price,
-        drop_in_enabled,
         booking_instructions,
         image_url
       `)
@@ -1685,9 +1661,6 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         updated_at,
         created_by,
         organization_id,
-        pricing_type,
-        drop_in_price,
-        drop_in_enabled,
         booking_instructions,
         image_url,
         event_color
@@ -1957,9 +1930,6 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         updated_at,
         created_by,
         organization_id,
-        pricing_type,
-        drop_in_price,
-        drop_in_enabled,
         booking_instructions,
         image_url,
         event_color
@@ -2003,11 +1973,14 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
     const [
       { data: schedules, error: schedulesError },
       { data: oneOffDates, error: oneOffDatesError },
-      { data: instances, error: instancesError }
+      { data: instances, error: instancesError },
+      { data: sessionPriceOptionRows },
+      { data: orgPriceOptionRows },
+      { data: sessionMembershipPriceRows },
     ] = await Promise.all([
       supabase
         .from("session_schedules")
-        .select(`id, session_template_id, day_of_week, is_active, created_at, updated_at, time, duration_minutes`)
+        .select(`id, session_template_id, day_of_week, is_active, created_at, updated_at, time, duration_minutes, capacity`)
         .in('session_template_id', templateIds),
       supabase
         .from("session_one_off_dates")
@@ -2019,9 +1992,13 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         .select(`
           id,
           template_id,
+          schedule_id,
           start_time,
           end_time,
           status,
+          name_override,
+          description_override,
+          capacity_override,
           bookings (
             id,
             number_of_spots,
@@ -2036,7 +2013,20 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         .neq('status', 'cancelled')
         .gte('start_time', now)
         .lte('start_time', threeMonthsFromNow.toISOString())
-        .order('start_time', { ascending: true })
+        .order('start_time', { ascending: true }),
+      supabase
+        .from("session_price_options")
+        .select("session_template_id, price_option_id, is_enabled")
+        .in("session_template_id", templateIds),
+      supabase
+        .from("price_options")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true),
+      supabase
+        .from("session_membership_prices")
+        .select("session_template_id, membership_id, is_enabled")
+        .in("session_template_id", templateIds),
     ])
 
     if (schedulesError) {
@@ -2082,6 +2072,12 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
       ).catch(() => {})
     }
 
+    // Build a map of schedule_id → capacity for COALESCE resolution
+    const scheduleCapacityMap = (schedules ?? []).reduce<Record<string, number | null>>((acc, s) => {
+      acc[s.id] = (s as unknown as { capacity: number | null }).capacity ?? null
+      return acc
+    }, {})
+
     // Combine the data
     const transformedData = (templates as DBSessionTemplate[]).map(template => {
       const templateSchedules = schedules?.filter(s => s.session_template_id === template.id) || []
@@ -2107,7 +2103,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
       }, {} as Record<string, SessionSchedule>)
 
       const transformedInstances = templateInstances.map(instance => {
-        const bookings = instance.bookings?.filter(b => !b.cancelled_at).map(booking => {
+        const activeBookings = instance.bookings?.filter(b => !b.cancelled_at).map(booking => {
           const user = booking.user;
           return {
             id: booking.id,
@@ -2118,15 +2114,39 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
           };
         }) || [];
 
+        // Resolve capacity: instance override → schedule default → template default
+        const scheduleCapacity = instance.schedule_id ? (scheduleCapacityMap[instance.schedule_id] ?? null) : null
+        const effectiveCapacity = instance.capacity_override ?? scheduleCapacity ?? template.capacity
+        const spotsBooked = activeBookings.reduce((sum, b) => sum + b.number_of_spots, 0)
+
         return {
           id: instance.id,
           start_time: instance.start_time,
           end_time: instance.end_time,
           status: instance.status,
           template_id: template.id,
-          bookings
+          effectiveCapacity,
+          spotsRemaining: effectiveCapacity - spotsBooked,
+          effectiveName: instance.name_override ?? template.name,
+          effectiveDescription: instance.description_override ?? template.description,
+          bookings: activeBookings,
         };
       });
+
+      // Compute resolvedPriceOptions for calendar filter
+      const templatePriceOptionRows = (sessionPriceOptionRows || []).filter(r => r.session_template_id === template.id)
+      const hasTemplateConfig = templatePriceOptionRows.length > 0
+      const activeOrgOptionIds = (orgPriceOptionRows || []).map(o => o.id)
+      const resolvedPriceOptions = hasTemplateConfig
+        ? templatePriceOptionRows.filter(r => r.is_enabled).map(r => ({ priceOption: { id: r.price_option_id } }))
+        : activeOrgOptionIds.map(id => ({ priceOption: { id } }))
+
+      // Compute availableMembershipIds for calendar filter
+      // undefined = no per-session config, all memberships available by default
+      const templateMembershipRows = (sessionMembershipPriceRows || []).filter(r => r.session_template_id === template.id)
+      const availableMembershipIds = templateMembershipRows.length > 0
+        ? templateMembershipRows.filter(r => r.is_enabled).map(r => r.membership_id)
+        : undefined
 
       return {
         ...template,
@@ -2139,7 +2159,9 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
           duration_minutes: d.duration_minutes,
         })),
         schedules: Object.values(scheduleGroups),
-        instances: transformedInstances
+        instances: transformedInstances,
+        resolvedPriceOptions,
+        availableMembershipIds,
       } as SessionTemplate
     })
 
@@ -3009,12 +3031,9 @@ export async function getPublicSessionById(
         updated_at,
         created_by,
         organization_id,
-        pricing_type,
-        drop_in_price,
-        drop_in_enabled,
-        member_price,
         booking_instructions,
-        image_url
+        image_url,
+        event_color
       `)
       .eq('id', sessionId)
       .neq('visibility', 'closed')

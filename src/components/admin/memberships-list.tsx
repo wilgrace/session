@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -12,9 +12,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Pencil, GripVertical, Plus, Copy, Check } from "lucide-react"
+import { Pencil, GripVertical, Plus, Copy, Check, Filter } from "lucide-react"
 import type { Membership } from "@/lib/db/schema"
-import { updateMembership } from "@/app/actions/memberships"
+import { updateMembership, reorderMemberships } from "@/app/actions/memberships"
 import { useParams } from "next/navigation"
 import { toast } from "sonner"
 
@@ -35,6 +35,12 @@ export function MembershipsList({
   const slug = params.slug as string
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [ordered, setOrdered] = useState<Membership[]>(memberships)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setOrdered(memberships)
+  }, [memberships])
 
   function formatPrice(priceInPence: number): string {
     if (priceInPence === 0) return "Free"
@@ -43,14 +49,10 @@ export function MembershipsList({
 
   function formatBillingPeriod(period: string): string {
     switch (period) {
-      case "monthly":
-        return "/mo"
-      case "yearly":
-        return "/yr"
-      case "one_time":
-        return " once"
-      default:
-        return ""
+      case "monthly": return "/mo"
+      case "yearly": return "/yr"
+      case "one_time": return " once"
+      default: return ""
     }
   }
 
@@ -70,11 +72,8 @@ export function MembershipsList({
       id: membership.id,
       isActive: !membership.isActive,
     })
-
     if (result.success) {
-      toast.success(
-        membership.isActive ? "Membership deactivated" : "Membership activated"
-      )
+      toast.success(membership.isActive ? "Membership deactivated" : "Membership activated")
       onRefresh()
     } else {
       toast.error(result.error || "Failed to update membership")
@@ -94,16 +93,47 @@ export function MembershipsList({
     return membership.showOnMembershipPage ? "Members page" : "Direct link only"
   }
 
+  // Drag-to-reorder handlers
+  function handleDragStart(e: React.DragEvent, id: string) {
+    setDraggedId(id)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  function handleDragOver(e: React.DragEvent, overId: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (!draggedId || draggedId === overId) return
+    const fromIndex = ordered.findIndex(m => m.id === draggedId)
+    const toIndex = ordered.findIndex(m => m.id === overId)
+    if (fromIndex === -1 || toIndex === -1) return
+    const next = [...ordered]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    setOrdered(next)
+  }
+
+  async function handleDrop() {
+    setDraggedId(null)
+    const ids = ordered.map(m => m.id)
+    const result = await reorderMemberships(ids)
+    if (!result.success) {
+      toast.error(result.error || "Failed to reorder")
+      onRefresh()
+    }
+  }
+
+  function handleDragEnd() {
+    setDraggedId(null)
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium">
-            Membership
+          <p className="text-lg font-medium text-gray-900">Membership</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Create membership tiers to offer subscribers discounted session pricing.
           </p>
-          <p className="text-xs text-gray-500">
-          Create membership tiers to offer subscribers discounted session pricing.
-              </p>
         </div>
         <Button onClick={onCreate} className="gap-2" variant="outline">
           <Plus className="h-4 w-4" />
@@ -111,7 +141,7 @@ export function MembershipsList({
         </Button>
       </div>
 
-      {memberships.length === 0 ? (
+      {ordered.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg">
           <p className="text-sm text-gray-500 mb-4">
             No memberships yet. Create your first membership tier.
@@ -131,15 +161,24 @@ export function MembershipsList({
                 <TableHead>Price</TableHead>
                 <TableHead>Member Session Price</TableHead>
                 <TableHead>Sign Up</TableHead>
+                <TableHead>Filter</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {memberships.map((membership) => (
-                <TableRow key={membership.id}>
+              {ordered.map((membership) => (
+                <TableRow
+                  key={membership.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, membership.id)}
+                  onDragOver={(e) => handleDragOver(e, membership.id)}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  className={draggedId === membership.id ? "opacity-40" : ""}
+                >
                   <TableCell>
-                    <GripVertical className="h-4 w-4 text-gray-400 cursor-grab" />
+                    <GripVertical className="h-4 w-4 text-gray-400 cursor-grab active:cursor-grabbing" />
                   </TableCell>
                   <TableCell>
                     <div>
@@ -152,18 +191,22 @@ export function MembershipsList({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium">
-                      {formatPrice(membership.price)}
-                    </span>
-                    <span className="text-gray-500">
-                      {formatBillingPeriod(membership.billingPeriod)}
-                    </span>
+                    <span className="font-medium">{formatPrice(membership.price)}</span>
+                    <span className="text-gray-500">{formatBillingPeriod(membership.billingPeriod)}</span>
                   </TableCell>
                   <TableCell>{formatMemberPrice(membership)}</TableCell>
                   <TableCell>
-                    <span className="text-sm text-gray-600">
-                      {getSignUpDisplay(membership)}
-                    </span>
+                    <span className="text-sm text-gray-600">{getSignUpDisplay(membership)}</span>
+                  </TableCell>
+                  <TableCell>
+                    {membership.includeInFilter ? (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <Filter className="h-3 w-3" />
+                        In filter
+                      </Badge>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -215,7 +258,6 @@ export function MembershipsList({
           </Table>
         </div>
       )}
-
     </div>
   )
 }

@@ -3,7 +3,8 @@ import { Suspense } from "react"
 import Image from "next/image"
 import { notFound } from "next/navigation"
 import { getPublicSessionsByOrg, getUserUpcomingBookings, getUserBookedInstances } from "@/app/actions/session"
-import { getPublicMembershipsForListing } from "@/app/actions/memberships"
+import { getPublicMembershipsForListing, getFilterableMemberships } from "@/app/actions/memberships"
+import { getPublicPriceOptions } from "@/app/actions/price-options"
 import { LazyBookingCalendar } from "@/components/booking/lazy-booking-calendar"
 import { UpcomingBookings } from "@/components/booking/upcoming-bookings"
 import { BookingHeader } from "@/components/booking/booking-header"
@@ -47,11 +48,15 @@ async function CalendarSection({
   userId?: string | null
   initialDate?: string
 }) {
-  const [{ data: sessions }, bookedResult] = await Promise.all([
+  const [{ data: sessions }, bookedResult, priceOptionsResult, membershipsResult] = await Promise.all([
     getPublicSessionsByOrg(organizationId),
     userId ? getUserBookedInstances(userId, organizationId) : Promise.resolve({ data: {}, error: null }),
+    getPublicPriceOptions(organizationId),
+    getFilterableMemberships(organizationId),
   ])
-  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} initialDate={initialDate} />
+  const filterablePriceOptions = (priceOptionsResult.data ?? []).filter(o => o.includeInFilter)
+  const filterableMemberships = membershipsResult.data ?? []
+  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} initialDate={initialDate} filterablePriceOptions={filterablePriceOptions} filterableMemberships={filterableMemberships} />
 }
 
 // Async server component — streams in upcoming bookings

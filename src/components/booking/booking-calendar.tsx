@@ -15,6 +15,7 @@ import { MobileCalendarView } from "./mobile-calendar-view"
 import { MobileSessionList } from "./mobile-session-list"
 import { getEventColorValues } from "@/lib/event-colors"
 import { SessionFilter } from "./session-filter"
+import type { PriceOption, Membership } from "@/lib/db/schema"
 
 // Add custom styles to hide rbc-event-label
 const calendarStyles = `
@@ -67,6 +68,8 @@ interface BookingCalendarProps {
   isAdmin?: boolean
   bookedInstances?: Record<string, string>
   initialDate?: string
+  filterablePriceOptions?: PriceOption[]
+  filterableMemberships?: Membership[]
 }
 
 function isEventFull(event: CalendarEvent): boolean {
@@ -90,8 +93,8 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
   const availableSpots = totalCapacity - totalSpotsBooked
 
-  // Check if this is a free (locked) session
-  const isFreeSession = event.resource.pricing_type === 'free'
+  // TODO: use price options to determine free sessions
+  const isFreeSession = false
 
   // Check if this is a hidden session (only admins see these)
   const isHidden = event.resource.visibility === 'hidden'
@@ -151,7 +154,7 @@ function EmptyStateOverlay({ isAdmin, slug }: { isAdmin: boolean; slug: string }
   )
 }
 
-export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate }: BookingCalendarProps) {
+export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate, filterablePriceOptions = [], filterableMemberships = [] }: BookingCalendarProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [currentView, setCurrentView] = useState<View>('week')
@@ -170,17 +173,38 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
     return new Date()
   })
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
+  const [selectedPriceOptionIds, setSelectedPriceOptionIds] = useState<string[]>([])
+  const [selectedMembershipIds, setSelectedMembershipIds] = useState<string[]>([])
 
   // Update view based on screen size
   useEffect(() => {
     setCurrentView(isMobile ? 'day' : 'week')
   }, [isMobile])
 
-  const filteredSessions = useMemo(() =>
-    selectedTemplateIds.length === 0
+  const filteredSessions = useMemo(() => {
+    let result = selectedTemplateIds.length === 0
       ? sessions
-      : sessions.filter(s => selectedTemplateIds.includes(s.id)),
-  [sessions, selectedTemplateIds])
+      : sessions.filter(s => selectedTemplateIds.includes(s.id))
+
+    if (selectedPriceOptionIds.length > 0) {
+      result = result.filter(s => {
+        const opts = (s as any).resolvedPriceOptions as Array<{ priceOption: { id: string } }> | undefined
+        if (!opts || opts.length === 0) return false
+        return selectedPriceOptionIds.some(id => opts.some(o => o.priceOption.id === id))
+      })
+    }
+
+    if (selectedMembershipIds.length > 0) {
+      result = result.filter(s => {
+        const available = (s as any).availableMembershipIds as string[] | undefined
+        // If no per-session data, membership is available by default
+        if (!available) return true
+        return selectedMembershipIds.some(id => available.includes(id))
+      })
+    }
+
+    return result
+  }, [sessions, selectedTemplateIds, selectedPriceOptionIds, selectedMembershipIds])
 
   // Convert sessions to events format for react-big-calendar
   // Memoize to prevent expensive recalculation on every render
@@ -463,6 +487,12 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
               sessions={sessions}
               selectedIds={selectedTemplateIds}
               onSelectionChange={setSelectedTemplateIds}
+              filterablePriceOptions={filterablePriceOptions}
+              selectedPriceOptionIds={selectedPriceOptionIds}
+              onPriceOptionSelectionChange={setSelectedPriceOptionIds}
+              filterableMemberships={filterableMemberships}
+              selectedMembershipIds={selectedMembershipIds}
+              onMembershipSelectionChange={setSelectedMembershipIds}
             />
             <Button
               variant="outline"

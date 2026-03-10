@@ -78,17 +78,21 @@ All booking and admin routes are prefixed with the organization's slug:
 
 The middleware validates the slug against the database and sets `x-organization-id` and `x-organization-slug` headers for server components.
 
-## Database Schema (9 Tables)
+## Database Schema (13 Tables)
 
 1. **organizations** - Multi-tenant support (has `slug` column for URL routing)
 2. **clerk_users** - User profiles (bridges Clerk ↔ Supabase, includes `date_of_birth`, `gender`, `ethnicity` for community profile). `role` column defaults to `'user'` — new tenant admins are explicitly promoted to `'admin'` by `createOrganizationForUser()` during onboarding. `clerk_user_id` is nullable to support placeholder users imported from Acuity; `migrated_from` tracks the source platform (`'acuity'` | null)
 3. **user_memberships** - User subscription status per organization
 4. **saunas** - Sauna/facility definitions (legacy, may be unused)
 5. **session_templates** - Master templates, includes `event_color` for calendar display. Whether a template is recurring/one-off is **derived** from child records (not stored); `deleted_at` for soft-delete
-6. **session_schedules** - Days/times for recurring schedules, includes optional `duration_minutes` override and `ended_at` to stop a recurring schedule on a date
-7. **session_instances** - Individual bookable time slots (UTC), stores `start_time`, `end_time`, `status` (`active`/`cancelled`), `schedule_id`, and instance-level override columns (`name_override`, `description_override`, `pricing_type_override`, etc.)
-8. **bookings** - User reservations (includes `price_paid`, `member_price_applied` for price tracking, `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason`, `refund_amount`)
+6. **session_schedules** - Days/times for recurring schedules, includes optional `duration_minutes` override and `ended_at` to stop a recurring schedule on a date; also optional `capacity` column for schedule-level capacity default
+7. **session_instances** - Individual bookable time slots (UTC), stores `start_time`, `end_time`, `status` (`active`/`cancelled`), `schedule_id`, and instance-level override columns (`name_override`, `description_override`); also `capacity_override` for instance-level capacity
+8. **bookings** - User reservations (includes `price_paid`, `member_price_applied` for price tracking, `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason`, `refund_amount`, `price_option_id` FK to price_options for reporting)
 9. **stripe_connect_accounts** - Stripe Connect account links per organization (includes membership product/price IDs)
+10. **price_options** - Org-level ticket types (name, price in pence, spaces consumed, include_in_filter, is_active, sort_order)
+11. **session_price_options** - Template-level overrides per price option (is_enabled, override_price, override_spaces); NULL override = inherit from org option
+12. **instance_price_options** - Instance-level overrides per price option (is_enabled, override_price); NULL = inherit from template
+13. **instance_membership_overrides** - Instance-level overrides per membership (is_enabled, override_price)
 
 ### Key Relationships
 - Templates have many Schedules → generates Instances; Templates can also have one-off dates
@@ -230,6 +234,7 @@ Required in `.env.local`:
 - Client components use `useParams()` or `useSlug()` hook
 - `/onboarding` is in `BYPASS_PATHS` — never treated as an org slug
 - Authenticated users with no org (or `slug: null`) are redirected to `/onboarding` instead of `/sign-in`
+- **Reserved slugs**: The following slugs are claimed by `BYPASS_PATHS` and must never be allowed as org slugs: `_next`, `api`, `sign-in`, `sign-up`, `onboarding`, `favicon.ico`, `robots.txt`, `sitemap.xml`, `offline`, `icons`, `sw.js`, `workbox-`, `terms-of-service`, `privacy-policy`. The slug availability check in onboarding (`checkOnboardingStatus`) must validate against this list in addition to checking DB uniqueness — otherwise a tenant could claim e.g. `api` or `admin` as their booking URL and break those routes.
 
 ### Server Actions
 All database operations use React 19 server actions in `src/app/actions/`:
@@ -381,19 +386,43 @@ The Create/Edit Session form (`src/components/admin/session-form.tsx`) is organi
 
 **Payment Section**:
 - Pricing Type: Free or Paid
-- Drop-in Price (for non-members)
-- Membership Pricing overrides
+- **Ticket Types** subsection (when Paid): Switch + optional price override + optional spaces override per org-level price option. Uses `Switch` toggles (not Checkbox). If no price options exist on the org, shows hint to add them in Billing.
+- **Membership Pricing** subsection: Switch + optional price override per membership. Uses `Switch` toggles. `session_membership_prices.override_price` is nullable — NULL means "use default pricing".
 
 **Form Behaviour Notes**:
 - **New sessions**: the schedule section starts collapsed — only "Repeat" / "Add Dates" buttons shown initially
 - **Edit mode**: X buttons to remove individual schedules/dates are always shown (even when only one exists); section-level X to remove all recurring or all one-off is also always shown
 - **SheetContent close button**: `SheetContent`'s built-in close button is `absolute right-4 top-4` and gets hidden behind a sticky header with `z-10`. Fix: raise sticky header to `z-20`, add `pr-12` padding, and place an explicit `<SheetClose>` inside the sticky header instead of relying on the built-in one.
 
+### Price Options System
+
+Org-level ticket types that control per-ticket pricing, capacity consumption, and calendar filters.
+
+**Architecture**:
+- `price_options` — org-level definitions (name, price, spaces consumed per booking, include_in_filter)
+- `session_price_options` — template overrides (enable/disable per option, price/spaces override)
+- `instance_price_options` — instance overrides (enable/disable per option, price override)
+- Capacity hierarchy: `instance.capacity_override` → `schedule.capacity` → `template.capacity`
+
+**Key Files**:
+- `src/app/actions/price-options.ts` — all CRUD + resolution logic (`getBookingPriceOptionsData`, `getPublicPriceOptions`)
+- `src/components/admin/price-options-list.tsx` — admin list UI
+- `src/components/admin/price-option-form.tsx` — admin create/edit Sheet
+- `src/lib/pricing-utils.ts` — `resolveInstanceCapacity`, `resolveEffectivePriceOptionPrice`, `isPriceOptionAvailable`
+
+**Admin UI**: `/{slug}/admin/billing` → Price Options section above Memberships.
+
+**Booking filter**: `filterablePriceOptions` (options with `includeInFilter = true`) fetched server-side in `CalendarSection` in `page.tsx`, passed through `LazyBookingCalendar` → `BookingCalendar` → `SessionFilter`. Sessions are filtered by `(s as any).resolvedPriceOptions`.
+
+**Membership price saves**: `updateSessionMembershipPrices` in `src/app/actions/memberships.ts` does NOT call `getAuthenticatedAdmin()` — that guard was removed because it was silently failing in server action context. The function uses service role client (bypasses RLS) consistent with `updateSessionPriceOptions`. `session_membership_prices.override_price` is nullable (migration `20260310000001`).
+
 ### Session Generation
 1. Admin creates template with recurring schedules and/or one-off dates
 2. `generate-instances` Edge Function triggered
 3. Function generates instances for recurring schedules using schedule-specific duration or template default, and for each one-off date
 4. Instances stored in UTC with calculated `start_time` and `end_time`
+
+**Generation window**: For recurring schedules, instances are generated from `recurrence_start_date` (or today) up to `recurrence_end_date`. If no end date is set, the function defaults to **3 months from now** (`addMonths(new Date(), 3)`). This means sessions beyond 3 months in the future will not appear until the function runs again or the template is saved again. If a user reports missing sessions for next month, check that `recurrence_end_date` is set far enough in the future, or that the function has been re-triggered recently.
 
 ### Instance Cancellation
 Admins can cancel individual session instances from the admin home page.

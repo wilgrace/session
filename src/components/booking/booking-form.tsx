@@ -37,6 +37,8 @@ interface BookingFormProps {
   sessionId?: string // Session template ID for sharing links
   sessionInstanceId?: string // Session instance ID (needed for waiting list)
   spotsRemaining?: number
+  // Price options (new system)
+  resolvedPriceOptions?: import("@/lib/pricing-utils").ResolvedPriceOption[]
   // Multi-membership pricing props
   memberships?: MembershipPricingOption[]
   userMembershipId?: string | null
@@ -74,6 +76,7 @@ export function BookingForm({
   sessionId,
   sessionInstanceId,
   spotsRemaining = session.capacity,
+  resolvedPriceOptions = [],
   memberships = [],
   userMembershipId,
   userMembershipDisabled = false,
@@ -115,9 +118,9 @@ export function BookingForm({
   const [pendingFreeSubmit, setPendingFreeSubmit] = useState(false)
   const [pendingFreeFormData, setPendingFreeFormData] = useState<CheckoutFormData | null>(null)
 
-  // Determine if this is a paid session (not in edit mode)
-  // Note: drop_in_price being null/0 does NOT mean the session is free — it may be membership-only
-  const isPaidSession = session.pricing_type === "paid" && !isEditMode
+  // TODO: use price options to determine if this is a paid session
+  // For now treat all sessions as potentially paid (non-edit mode)
+  const isPaidSession = !isEditMode
 
   // NOTE: All hooks must be called before any conditional returns
   // The BookingPanel return is moved below this useEffect to comply with React's rules of hooks
@@ -213,7 +216,8 @@ export function BookingForm({
         promotionCode: formData.promotionCode,
         pricingType: formData.pricingType,
         isNewMembership: formData.isNewMembership,
-        membershipId: formData.membershipId, // For multi-membership support
+        membershipId: formData.membershipId,
+        priceOptionId: formData.priceOptionId,
         slug: slug,
       })
 
@@ -440,6 +444,7 @@ export function BookingForm({
           organizationId={session.organization_id}
           onProceedToCheckout={handleProceedToCheckoutWithWaiver}
           isLoading={checkoutLoading}
+          resolvedPriceOptions={resolvedPriceOptions}
           memberships={memberships}
           userMembershipId={userMembershipId}
           userMembershipDisabled={userMembershipDisabled}
@@ -448,7 +453,7 @@ export function BookingForm({
           monthlyMembershipPrice={monthlyMembershipPrice}
           isActiveMember={isActiveMember}
           defaultToMembership={defaultToMembership}
-          dropInEnabled={session.drop_in_enabled !== false}
+          dropInEnabled={true}
         />
       )
     }

@@ -72,12 +72,13 @@ export default async function SessionPage({ params, searchParams }: SessionPageP
 
   const initialSession = sessionResult.success && sessionResult.data ? sessionResult.data : null
 
-  // Prefetch membership pricing server-side for paid sessions to avoid client-side delay
+  // Prefetch membership pricing server-side to avoid client-side delay
+  // TODO: use price options to determine if session is paid; prefetch for all sessions for now
   let initialPricingData: BookingMembershipPricingData | null = null
-  if (initialSession && initialSession.pricing_type === "paid") {
+  if (initialSession) {
     const pricingResult = await getBookingMembershipPricingData({
       organizationId: tenant.organizationId,
-      dropInPrice: initialSession.drop_in_price ?? 0,
+      dropInPrice: 0, // TODO: replace with price options
       sessionTemplateId: resolvedParams.sessionId,
     })
     if (pricingResult.success && pricingResult.data) {

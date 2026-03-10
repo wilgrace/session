@@ -11,6 +11,8 @@ import { SessionTemplate } from "@/types/session"
 import { useUser } from "@clerk/nextjs"
 import { getBookingDetails, getPublicSessionById, checkUserExistingBooking } from "@/app/actions/session"
 import { getBookingMembershipPricingData, BookingMembershipPricingData } from "@/app/actions/memberships"
+import { getBookingPriceOptionsData } from "@/app/actions/price-options"
+import type { ResolvedPriceOption } from "@/lib/pricing-utils"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -78,6 +80,8 @@ export function SessionPageClient({
   const [bookingDetails, setBookingDetails] = useState<any>(initialBookingDetails ?? null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [pricingData, setPricingData] = useState<BookingMembershipPricingData | null>(initialPricingData ?? null)
+  const [resolvedPriceOptions, setResolvedPriceOptions] = useState<ResolvedPriceOption[]>([])
+  const priceOptionsFetchedRef = useRef(false)
   const [checkoutStep, setCheckoutStep] = useState<"form" | "checkout">("form")
   const returnDate = searchParams.date
   const backHref = returnDate ? `/${slug}?date=${encodeURIComponent(returnDate)}` : `/${slug}`
@@ -233,12 +237,10 @@ export function SessionPageClient({
   // Fetch pricing data whenever session is available (handles both server-prefetched and client-fetched sessions)
   useEffect(() => {
     if (!session || pricingFetchedRef.current) return
-    if (session.pricing_type !== "paid") return
-
     pricingFetchedRef.current = true
     getBookingMembershipPricingData({
       organizationId: session.organization_id,
-      dropInPrice: session.drop_in_price ?? 0,
+      dropInPrice: 0,
       sessionTemplateId: sessionId,
     }).then(result => {
       if (result.success && result.data) {
@@ -247,6 +249,23 @@ export function SessionPageClient({
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, sessionId])
+
+  // Fetch price options when we have a session instance ID
+  useEffect(() => {
+    const instanceId = session?.instances?.[0]?.id
+    if (!instanceId || !session || priceOptionsFetchedRef.current) return
+    priceOptionsFetchedRef.current = true
+    getBookingPriceOptionsData({
+      organizationId: session.organization_id,
+      sessionTemplateId: sessionId,
+      sessionInstanceId: instanceId,
+    }).then(result => {
+      if (result.success && result.data) {
+        setResolvedPriceOptions(result.data.resolvedPriceOptions)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.instances?.[0]?.id, sessionId])
 
   if (loading) {
     return (
@@ -377,6 +396,7 @@ export function SessionPageClient({
               sessionId={sessionId}
               sessionInstanceId={session.instances?.[0]?.id}
               spotsRemaining={calculateSpotsRemaining(session, bookingDetails?.number_of_spots || 0)}
+              resolvedPriceOptions={resolvedPriceOptions}
               memberships={pricingData?.memberships}
               userMembershipId={pricingData?.userMembershipId}
               userMembershipDisabled={pricingData?.userMembershipDisabled}

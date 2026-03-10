@@ -48,17 +48,11 @@ export interface SessionTemplate {
   organization_id: string
   schedules: SessionSchedule[]
   instances: SessionInstance[]
-  // Pricing fields
-  pricing_type?: 'free' | 'paid'
-  drop_in_price?: number | null
-  member_price?: number | null
   booking_instructions?: string | null
   // Image field
   image_url?: string | null
   // Calendar display color
   event_color?: string | null
-  // Pricing availability
-  drop_in_enabled?: boolean | null
 }
 
 export interface SessionInstance {
@@ -69,6 +63,14 @@ export interface SessionInstance {
   status: string
   cancelled_at?: string | null
   cancellation_reason?: string | null
+  /** Resolved capacity: instance_override ?? schedule_default ?? template_default */
+  effectiveCapacity?: number
+  /** Remaining spots = effectiveCapacity - sum(active bookings) */
+  spotsRemaining?: number
+  /** Resolved name: instance name_override ?? template name */
+  effectiveName?: string
+  /** Resolved description: instance description_override ?? template description */
+  effectiveDescription?: string | null
   bookings?: {
     id: string
     number_of_spots: number

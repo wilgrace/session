@@ -41,6 +41,10 @@ export function SessionDetails({
   const spotsRemaining = session.capacity - totalSpotsBooked
 
   const eventColor = getEventColorValues(session.event_color)
+  // If event_color is an arbitrary hex (legacy data before key-based picker), use it directly
+  const dotColor = session.event_color && /^#[0-9a-fA-F]{6}$/.test(session.event_color)
+    ? session.event_color
+    : eventColor.color500
 
   return (
     <div>
@@ -61,7 +65,7 @@ export function SessionDetails({
           <p className="font-medium text-muted-foreground flex items-center gap-1.5">
             <span
               className="inline-block h-2 w-2 rounded-full shrink-0"
-              style={{ backgroundColor: eventColor.color500 }}
+              style={{ backgroundColor: dotColor }}
             />
             {session.name}
           </p>

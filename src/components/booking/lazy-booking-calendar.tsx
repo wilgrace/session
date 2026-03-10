@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SessionTemplate } from "@/types/session"
+import type { PriceOption, Membership } from "@/lib/db/schema"
 
 // Lazy load the heavy calendar component (includes moment.js ~70KB and react-big-calendar ~80KB)
 const BookingCalendar = dynamic(
@@ -19,8 +20,10 @@ export interface LazyBookingCalendarProps {
   isAdmin?: boolean
   bookedInstances?: Record<string, string>
   initialDate?: string
+  filterablePriceOptions?: PriceOption[]
+  filterableMemberships?: Membership[]
 }
 
-export function LazyBookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate }: LazyBookingCalendarProps) {
-  return <BookingCalendar sessions={sessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedInstances} initialDate={initialDate} />
+export function LazyBookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate, filterablePriceOptions = [], filterableMemberships = [] }: LazyBookingCalendarProps) {
+  return <BookingCalendar sessions={sessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedInstances} initialDate={initialDate} filterablePriceOptions={filterablePriceOptions} filterableMemberships={filterableMemberships} />
 }

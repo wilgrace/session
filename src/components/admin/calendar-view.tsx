@@ -83,8 +83,8 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
   const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
   const availableSpots = totalCapacity - totalSpotsBooked
 
-  // Check if this is a free (locked) session
-  const isFreeSession = event.resource.pricing_type === 'free'
+  // TODO: use price options to determine free sessions
+  const isFreeSession = false
   const isFull = availableSpots === 0
 
   // Check visibility status
@@ -583,7 +583,15 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                     onEditSession(template);
                   }}
                 >
-                  <TableCell className="font-medium">{template.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: getEventColorValues(template.event_color).color500 }}
+                      />
+                      {template.name}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {(template.schedules?.length ?? 0) === 0 && (template.one_off_dates?.length ?? 0) === 0 ? (
                       "No schedule"
