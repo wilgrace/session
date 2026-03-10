@@ -79,7 +79,7 @@ export function ShareActions({
         ) : (
           <>
             <Copy className="h-4 w-4" />
-            Copy Link & Share with Friends
+            Copy link & share
           </>
         )}
       </Button>

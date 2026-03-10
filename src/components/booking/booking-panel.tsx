@@ -333,7 +333,7 @@ export function BookingPanel({
                   disabled={loading}
                 >
                   <CalendarDays className="h-4 w-4" />
-                  Change Date
+                  Change date
                 </Button>
               )}
               {!isConfirmation && (
@@ -378,7 +378,7 @@ export function BookingPanel({
                     disabled={loading}
                   >
                     <CalendarDays className="h-4 w-4" />
-                    Change Date
+                    Change date
                   </Button>
                 )}
                 {!isConfirmation && (
@@ -435,7 +435,7 @@ export function BookingPanel({
               ) : (
                 <>
                   <Copy className="h-4 w-4" />
-                  Copy Link & Share with Friends
+                  Copy link & share
                 </>
               )}
             </Button>

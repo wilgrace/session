@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { auth } from "@clerk/nextjs/server"
 import { getTenantFromHeaders } from "@/lib/tenant-utils"
+import { getPublicMembershipsForListing } from "@/app/actions/memberships"
 import { AccountPageClient } from "./account-client"
 import { Loader2 } from "lucide-react"
 
@@ -25,6 +26,9 @@ export default async function AccountPage({ params }: AccountPageProps) {
     redirect("/")
   }
 
+  const membershipsResult = await getPublicMembershipsForListing(tenant.organizationId)
+  const hasMemberships = (membershipsResult.data?.memberships.length ?? 0) > 0
+
   return (
     <div className="container mx-auto py-8 px-4">
       <Suspense
@@ -37,6 +41,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
         <AccountPageClient
           slug={resolvedParams.slug}
           organizationId={tenant.organizationId}
+          hasMemberships={hasMemberships}
         />
       </Suspense>
     </div>

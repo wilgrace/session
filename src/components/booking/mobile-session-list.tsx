@@ -4,8 +4,8 @@ import { format, addDays, startOfDay } from "date-fns"
 import { formatInTimeZone } from "date-fns-tz"
 import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 import { SessionTemplate, SessionInstance } from "@/types/session"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
-import { useRouter } from "next/navigation"
 import { Users, EyeOff, ChevronRight } from "lucide-react"
 import { getEventColorValues } from "@/lib/event-colors"
 
@@ -64,7 +64,6 @@ function findNextAvailableSessionDate(sessions: SessionTemplate[], afterDate: Da
 }
 
 export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, bookedInstances = {} }: MobileSessionListProps) {
-  const router = useRouter()
   // Build a flat list of all sessions for the selected day directly from sessions
   const sessionsForDay = sessions.flatMap((template) => {
     const results: { template: SessionTemplate; startTime: Date; endTime: Date; key: string; instance?: SessionInstance; isBooked: boolean; bookingId?: string }[] = []
@@ -132,15 +131,6 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
     ? sessionsForDay.filter(s => s.endTime > now)
     : sessionsForDay
 
-  const handleSessionClick = (template: SessionTemplate, startTime: Date, isBooked: boolean, bookingId?: string) => {
-    const dateParam = `&date=${selectedDate.toISOString()}`
-    if (isBooked && bookingId) {
-      router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}${dateParam}`)
-      return
-    }
-    router.push(`/${slug}/${template.id}?start=${startTime.toISOString()}${dateParam}`)
-  }
-
   const allFull = visibleSessionsForDay.length > 0 && visibleSessionsForDay.every(({ template, instance }) => {
     if (!instance) return false // schedule-based, assume available
     const totalCapacity = template.capacity || 10
@@ -195,13 +185,16 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
 
         const eventColor = getEventColorValues(template.event_color)
 
+        const href = isBooked && bookingId
+          ? `/${slug}/${template.id}?start=${startTime.toISOString()}&edit=true&bookingId=${bookingId}&date=${selectedDate.toISOString()}`
+          : `/${slug}/${template.id}?start=${startTime.toISOString()}&date=${selectedDate.toISOString()}`
+
         return (
+          <Link key={key} href={href} prefetch={true}>
           <Card
-            key={key}
             className={`cursor-pointer transition-all duration-75 active:scale-[0.96] active:opacity-60 ${
               isBooked ? 'border-primary bg-primary/5' : isFull ? 'border-gray-200 bg-gray-50' : ''
             }`}
-            onClick={() => handleSessionClick(template, startTime, isBooked, bookingId)}
           >
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
@@ -227,6 +220,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
               </div>
             </CardContent>
           </Card>
+          </Link>
         )
       })}
 

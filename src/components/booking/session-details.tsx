@@ -55,6 +55,7 @@ export function SessionDetails({
             src={session.image_url}
             alt={session.name}
             fill
+            priority
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 50vw"
           />
