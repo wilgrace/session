@@ -1190,26 +1190,110 @@ export async function updateSessionWithSchedules(params: {
       return { success: false, error: "Unauthorized: Admin access required" }
     }
 
-    // Check for future booked instances that will be wiped by this update.
-    // This covers both removed schedules and schedule time changes (all non-cancelled
-    // instances are regenerated, so any with bookings would be lost).
-    const futureDate = new Date().toISOString()
-    const { data: futureInstances } = await supabase
-      .from('session_instances')
-      .select('id')
+    // --- Surgical diff: only touch instances that are actually changing ---
+
+    // Fetch existing recurring schedules and one-off dates from DB
+    const { data: existingSchedules } = await supabase
+      .from('session_schedules')
+      .select('id, time, day_of_week, duration_minutes')
+      .eq('session_template_id', params.templateId)
+
+    const { data: existingOneOffDates } = await supabase
+      .from('session_one_off_dates')
+      .select('id, date, time, duration_minutes')
       .eq('template_id', params.templateId)
+
+    // Supabase returns TIME columns as "HH:MM:SS"; the form may also pass "HH:MM:SS" from the
+    // loaded template data. Normalize to "HH:MM" on both sides before comparing.
+    const normalizeTime = (t: string) => t.slice(0, 5)
+
+    // Flatten new schedule params to one row per day for easy comparison (time normalized)
+    const newScheduleRows = params.schedules.flatMap(s =>
+      s.days.map(day => ({
+        time: normalizeTime(s.time),
+        day_of_week: mapDayStringToInt(day),
+        duration_minutes: s.duration_minutes ?? null,
+      }))
+    )
+
+    // DB schedule rows not present in new params → being removed or changed
+    const removedOrChangedScheduleIds = (existingSchedules ?? [])
+      .filter(dbRow =>
+        !newScheduleRows.some(nr =>
+          nr.time === normalizeTime(dbRow.time) &&
+          nr.day_of_week === dbRow.day_of_week &&
+          nr.duration_minutes === dbRow.duration_minutes
+        )
+      )
+      .map(r => r.id)
+
+    // New param rows not present in DB → need to be inserted
+    const addedScheduleRows = newScheduleRows.filter(nr =>
+      !(existingSchedules ?? []).some(dbRow =>
+        normalizeTime(dbRow.time) === nr.time &&
+        dbRow.day_of_week === nr.day_of_week &&
+        dbRow.duration_minutes === nr.duration_minutes
+      )
+    )
+
+    // Compute the UTC start_times that the new one-off dates will produce.
+    // Any existing one-off instance whose start_time is absent from this set will be removed.
+    const newOneOffStartTimes = new Set(
+      buildInstancesFromOneOffDates(
+        params.templateId,
+        template.organization_id ?? '',
+        params.template.duration_minutes ?? 75,
+        params.one_off_dates ?? []
+      ).map(r => r.start_time)
+    )
+
+    // Fetch existing future one-off instances (schedule_id IS NULL = one-off)
+    const { data: existingOneOffInstances } = await supabase
+      .from('session_instances')
+      .select('id, start_time')
+      .eq('template_id', params.templateId)
+      .is('schedule_id', null)
       .neq('status', 'cancelled')
-      .gt('start_time', futureDate)
+      .gt('start_time', new Date().toISOString())
+
+    const removedOneOffInstanceIds = (existingOneOffInstances ?? [])
+      .filter(inst => !newOneOffStartTimes.has(inst.start_time))
+      .map(inst => inst.id)
+
+    // DB one-off date rows no longer in new params (to delete from session_one_off_dates)
+    const newOneOffDateKeys = new Set((params.one_off_dates ?? []).map(d => `${d.date}|${d.time}`))
+    const removedOneOffDateIds = (existingOneOffDates ?? [])
+      .filter(d => !newOneOffDateKeys.has(`${d.date}|${d.time}`))
+      .map(d => d.id)
+
+    // New one-off dates not already in DB → need to be inserted
+    const addedOneOffDates = (params.one_off_dates ?? []).filter(d =>
+      !(existingOneOffDates ?? []).some(dbD => dbD.date === d.date && dbD.time === d.time)
+    )
+
+    // --- Only check/cancel bookings on instances that are actually being removed/changed ---
+
+    const affectedInstanceIds: string[] = []
+
+    if (removedOrChangedScheduleIds.length > 0) {
+      const { data: schedInstances } = await supabase
+        .from('session_instances')
+        .select('id')
+        .in('schedule_id', removedOrChangedScheduleIds)
+        .neq('status', 'cancelled')
+        .gt('start_time', new Date().toISOString())
+      affectedInstanceIds.push(...(schedInstances ?? []).map(i => i.id))
+    }
+    affectedInstanceIds.push(...removedOneOffInstanceIds)
 
     let affectedBookingCount = 0
     let affectedBookingIds: string[] = []
 
-    if (futureInstances && futureInstances.length > 0) {
-      const futureInstanceIds = futureInstances.map(i => i.id)
+    if (affectedInstanceIds.length > 0) {
       const { data: affectedBookings } = await supabase
         .from('bookings')
         .select('id')
-        .in('session_instance_id', futureInstanceIds)
+        .in('session_instance_id', affectedInstanceIds)
         .in('status', ['confirmed', 'completed'])
 
       if (affectedBookings && affectedBookings.length > 0) {
@@ -1217,7 +1301,6 @@ export async function updateSessionWithSchedules(params: {
         affectedBookingIds = affectedBookings.map(b => b.id)
 
         if (!params.cancelAffectedBookings) {
-          // Return to the caller so it can show a confirmation dialog
           return {
             success: false,
             requiresConfirmation: true,
@@ -1225,7 +1308,7 @@ export async function updateSessionWithSchedules(params: {
           }
         }
 
-        // Admin confirmed: cancel and refund all affected bookings
+        // Admin confirmed: cancel and refund only the affected bookings
         for (const bookingId of affectedBookingIds) {
           await cancelBookingWithRefund(bookingId, {
             cancellationReason: "Session schedule updated by admin",
@@ -1239,17 +1322,43 @@ export async function updateSessionWithSchedules(params: {
     const { is_recurring: _removed, ...templateFieldsWithoutIsRecurring } = params.template as any
     const updateFields = { ...templateFieldsWithoutIsRecurring, updated_at: new Date().toISOString() }
 
-    // Delete only non-cancelled instances so that previously cancelled slots
-    // are preserved and won't be regenerated (Rule 4).
-    const results = await Promise.all([
-      supabase.from("session_templates").update(updateFields).eq("id", params.templateId),
-      supabase.from("session_schedules").delete().eq("session_template_id", params.templateId),
-      supabase.from("session_instances").delete().eq("template_id", params.templateId).neq("status", "cancelled"),
-      supabase.from("session_one_off_dates").delete().eq("template_id", params.templateId),
-    ])
+    const { error: templateUpdateError } = await supabase
+      .from("session_templates")
+      .update(updateFields)
+      .eq("id", params.templateId)
 
-    if (results[0].error) {
-      return { success: false, error: results[0].error.message }
+    if (templateUpdateError) {
+      return { success: false, error: templateUpdateError.message }
+    }
+
+    // --- Surgical deletion: only remove instances/schedules that are changing ---
+
+    // Delete instances and schedule rows for removed/changed recurring schedules
+    if (removedOrChangedScheduleIds.length > 0) {
+      await supabase
+        .from('session_instances')
+        .delete()
+        .in('schedule_id', removedOrChangedScheduleIds)
+        .neq('status', 'cancelled')
+
+      await supabase
+        .from('session_schedules')
+        .delete()
+        .in('id', removedOrChangedScheduleIds)
+    }
+
+    // Delete removed one-off instances and their date rows
+    if (removedOneOffInstanceIds.length > 0) {
+      await supabase
+        .from('session_instances')
+        .delete()
+        .in('id', removedOneOffInstanceIds)
+    }
+    if (removedOneOffDateIds.length > 0) {
+      await supabase
+        .from('session_one_off_dates')
+        .delete()
+        .in('id', removedOneOffDateIds)
     }
 
     const IS_DEVELOPMENT = process.env.NODE_ENV === 'development'
@@ -1257,32 +1366,27 @@ export async function updateSessionWithSchedules(params: {
       ? 'http://localhost:54321/functions/v1/generate-instances'
       : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-instances`
 
-    // Insert new recurring schedules (if any)
-    if (params.schedules.length > 0) {
-      const scheduleRows = params.schedules.flatMap(schedule =>
-        schedule.days.map(day => ({
-          session_template_id: params.templateId,
-          day_of_week: mapDayStringToInt(day),
-          time: schedule.time,
-          is_active: true,
-          duration_minutes: schedule.duration_minutes ?? null,
-          organization_id: template.organization_id,
-        }))
-      )
-
-      if (scheduleRows.length > 0) {
-        const { error: scheduleError } = await supabase
-          .from("session_schedules")
-          .insert(scheduleRows)
-
-        if (scheduleError) {
-          return { success: false, error: `Failed to create schedules: ${scheduleError.message}` }
-        }
+    // Insert only newly added recurring schedule rows (unchanged ones stay in DB)
+    if (addedScheduleRows.length > 0) {
+      const rowsToInsert = addedScheduleRows.map(r => ({
+        session_template_id: params.templateId,
+        day_of_week: r.day_of_week,
+        time: r.time,
+        is_active: true,
+        duration_minutes: r.duration_minutes,
+        organization_id: template.organization_id,
+      }))
+      const { error: scheduleError } = await supabase
+        .from("session_schedules")
+        .insert(rowsToInsert)
+      if (scheduleError) {
+        return { success: false, error: `Failed to create schedules: ${scheduleError.message}` }
       }
+    }
 
-      // Fire-and-forget instance generation for recurring schedules.
-      // The Edge Function skips start_times where an instance already exists,
-      // so cancelled instances naturally prevent regeneration at those slots.
+    // Trigger edge function if any recurring schedules exist — fills in missing future slots
+    // (safe to call even for unchanged schedules; the function skips existing instances).
+    if (params.schedules.length > 0) {
       fetch(functionUrl, {
         method: 'POST',
         headers: {
@@ -1293,11 +1397,11 @@ export async function updateSessionWithSchedules(params: {
       }).catch(() => {})
     }
 
-    // Insert new one-off dates (if any)
-    if (params.one_off_dates && params.one_off_dates.length > 0) {
+    // Insert only newly added one-off dates (unchanged ones stay in DB)
+    if (addedOneOffDates.length > 0) {
       const { error: datesError } = await supabase
         .from("session_one_off_dates")
-        .insert(params.one_off_dates.map(d => ({
+        .insert(addedOneOffDates.map(d => ({
           template_id: params.templateId,
           organization_id: template.organization_id,
           date: d.date,
@@ -1309,13 +1413,13 @@ export async function updateSessionWithSchedules(params: {
         return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
       }
 
-      // Create one-off instances synchronously. Use upsert with ignoreDuplicates so
-      // that cancelled instances at the same start_time are preserved (Rule 4).
+      // Create instances for new one-off dates synchronously.
+      // Use upsert with ignoreDuplicates so cancelled slots are preserved (Rule 4).
       const instanceRows = buildInstancesFromOneOffDates(
         params.templateId,
         template.organization_id ?? '',
         params.template.duration_minutes ?? 75,
-        params.one_off_dates
+        addedOneOffDates
       )
       await supabase.from("session_instances").upsert(instanceRows, {
         onConflict: 'template_id,start_time',
@@ -2133,6 +2237,7 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
           start_time: instance.start_time,
           end_time: instance.end_time,
           status: instance.status,
+          schedule_id: instance.schedule_id,
           template_id: template.id,
           effectiveCapacity,
           spotsRemaining: effectiveCapacity - spotsBooked,

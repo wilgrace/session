@@ -50,7 +50,7 @@ export function UpcomingBookings({ bookings, className, slug }: UpcomingBookings
                   <span className="hidden sm:inline mx-2 text-gray-300">•</span>
                   <div className="flex items-center">
                     <Users className="mr-1 h-4 w-4 flex-shrink-0 text-gray-400" />
-                    {booking.spotsBooked} {booking.spotsBooked === 1 ? "spot" : "spots"} booked
+                    {booking.spotsBooked} {booking.spotsBooked === 1 ? "space" : "spaces"} booked
                   </div>
                 </div>
               </div>

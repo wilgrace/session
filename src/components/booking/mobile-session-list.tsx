@@ -213,7 +213,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
                     <span className="text-gray-300">·</span>
                     <span className="flex items-center gap-1">
                       <Users className="h-3 w-3" />
-                      {isBooked ? 'Booked' : isFull ? 'Waiting List' : availableSpots}
+                      {isBooked ? 'Booked' : isFull ? 'Full • Join waiting list' : `${availableSpots} spaces`}
                     </span>
                   </div>
                 </div>

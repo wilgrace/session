@@ -59,6 +59,7 @@ export interface SessionTemplate {
 export interface SessionInstance {
   id: string
   template_id: string
+  schedule_id?: string | null
   start_time: string
   end_time: string
   status: string

@@ -159,7 +159,7 @@ export function buildBookingConfirmationPreview({
             ${buildDetailRow('Date', 'Saturday 15 March 2026')}
             ${buildDetailRow('Time', '14:00 – 15:00')}
             ${buildDetailRow('Duration', '60 min')}
-            ${buildDetailRow('Spots booked', '2')}
+            ${buildDetailRow('Spaces booked', '2')}
             ${buildDetailRow('Total', '£20.00')}
           </table>
         </td>
