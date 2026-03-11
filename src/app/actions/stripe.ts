@@ -376,6 +376,65 @@ export async function createDashboardLink(): Promise<ActionResult<{ url: string 
 }
 
 /**
+ * Sync Stripe account status directly from Stripe API (bypasses webhook dependency)
+ * Called when returning from Stripe onboarding to ensure immediate status update
+ */
+export async function syncStripeAccountStatus(): Promise<ActionResult<StripeConnectStatus>> {
+  try {
+    const authResult = await getAuthenticatedOrg()
+    if ("error" in authResult) {
+      return { success: false, error: authResult.error }
+    }
+
+    const { orgId } = authResult
+    const supabase = createSupabaseServerClient()
+
+    const { data: account } = await supabase
+      .from("stripe_connect_accounts")
+      .select("stripe_account_id")
+      .eq("organization_id", orgId)
+      .maybeSingle()
+
+    if (!account) {
+      return { success: false, error: "No Stripe account found" }
+    }
+
+    const stripe = getStripe()
+    const stripeAccount = await stripe.accounts.retrieve(account.stripe_account_id)
+
+    // Update DB with fresh values from Stripe
+    await supabase
+      .from("stripe_connect_accounts")
+      .update({
+        details_submitted: stripeAccount.details_submitted ?? false,
+        charges_enabled: stripeAccount.charges_enabled ?? false,
+        payouts_enabled: stripeAccount.payouts_enabled ?? false,
+        country: stripeAccount.country,
+        default_currency: stripeAccount.default_currency,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("stripe_account_id", account.stripe_account_id)
+
+    return {
+      success: true,
+      data: {
+        connected: true,
+        onboardingComplete: stripeAccount.details_submitted ?? false,
+        chargesEnabled: stripeAccount.charges_enabled ?? false,
+        payoutsEnabled: stripeAccount.payouts_enabled ?? false,
+        stripeAccountId: account.stripe_account_id,
+      },
+    }
+  } catch (error) {
+    console.error("Error in syncStripeAccountStatus:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+/**
  * Disconnect Stripe account from organization
  * This removes the connection from our database but does NOT delete the Stripe account itself
  */
