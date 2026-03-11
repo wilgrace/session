@@ -402,6 +402,15 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             setMembershipEnabled(enabledMap)
             setMembershipPrices(priceMap)
           }
+
+          // If the template has any saved price option or membership rows it was
+          // configured as Paid — override the Stripe-based baseline set above.
+          const hasSavedRows =
+            (sessionPriceOptsResult.success && (sessionPriceOptsResult.data?.length ?? 0) > 0) ||
+            (membershipPricesResult.success && (membershipPricesResult.data?.length ?? 0) > 0)
+          if (hasSavedRows) {
+            setPricingType('paid')
+          }
         } else {
           // New session: all enabled, no overrides
           const optEnabledMap: Record<string, boolean> = {}
@@ -433,9 +442,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
     getStripeConnectStatus().then(result => {
       const enabled = !!(result.success && result.data?.chargesEnabled)
       setStripeChargesEnabled(enabled)
-      if (!template) {
-        setPricingType(enabled ? 'paid' : 'free')
-      }
+      // Always set the baseline pricingType from Stripe status.
+      // For existing templates with saved price/membership rows, loadPricingData
+      // will override this to 'paid' after it finishes loading.
+      setPricingType(enabled ? 'paid' : 'free')
     }).catch(() => {
       setStripeChargesEnabled(true) // fail open on error
     })

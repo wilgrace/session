@@ -35,6 +35,7 @@ type SlugStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
 export function OrganisationForm({ open, onClose, org, onSuccess }: OrganisationFormProps) {
   const [name, setName] = useState("");
+  const [shortName, setShortName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugStatus, setSlugStatus] = useState<SlugStatus>("idle");
   const [loading, setLoading] = useState(false);
@@ -44,6 +45,7 @@ export function OrganisationForm({ open, onClose, org, onSuccess }: Organisation
   useEffect(() => {
     if (open) {
       setName(org?.name ?? "");
+      setShortName(org?.shortName ?? "");
       setSlug(org?.slug ?? "");
       setSlugStatus("idle");
       setFieldErrors({});
@@ -96,7 +98,7 @@ export function OrganisationForm({ open, onClose, org, onSuccess }: Organisation
     let result: { success: boolean; error?: string };
 
     if (org) {
-      result = await updateOrganisation({ id: org.id, name: name.trim(), slug: slug.trim() });
+      result = await updateOrganisation({ id: org.id, name: name.trim(), shortName: shortName.trim() || null, slug: slug.trim() });
     } else {
       const createResult = await createOrganization({ name: name.trim(), slug: slug.trim() });
       result = { success: createResult.success, error: createResult.error };
@@ -147,6 +149,18 @@ export function OrganisationForm({ open, onClose, org, onSuccess }: Organisation
               className={cn(fieldErrors.name && "border-red-500 focus-visible:ring-red-500")}
             />
             {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="org-short-name">Short Name (optional)</Label>
+            <Input
+              id="org-short-name"
+              value={shortName}
+              onChange={(e) => setShortName(e.target.value)}
+              placeholder={name || "My Org"}
+              maxLength={12}
+            />
+            <p className="text-sm text-gray-500">Shown on the home screen when users install the app (max 12 chars).</p>
           </div>
 
           <div className="space-y-2">

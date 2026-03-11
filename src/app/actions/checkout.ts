@@ -544,6 +544,7 @@ export interface CreateEmbeddedCheckoutParams {
   isNewMembership?: boolean // True if user is signing up for membership
   membershipId?: string // Selected membership ID for multi-membership support
   priceOptionId?: string // Selected price option ID for price options flow
+  quantity?: number // Number of price option tickets selected
   slug: string // Organization slug for return URL
 }
 
@@ -737,6 +738,37 @@ export async function createEmbeddedCheckoutSession(
       }
     }
 
+    // --- Price Options Flow ---
+    // If a price option is selected, resolve its effective price server-side.
+    // This is authoritative — the client-supplied price is never trusted.
+    let priceOptionEffectivePrice: number | null = null
+    const priceOptionQuantity = params.quantity ?? 1
+    if (params.priceOptionId && !isNewMembership) {
+      const [{ data: orgOption }, { data: templateOverride }] = await Promise.all([
+        supabase
+          .from("price_options")
+          .select("price, is_active, name")
+          .eq("id", params.priceOptionId)
+          .eq("organization_id", template.organization_id)
+          .single(),
+        supabase
+          .from("session_price_options")
+          .select("override_price, is_enabled")
+          .eq("session_template_id", params.sessionTemplateId)
+          .eq("price_option_id", params.priceOptionId)
+          .maybeSingle(),
+      ])
+
+      if (!orgOption?.is_active) {
+        return { success: false, error: "Selected ticket type is not available" }
+      }
+      if (templateOverride?.is_enabled === false) {
+        return { success: false, error: "Selected ticket type is not available for this session" }
+      }
+
+      priceOptionEffectivePrice = templateOverride?.override_price ?? orgOption.price
+    }
+
     // Calculate pricing breakdown
     // Use selected membership price if purchasing new membership, otherwise null
     const priceBreakdown = calculateBookingPrice(
@@ -744,11 +776,17 @@ export async function createEmbeddedCheckoutSession(
         numberOfSpots: params.numberOfSpots,
         isMember: isActiveMember,
         isNewMembership: params.isNewMembership || false,
-        dropInPrice: 0, // TODO: use price options
+        dropInPrice: priceOptionEffectivePrice ?? 0,
         memberPrice,
       },
       selectedMembership?.price ?? null
     )
+
+    // Subtotal before discount: for price options use effectivePrice × quantity,
+    // for legacy/membership paths use the priceBreakdown session subtotal.
+    const sessionSubtotal = priceOptionEffectivePrice !== null
+      ? priceOptionEffectivePrice * priceOptionQuantity
+      : priceBreakdown.sessionSubtotal
 
     // Calculate discount if promotion code is provided
     let discountAmount = 0
@@ -771,12 +809,10 @@ export async function createEmbeddedCheckoutSession(
             { stripeAccount: stripeAccount.stripe_account_id }
           )
 
-          // Calculate discount (only on session price, not membership fee)
-          const sessionTotal = priceBreakdown.person1Price + (priceBreakdown.additionalPersonPrice * priceBreakdown.additionalPeople)
           if (coupon.percent_off) {
-            discountAmount = Math.round(sessionTotal * (coupon.percent_off / 100))
+            discountAmount = Math.round(sessionSubtotal * (coupon.percent_off / 100))
           } else if (coupon.amount_off) {
-            discountAmount = Math.min(coupon.amount_off, sessionTotal)
+            discountAmount = Math.min(coupon.amount_off, sessionSubtotal)
           }
         }
       } catch (err) {
@@ -786,7 +822,10 @@ export async function createEmbeddedCheckoutSession(
     }
 
     // Calculate final total after discount
-    const finalTotal = priceBreakdown.total - discountAmount
+    const priceBreakdownTotal = priceOptionEffectivePrice !== null
+      ? sessionSubtotal
+      : priceBreakdown.total
+    const finalTotal = priceBreakdownTotal - discountAmount
 
     // ZERO-PRICE BYPASS: If total is £0 (after discount) and no membership, create booking directly
     if (finalTotal <= 0 && !isNewMembership) {
@@ -850,8 +889,29 @@ export async function createEmbeddedCheckoutSession(
         },
         quantity: 1,
       })
+    } else if (priceOptionEffectivePrice !== null) {
+      // Price options flow: single line item with the resolved price option price
+      const sessionDesc = `${startTime.toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      })} at ${startTime.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+      lineItems.push({
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: template.name,
+            description: sessionDesc,
+          },
+          unit_amount: priceOptionEffectivePrice,
+        },
+        quantity: priceOptionQuantity,
+      })
     } else {
-      // Payment mode: session booking only
+      // Payment mode: session booking only (legacy path)
 
       // Person 1 (member rate if applicable)
       lineItems.push({
@@ -911,7 +971,7 @@ export async function createEmbeddedCheckoutSession(
         is_new_membership: isNewMembership ? "true" : "false",
         promotion_code: params.promotionCode || "",
         // Price breakdown for confirmation display
-        unit_price: priceBreakdown.person1Price.toString(),
+        unit_price: (priceOptionEffectivePrice ?? priceBreakdown.person1Price).toString(),
         discount_amount: discountAmount.toString(),
       },
     }

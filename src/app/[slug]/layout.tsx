@@ -100,7 +100,7 @@ export async function generateMetadata({
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",
-      title: org.name,
+      title: org.shortName ?? org.name,
       startupImage,
     },
 

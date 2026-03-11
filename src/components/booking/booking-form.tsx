@@ -218,6 +218,7 @@ export function BookingForm({
         isNewMembership: formData.isNewMembership,
         membershipId: formData.membershipId,
         priceOptionId: formData.priceOptionId,
+        quantity: formData.quantity,
         slug: slug,
       })
 

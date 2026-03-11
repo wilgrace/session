@@ -12,6 +12,7 @@ export type BillingPeriod = 'monthly' | 'yearly' | 'one_time';
 export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  shortName: text('short_name'),
   slug: text('slug').notNull().unique(),
   description: text('description'),
   logoUrl: text('logo_url'),

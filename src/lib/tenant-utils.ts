@@ -10,6 +10,7 @@ import type { UserRole } from './db/schema';
 export interface TenantOrganization {
   id: string;
   name: string;
+  shortName: string | null;
   slug: string;
   description: string | null;
   logoUrl: string | null;
@@ -49,7 +50,7 @@ export const TENANT_ID_HEADER = 'x-organization-id';
 export const TENANT_SLUG_HEADER = 'x-organization-slug';
 
 const mapOrgData = (data: {
-  id: string; name: string; slug: string; description: string | null;
+  id: string; name: string; short_name: string | null; slug: string; description: string | null;
   logo_url: string | null; favicon_url: string | null; header_image_url: string | null;
   default_session_image_url: string | null; button_color: string | null;
   button_text_color: string | null; homepage_url: string | null;
@@ -58,6 +59,7 @@ const mapOrgData = (data: {
 }): TenantOrganization => ({
   id: data.id,
   name: data.name,
+  shortName: data.short_name ?? null,
   slug: data.slug,
   description: data.description,
   logoUrl: data.logo_url,
@@ -72,7 +74,7 @@ const mapOrgData = (data: {
   cancellationWindowHours: data.cancellation_window_hours ?? 0,
 });
 
-const ORG_SELECT = 'id, name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url, cancellation_window_hours';
+const ORG_SELECT = 'id, name, short_name, slug, description, logo_url, favicon_url, header_image_url, default_session_image_url, button_color, button_text_color, homepage_url, instagram_url, facebook_url, cancellation_window_hours';
 
 /**
  * Get organization by slug from the database.

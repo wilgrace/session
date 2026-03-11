@@ -55,6 +55,7 @@ function SettingsPageContent() {
 
   // Form state
   const [name, setName] = useState("")
+  const [shortName, setShortName] = useState("")
   const [description, setDescription] = useState("")
   const [formSlug, setFormSlug] = useState("")
   // Design fields kept in state for pass-through on save (not editable here)
@@ -106,6 +107,7 @@ function SettingsPageContent() {
     if (result.success && result.data) {
       setSettings(result.data)
       setName(result.data.name)
+      setShortName(result.data.shortName || "")
       setDescription(result.data.description || "")
       setFormSlug(result.data.slug)
       setLogoUrl(result.data.logoUrl || "")
@@ -218,6 +220,7 @@ function SettingsPageContent() {
     const result = await updateOrganizationSettings({
       organizationId: settings.id,
       name: name.trim(),
+      shortName: shortName.trim() || null,
       description: description.trim() || null,
       slug: formSlug.trim(),
       logoUrl: logoUrl || null,
@@ -294,6 +297,21 @@ function SettingsPageContent() {
             />
             <p className="text-sm text-gray-500">
               To help search engines find you
+            </p>
+          </div>
+
+          {/* Short Name */}
+          <div className="space-y-2">
+            <Label htmlFor="shortName">Short Name (optional)</Label>
+            <Input
+              id="shortName"
+              value={shortName}
+              onChange={(e) => setShortName(e.target.value)}
+              placeholder={name || "My Org"}
+              maxLength={12}
+            />
+            <p className="text-sm text-gray-500">
+              A short name (max 12 chars) shown when users add this app to their home screen.
             </p>
           </div>
 
