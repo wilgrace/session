@@ -194,6 +194,7 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
     setLocalBooking(booking);
     setCancelLoading(false);
     setQuantityOpen(false);
+    setQuantitySaving(false);
     setQuantityValue(booking?.number_of_spots ?? 1);
   }, [booking]);
 

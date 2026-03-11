@@ -30,6 +30,7 @@ export default function AdminHomePage() {
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const [hasSetInitialSession, setHasSetInitialSession] = useState(false);
   const [hasTemplates, setHasTemplates] = useState<boolean | null>(null);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
   const { view, searchQuery, setView, setSearchQuery } = useBookingsView();
 
   useEffect(() => {
@@ -175,6 +176,7 @@ export default function AdminHomePage() {
               onSelectBooking={setSelectedBooking}
               onClearSearch={() => setSearchQuery("")}
               hasTemplates={hasTemplates}
+              refreshKey={listRefreshKey}
             />
           </div>
         </div>
@@ -182,7 +184,7 @@ export default function AdminHomePage() {
           open={!!selectedBooking}
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
-          onCancel={() => setSelectedBooking(null)}
+          onCancel={() => { setSelectedBooking(null); setListRefreshKey(k => k + 1); }}
           onCheckIn={handleCheckIn}
         />
       </main>

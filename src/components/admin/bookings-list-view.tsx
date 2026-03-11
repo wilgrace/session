@@ -25,9 +25,10 @@ interface BookingsListViewProps {
   onSelectBooking: (booking: any) => void
   onClearSearch?: () => void
   hasTemplates?: boolean | null
+  refreshKey?: number
 }
 
-export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch, hasTemplates }: BookingsListViewProps) {
+export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch, hasTemplates, refreshKey }: BookingsListViewProps) {
   const params = useParams()
   const router = useRouter()
   const slug = params.slug as string
@@ -61,7 +62,7 @@ export function BookingsListView({ searchQuery, onSelectBooking, onClearSearch, 
     } finally {
       setLoading(false)
     }
-  }, [searchQuery, page, timeFilter])
+  }, [searchQuery, page, timeFilter, refreshKey])
 
   useEffect(() => {
     fetchBookings()
