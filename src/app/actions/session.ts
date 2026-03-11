@@ -2807,7 +2807,7 @@ export async function getDateChangeOptions(bookingId: string): Promise<{
     // Fetch future instances of same template, excluding current
     const { data: instances, error: instancesError } = await supabase
       .from('session_instances')
-      .select(`id, start_time, end_time, bookings(number_of_spots, status)`)
+      .select(`id, start_time, end_time, capacity_override, bookings(number_of_spots, status)`)
       .eq('template_id', templateId)
       .neq('id', currentInstanceId)
       .gt('start_time', new Date().toISOString())
@@ -2819,6 +2819,7 @@ export async function getDateChangeOptions(bookingId: string): Promise<{
 
     // Calculate available spots, filter to those with enough capacity
     const available = (instances || []).map((inst: any) => {
+      const effectiveCapacity = inst.capacity_override ?? capacity;
       const bookedSpots = (inst.bookings || [])
         .filter((b: any) => b.status !== 'cancelled')
         .reduce((sum: number, b: any) => sum + (b.number_of_spots || 0), 0);
@@ -2826,7 +2827,7 @@ export async function getDateChangeOptions(bookingId: string): Promise<{
         id: inst.id,
         start_time: inst.start_time,
         end_time: inst.end_time,
-        available_spots: capacity - bookedSpots,
+        available_spots: effectiveCapacity - bookedSpots,
       };
     }).filter((inst) => inst.available_spots >= requiredSpots);
 
@@ -2872,6 +2873,7 @@ export async function getAdminMoveOptions(
         id,
         start_time,
         end_time,
+        capacity_override,
         template:session_templates(name, capacity),
         bookings(number_of_spots, status)
       `)
@@ -2887,7 +2889,7 @@ export async function getAdminMoveOptions(
 
     const requiredSpots = booking.number_of_spots;
     const available = (instances || []).map((inst: any) => {
-      const capacity = inst.template?.capacity || 0;
+      const effectiveCapacity = inst.capacity_override ?? inst.template?.capacity ?? 0;
       const bookedSpots = (inst.bookings || [])
         .filter((b: any) => b.status !== 'cancelled')
         .reduce((sum: number, b: any) => sum + (b.number_of_spots || 0), 0);
@@ -2896,7 +2898,7 @@ export async function getAdminMoveOptions(
         start_time: inst.start_time,
         end_time: inst.end_time,
         template_name: inst.template?.name || 'Session',
-        available_spots: capacity - bookedSpots,
+        available_spots: effectiveCapacity - bookedSpots,
       };
     }).filter((inst) => inst.available_spots >= requiredSpots);
 
@@ -2943,6 +2945,7 @@ export async function moveBookingToInstance(
         id,
         template_id,
         start_time,
+        capacity_override,
         template:session_templates(capacity),
         bookings(number_of_spots, status)
       `)
@@ -2966,12 +2969,12 @@ export async function moveBookingToInstance(
 
     // Validate capacity
     const newInstanceTyped = newInstance as any;
-    const capacity = newInstanceTyped.template?.capacity || 0;
+    const effectiveCapacity = newInstanceTyped.capacity_override ?? newInstanceTyped.template?.capacity ?? 0;
     const bookedSpots = (newInstanceTyped.bookings || [])
       .filter((b: any) => b.status !== 'cancelled')
       .reduce((sum: number, b: any) => sum + (b.number_of_spots || 0), 0);
 
-    if (capacity - bookedSpots < booking.number_of_spots) {
+    if (effectiveCapacity - bookedSpots < booking.number_of_spots) {
       return { success: false, error: 'Not enough spots available in the selected session' };
     }
 

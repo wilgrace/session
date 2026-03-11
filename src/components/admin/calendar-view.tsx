@@ -73,12 +73,12 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
     )
   }
 
-  const totalCapacity = event.resource.capacity || 10
   // Find the instance for this event
   const instance = event.resource.instances?.find(i => {
     const instanceStart = new Date(i.start_time)
     return instanceStart.getTime() === event.start.getTime()
   })
+  const totalCapacity = instance?.capacity_override ?? event.resource.capacity ?? 10
   // Sum number_of_spots across all bookings for this instance
   const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
   const availableSpots = totalCapacity - totalSpotsBooked
@@ -526,7 +526,7 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                   return instanceStart.getTime() === event.start.getTime()
                 })
                 const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
-                const availableSpots = (event.resource.capacity || 10) - totalSpotsBooked
+                const availableSpots = (instance?.capacity_override ?? event.resource.capacity ?? 10) - totalSpotsBooked
                 const isFull = availableSpots === 0
 
                 // Check visibility status

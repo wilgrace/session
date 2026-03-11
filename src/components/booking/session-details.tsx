@@ -37,8 +37,12 @@ export function SessionDetails({
       return total + (instance.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
     }, 0) || 0) + currentUserSpots
 
+  // Resolve effective capacity: instance override → template default
+  const instance = session.instances?.[0]
+  const effectiveCapacity = instance?.capacity_override ?? session.capacity
+
   // Calculate spots remaining
-  const spotsRemaining = session.capacity - totalSpotsBooked
+  const spotsRemaining = effectiveCapacity - totalSpotsBooked
 
   const eventColor = getEventColorValues(session.event_color)
   // If event_color is an arbitrary hex (legacy data before key-based picker), use it directly
@@ -85,7 +89,7 @@ export function SessionDetails({
           <div>
             <h3 className="text-sm text-muted-foreground">Availability</h3>
             <p className="font-medium">
-              {spotsRemaining > 0 ? `${spotsRemaining} of ${session.capacity}` : 'Full'}
+              {spotsRemaining > 0 ? `${spotsRemaining} of ${effectiveCapacity}` : 'Full'}
             </p>
           </div>
         </div>

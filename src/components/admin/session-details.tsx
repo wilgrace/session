@@ -8,6 +8,7 @@ interface Session {
   start_time: string;
   end_time?: string;
   status?: string;
+  capacity_override?: number | null;
   bookings?: { number_of_spots?: number }[];
   template?: { name?: string; capacity?: number; event_color?: string | null };
 }
@@ -35,7 +36,7 @@ export function SessionDetails({
   const spotsTaken = (session.bookings || []).reduce(
     (sum, b) => sum + (b.number_of_spots || 1), 0
   );
-  const capacity = session.template?.capacity || 0;
+  const capacity = session.capacity_override ?? session.template?.capacity ?? 0;
   const eventColor = getEventColorValues(session.template?.event_color);
 
   const hasPrev = currentIndex > 0;

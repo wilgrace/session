@@ -83,9 +83,13 @@ export async function POST(req: NextRequest) {
           // Register payment method domain when charges first become enabled
           const wasChargesEnabled = existingAccount?.charges_enabled ?? false
           if (!wasChargesEnabled && account.charges_enabled) {
-            const appDomain = (process.env.NEXT_PUBLIC_APP_URL || "https://bookasession.org")
+            // Use www.bookasession.org — the canonical domain Vercel serves from.
+            // NEXT_PUBLIC_APP_URL may be bare bookasession.org which 307-redirects to www,
+            // and Apple's domain verification crawler does not follow redirects.
+            const rawDomain = (process.env.NEXT_PUBLIC_APP_URL || "https://www.bookasession.org")
               .replace(/^https?:\/\//, "")
               .replace(/\/$/, "")
+            const appDomain = rawDomain === "bookasession.org" ? "www.bookasession.org" : rawDomain
             try {
               await stripe.paymentMethodDomains.create(
                 { domain_name: appDomain },
