@@ -360,7 +360,6 @@ export async function createCheckoutSession(
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: "payment",
       ui_mode: "embedded",
-      payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
@@ -954,7 +953,6 @@ export async function createEmbeddedCheckoutSession(
     const checkoutConfig: any = {
       mode: checkoutMode,
       ui_mode: "embedded",
-      payment_method_types: ["card"],
       line_items: lineItems,
       customer_email: customerEmail,
       return_url: `${baseUrl}/${params.slug}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
@@ -1242,7 +1240,6 @@ export async function createMembershipOnlyCheckoutSession(
       {
         mode: "subscription",
         ui_mode: "embedded",
-        payment_method_types: ["card"],
         line_items: [
           {
             price: membership.stripe_price_id,
