@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { getUserRoleForOrg, getUserOrganizations, type UserOrgAssignment } from '@/lib/tenant-utils';
@@ -239,10 +240,11 @@ export async function createOrganization(params: {
       return { success: false, error: 'An organization with this slug already exists' };
     }
 
-    // Create the organization
+    // Create the organization (id has no DB-level default, must supply)
     const { data: newOrg, error } = await supabase
       .from('organizations')
       .insert({
+        id: randomUUID(),
         name: params.name,
         slug: params.slug,
         description: params.description || null,
