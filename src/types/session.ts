@@ -53,6 +53,7 @@ export interface SessionTemplate {
   image_url?: string | null
   // Calendar display color
   event_color?: string | null
+  include_in_filter?: boolean
 }
 
 export interface SessionInstance {

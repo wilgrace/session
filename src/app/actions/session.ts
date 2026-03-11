@@ -75,6 +75,7 @@ interface CreateSessionTemplateParams {
   image_url?: string | null
   // Calendar display color
   event_color?: string | null
+  include_in_filter?: boolean
 }
 
 interface CreateSessionTemplateResult {
@@ -123,6 +124,7 @@ interface UpdateSessionTemplateParams {
   image_url?: string | null
   // Calendar display color
   event_color?: string | null
+  include_in_filter?: boolean
 }
 
 interface UpdateSessionTemplateResult {
@@ -291,6 +293,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         image_url: params.image_url,
         // Calendar display color
         event_color: params.event_color || '#3b82f6',
+        include_in_filter: params.include_in_filter ?? true,
       })
       .select()
       .single()
@@ -1663,7 +1666,8 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
         organization_id,
         booking_instructions,
         image_url,
-        event_color
+        event_color,
+        include_in_filter
       `)
       .order("created_at", { ascending: false })
 
@@ -1932,7 +1936,8 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
         organization_id,
         booking_instructions,
         image_url,
-        event_color
+        event_color,
+        include_in_filter
       `)
       .eq('organization_id', organizationId)
       .is('deleted_at', null)

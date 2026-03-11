@@ -106,6 +106,7 @@ export const sessionTemplates = pgTable('session_templates', {
   imageUrl: text('image_url'), // Optional image URL for the session
   // Calendar display color
   eventColor: text('event_color').default('blue'), // Color key for calendar events (blue, green, yellow, red, purple)
+  includeInFilter: boolean('include_in_filter').notNull().default(true),
 });
 
 export const sessionSchedules = pgTable('session_schedules', {

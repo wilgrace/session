@@ -22,8 +22,9 @@ export interface LazyBookingCalendarProps {
   initialDate?: string
   filterablePriceOptions?: PriceOption[]
   filterableMemberships?: Membership[]
+  filterableSessions?: SessionTemplate[]
 }
 
-export function LazyBookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate, filterablePriceOptions = [], filterableMemberships = [] }: LazyBookingCalendarProps) {
-  return <BookingCalendar sessions={sessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedInstances} initialDate={initialDate} filterablePriceOptions={filterablePriceOptions} filterableMemberships={filterableMemberships} />
+export function LazyBookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate, filterablePriceOptions = [], filterableMemberships = [], filterableSessions }: LazyBookingCalendarProps) {
+  return <BookingCalendar sessions={sessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedInstances} initialDate={initialDate} filterablePriceOptions={filterablePriceOptions} filterableMemberships={filterableMemberships} filterableSessions={filterableSessions} />
 }

@@ -70,6 +70,7 @@ interface BookingCalendarProps {
   initialDate?: string
   filterablePriceOptions?: PriceOption[]
   filterableMemberships?: Membership[]
+  filterableSessions?: SessionTemplate[]
 }
 
 function isEventFull(event: CalendarEvent): boolean {
@@ -154,7 +155,7 @@ function EmptyStateOverlay({ isAdmin, slug }: { isAdmin: boolean; slug: string }
   )
 }
 
-export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate, filterablePriceOptions = [], filterableMemberships = [] }: BookingCalendarProps) {
+export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstances = {}, initialDate, filterablePriceOptions = [], filterableMemberships = [], filterableSessions }: BookingCalendarProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [currentView, setCurrentView] = useState<View>('week')
@@ -465,6 +466,12 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
             allSessions={sessions}
             selectedTemplateIds={selectedTemplateIds}
             onFilterChange={setSelectedTemplateIds}
+            filterablePriceOptions={filterablePriceOptions}
+            selectedPriceOptionIds={selectedPriceOptionIds}
+            onPriceOptionSelectionChange={setSelectedPriceOptionIds}
+            filterableMemberships={filterableMemberships}
+            selectedMembershipIds={selectedMembershipIds}
+            onMembershipSelectionChange={setSelectedMembershipIds}
           />
         </div>
         <div className="relative min-h-[50vh]">
@@ -508,7 +515,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
           )}
           <div className="flex items-center space-x-2 shrink-0">
             <SessionFilter
-              sessions={sessions}
+              sessions={filterableSessions ?? sessions}
               selectedIds={selectedTemplateIds}
               onSelectionChange={setSelectedTemplateIds}
               filterablePriceOptions={filterablePriceOptions}

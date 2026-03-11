@@ -361,7 +361,7 @@ function BillingPageContent() {
       )}
 
       {/* CONNECTED: Show Prices, Memberships, Coupons, then Stripe at bottom */}
-      {status?.chargesEnabled && (
+      {status?.connected && status?.onboardingComplete && (
         <>
           {/* Price Options */}
           <div className="">
