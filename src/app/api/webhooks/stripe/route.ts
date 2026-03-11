@@ -53,6 +53,13 @@ export async function POST(req: NextRequest) {
       case "account.updated": {
         const account = event.data.object as Stripe.Account
 
+        // Check previous charges_enabled state to detect transition
+        const { data: existingAccount } = await supabase
+          .from("stripe_connect_accounts")
+          .select("charges_enabled")
+          .eq("stripe_account_id", account.id)
+          .single()
+
         const { error } = await supabase
           .from("stripe_connect_accounts")
           .update({
@@ -72,6 +79,27 @@ export async function POST(req: NextRequest) {
           console.log(`  - details_submitted: ${account.details_submitted}`)
           console.log(`  - charges_enabled: ${account.charges_enabled}`)
           console.log(`  - payouts_enabled: ${account.payouts_enabled}`)
+
+          // Register payment method domain when charges first become enabled
+          const wasChargesEnabled = existingAccount?.charges_enabled ?? false
+          if (!wasChargesEnabled && account.charges_enabled) {
+            const appDomain = (process.env.NEXT_PUBLIC_APP_URL || "https://bookasession.org")
+              .replace(/^https?:\/\//, "")
+              .replace(/\/$/, "")
+            try {
+              await stripe.paymentMethodDomains.create(
+                { domain_name: appDomain },
+                { stripeAccount: account.id }
+              )
+              console.log(`Registered payment method domain '${appDomain}' for account ${account.id}`)
+            } catch (domainErr: unknown) {
+              const msg = domainErr instanceof Error ? domainErr.message : String(domainErr)
+              // Ignore if domain already registered
+              if (!msg.includes("already") && !msg.includes("exists")) {
+                console.error(`Failed to register payment method domain for ${account.id}:`, domainErr)
+              }
+            }
+          }
         }
         break
       }
