@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { getEventColorValues } from "@/lib/event-colors"
 import { SAUNA_TIMEZONE, formatLocalDate } from "@/lib/time-utils"
 import { SessionFilter } from "./session-filter"
+import type { PriceOption, Membership } from "@/lib/db/schema"
 
 interface MobileCalendarViewProps {
   selectedDate: Date
@@ -26,9 +27,15 @@ interface MobileCalendarViewProps {
   allSessions: SessionTemplate[]
   selectedTemplateIds: string[]
   onFilterChange: (ids: string[]) => void
+  filterablePriceOptions?: PriceOption[]
+  selectedPriceOptionIds?: string[]
+  onPriceOptionSelectionChange?: (ids: string[]) => void
+  filterableMemberships?: Membership[]
+  selectedMembershipIds?: string[]
+  onMembershipSelectionChange?: (ids: string[]) => void
 }
 
-export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSessions, selectedTemplateIds, onFilterChange }: MobileCalendarViewProps) {
+export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSessions, selectedTemplateIds, onFilterChange, filterablePriceOptions, selectedPriceOptionIds, onPriceOptionSelectionChange, filterableMemberships, selectedMembershipIds, onMembershipSelectionChange }: MobileCalendarViewProps) {
   const [weekOffset, setWeekOffset] = useState(0)
   const touchStartX = useRef(0)
 
@@ -114,6 +121,12 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
           sessions={allSessions}
           selectedIds={selectedTemplateIds}
           onSelectionChange={onFilterChange}
+          filterablePriceOptions={filterablePriceOptions}
+          selectedPriceOptionIds={selectedPriceOptionIds}
+          onPriceOptionSelectionChange={onPriceOptionSelectionChange}
+          filterableMemberships={filterableMemberships}
+          selectedMembershipIds={selectedMembershipIds}
+          onMembershipSelectionChange={onMembershipSelectionChange}
         />
         <div className="flex items-center">
           <Button

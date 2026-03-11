@@ -56,7 +56,9 @@ async function CalendarSection({
   ])
   const filterablePriceOptions = (priceOptionsResult.data ?? []).filter(o => o.includeInFilter)
   const filterableMemberships = membershipsResult.data ?? []
-  return <LazyBookingCalendar sessions={sessions || []} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} initialDate={initialDate} filterablePriceOptions={filterablePriceOptions} filterableMemberships={filterableMemberships} />
+  const allSessions = sessions || []
+  const filterableSessions = allSessions.filter(s => s.include_in_filter !== false)
+  return <LazyBookingCalendar sessions={allSessions} slug={slug} isAdmin={isAdmin} bookedInstances={bookedResult.data ?? {}} initialDate={initialDate} filterablePriceOptions={filterablePriceOptions} filterableMemberships={filterableMemberships} filterableSessions={filterableSessions} />
 }
 
 // Async server component — streams in upcoming bookings

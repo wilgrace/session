@@ -169,6 +169,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   // Event color state
   const [eventColor, setEventColor] = useState<EventColorKey>(DEFAULT_EVENT_COLOR)
 
+  // Calendar filter state
+  const [includeInFilter, setIncludeInFilter] = useState<boolean>(template?.include_in_filter ?? true)
+
   // Stripe Connect status
   const [stripeChargesEnabled, setStripeChargesEnabled] = useState<boolean | null>(null)
 
@@ -197,6 +200,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       setVisibility('open')
       setBookingInstructions("")
       setEventColor(DEFAULT_EVENT_COLOR)
+      setIncludeInFilter(true)
       setGeneralExpanded(true)
       setFieldErrors({})
       // Pricing fields
@@ -268,6 +272,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
       // Load event color
       setEventColor(normalizeEventColor(template.event_color))
+
+      // Load calendar filter setting
+      setIncludeInFilter(template.include_in_filter ?? true)
 
       // Load recurring schedules if present
       if (template.schedules && template.schedules.length > 0) {
@@ -519,6 +526,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           booking_instructions: bookingInstructions || null,
           image_url: imageUrl || null,
           event_color: eventColor,
+          include_in_filter: includeInFilter,
         }
 
         // Detect if schedule-related fields changed. If only general/pricing/visibility
@@ -610,6 +618,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           image_url: imageUrl || null,
           // Calendar display color
           event_color: eventColor,
+          include_in_filter: includeInFilter,
           one_off_dates: oneOffDatesParam,
         });
 
@@ -1628,9 +1637,20 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
               </Select>
 
               {visibility === 'open' && (
-                <p className="text-sm text-muted-foreground">
-                  Can be found and booked from the public calendar.
-                </p>
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Can be found and booked from the public calendar.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Include in calendar filter</p>
+                      <p className="text-sm text-muted-foreground">
+                        Let users filter the calendar by this session type.
+                      </p>
+                    </div>
+                    <Switch checked={includeInFilter} onCheckedChange={setIncludeInFilter} />
+                  </div>
+                </>
               )}
               {visibility === 'hidden' && (
                 <p className="text-sm text-muted-foreground">
