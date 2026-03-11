@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield, ArrowDownToLine, Palette } from "lucide-react"
+import { CalendarCheck, CalendarDays, Users, CreditCard, Settings, ExternalLink, Menu, ChevronDown, Shield, ArrowDownToLine, Palette, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -73,6 +73,7 @@ export function Sidebar({ slug }: SidebarProps) {
   // Find current org from assignments
   const currentOrg = userOrgs.find(a => a.organization.slug === slug)
   const hasMultipleOrgs = userOrgs.length > 1
+  const isSuperAdmin = userOrgs.some(a => a.role === 'superadmin')
 
   // Navigate to a different org's admin
   const handleOrgSwitch = (newSlug: string) => {
@@ -210,6 +211,25 @@ export function Sidebar({ slug }: SidebarProps) {
                 )
               })}
             </div>
+          )}
+
+          {isSuperAdmin && (
+            <>
+              <div className="border-t border-gray-200 my-2" />
+              <Link
+                href={`/${slug}/admin/organisations`}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+                  pathname.startsWith(`/${slug}/admin/organisations`)
+                    ? "bg-gray-100 text-primary"
+                    : "text-gray-800 hover:bg-gray-100 hover:text-gray-900",
+                )}
+              >
+                <Building2 className="mr-3 h-5 w-5 opacity-50" />
+                Organisations
+              </Link>
+            </>
           )}
         </nav>
       </div>
