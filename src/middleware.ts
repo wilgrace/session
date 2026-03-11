@@ -21,6 +21,7 @@ const BYPASS_PATHS = [
   '/workbox-',
   '/terms-of-service',
   '/privacy-policy',
+  '/.well-known',
 ];
 
 // Static file extensions to bypass
