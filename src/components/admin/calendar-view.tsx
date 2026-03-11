@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Pencil, Users, ArrowUp, ArrowDown, EyeOff } from "lucide-react"
+import { List, ChevronLeft, ChevronRight, Calendar, RefreshCw, Pencil, Users, ArrowUp, ArrowDown, EyeOff, Lock } from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek as dateFnsStartOfWeek, endOfWeek as dateFnsEndOfWeek, startOfDay, endOfDay, getDay } from "date-fns"
 import { SessionTemplate } from "@/types/session"
 import { cn } from "@/lib/utils"
@@ -97,7 +97,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
       <div className="session-meta flex justify-between items-center">
         <span className="flex items-center gap-1">
           <Users className="h-3 w-3" />
-          {isFull ? 'Waiting List' : `${totalSpotsBooked}/${totalCapacity}`}
+          {isFull ? 'Full • Waiting List' : `${totalSpotsBooked}/${totalCapacity}`}
         </span>
         <span className="flex items-center gap-1">
           {isFreeSession && <span className="text-[10px] font-semibold uppercase">Free</span>}
@@ -245,7 +245,13 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
     // Process one-off instances (for templates with no schedules, or mixed templates with one-off dates)
     if (!session.schedules?.length || (session.one_off_dates?.length ?? 0) > 0) {
       if (session.instances && session.instances.length > 0) {
-        session.instances.forEach((instance) => {
+        // For mixed templates (has schedules), only render instances that are one-off (schedule_id === null)
+        // to avoid duplicating recurring instances already rendered above
+        const hasSchedules = (session.schedules?.length ?? 0) > 0
+        const instancesToRender = hasSchedules
+          ? session.instances.filter(i => i.schedule_id === null)
+          : session.instances
+        instancesToRender.forEach((instance) => {
           // Parse the ISO string and create a new Date object
           const startTime = new Date(instance.start_time);
           const endTime = new Date(instance.end_time);

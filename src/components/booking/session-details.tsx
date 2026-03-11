@@ -89,7 +89,7 @@ export function SessionDetails({
           <div>
             <h3 className="text-sm text-muted-foreground">Availability</h3>
             <p className="font-medium">
-              {spotsRemaining > 0 ? `${spotsRemaining} of ${effectiveCapacity}` : 'Full'}
+              {spotsRemaining > 0 ? `${spotsRemaining} spaces left` : 'Full'}
             </p>
           </div>
         </div>

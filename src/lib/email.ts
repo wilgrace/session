@@ -231,7 +231,7 @@ export async function sendBookingConfirmationEmail(
               ${buildDetailRow('Date', dateStr)}
               ${buildDetailRow('Time', `${timeStr} – ${endTimeStr}`)}
               ${buildDetailRow('Duration', durationStr)}
-              ${buildDetailRow('Spots booked', String(booking.number_of_spots))}
+              ${buildDetailRow('Spaces booked', String(booking.number_of_spots))}
               ${buildDetailRow('Total', amountStr)}
             </table>
           </td>

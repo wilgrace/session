@@ -108,7 +108,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
       <div className="session-meta flex justify-between items-center">
         <span className="flex items-center gap-1">
           <Users className="h-3 w-3" />
-          {event.isBooked ? 'Booked' : isFull ? 'Waiting List' : availableSpots}
+          {event.isBooked ? 'Booked' : isFull ? 'Full • Join waiting list' : `${availableSpots} spaces` }
         </span>
         <span className="flex items-center gap-1">
           {isFreeSession && <span className="text-[10px] font-semibold uppercase">Free</span>}
