@@ -67,7 +67,7 @@ export function MobileCalendarView({ selectedDate, onDateSelect, sessions, allSe
     )
     if (instancesOnDay.length === 0) return false
     return instancesOnDay.every(instance => {
-      const totalCapacity = instance.capacity_override ?? template.capacity ?? 10
+      const totalCapacity = (instance as any).effectiveCapacity ?? template.capacity ?? 10
       const totalSpotsBooked = instance.bookings?.reduce((sum: number, b: { number_of_spots?: number }) => sum + (b.number_of_spots || 1), 0) || 0
       return totalSpotsBooked >= totalCapacity
     })

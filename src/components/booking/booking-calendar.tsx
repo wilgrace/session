@@ -78,7 +78,7 @@ function isEventFull(event: CalendarEvent): boolean {
     new Date(i.start_time).getTime() === event.start.getTime()
   )
   if (!instance) return false // schedule-based, assume available
-  const effectiveCapacity = instance.capacity_override ?? event.resource.capacity ?? 10
+  const effectiveCapacity = (instance as any).effectiveCapacity ?? event.resource.capacity ?? 10
   const totalSpotsBooked = instance.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
   return totalSpotsBooked >= effectiveCapacity
 }
@@ -89,7 +89,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
     const instanceStart = new Date(i.start_time)
     return instanceStart.getTime() === event.start.getTime()
   })
-  const totalCapacity = instance?.capacity_override ?? event.resource.capacity ?? 10
+  const totalCapacity = (instance as any)?.effectiveCapacity ?? event.resource.capacity ?? 10
 
   // Calculate total spots booked by summing number_of_spots from all bookings
   const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
@@ -572,7 +572,7 @@ export function BookingCalendar({ sessions, slug, isAdmin = false, bookedInstanc
             return instanceStart.getTime() === event.start.getTime()
           })
           const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
-          const availableSpots = (instance?.capacity_override ?? event.resource.capacity ?? 10) - totalSpotsBooked
+          const availableSpots = ((instance as any)?.effectiveCapacity ?? event.resource.capacity ?? 10) - totalSpotsBooked
           const isFull = availableSpots === 0
 
           // Determine session type class
