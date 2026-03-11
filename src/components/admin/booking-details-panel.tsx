@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Check, X, ChevronLeft, Loader2, CalendarDays } from 'lucide-react';
-import { checkInBooking, cancelBookingWithRefund, getAdminMoveOptions, moveBookingToInstance } from '@/app/actions/session';
+import { Check, X, ChevronLeft, Loader2, CalendarDays, Users } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { checkInBooking, cancelBookingWithRefund, getAdminMoveOptions, moveBookingToInstance, updateBooking } from '@/app/actions/session';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect } from 'react';
 import { format, addDays } from 'date-fns';
@@ -176,6 +177,11 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
   const [localBooking, setLocalBooking] = useState<Booking | null>(booking);
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  // Edit quantity state
+  const [quantityOpen, setQuantityOpen] = useState(false);
+  const [quantityValue, setQuantityValue] = useState<number>(1);
+  const [quantitySaving, setQuantitySaving] = useState(false);
+
   // Move booking state
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveOptionsLoading, setMoveOptionsLoading] = useState(false);
@@ -187,6 +193,9 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
   useEffect(() => {
     setLocalBooking(booking);
     setCancelLoading(false);
+    setQuantityOpen(false);
+    setQuantitySaving(false);
+    setQuantityValue(booking?.number_of_spots ?? 1);
   }, [booking]);
 
   const handleCheckIn = async () => {
@@ -247,6 +256,21 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
         variant: 'destructive',
       });
       setCancelLoading(false);
+    }
+  };
+
+  const handleSaveQuantity = async () => {
+    if (!localBooking) return;
+    setQuantitySaving(true);
+    try {
+      const result = await updateBooking({ booking_id: localBooking.id, number_of_spots: quantityValue });
+      if (!result.success) throw new Error(result.error);
+      toast({ title: 'Quantity updated' });
+      setQuantityOpen(false);
+      onCancel(); // close panel and refresh parent
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to update quantity', variant: 'destructive' });
+      setQuantitySaving(false);
     }
   };
 
@@ -392,6 +416,37 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
                     </div>
                   )}
                 </Card>
+
+                {/* Edit Quantity */}
+                {!quantityOpen ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={() => { setQuantityValue(localBooking.number_of_spots || 1); setQuantityOpen(true); }}
+                    disabled={cancelLoading}
+                  >
+                    <Users className="h-4 w-4" />
+                    Edit Quantity
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={quantityValue}
+                      onChange={(e) => setQuantityValue(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="h-9 w-20 text-center"
+                      disabled={quantitySaving}
+                    />
+                    <Button size="sm" className="flex-1" onClick={handleSaveQuantity} disabled={quantitySaving}>
+                      {quantitySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setQuantityOpen(false)} disabled={quantitySaving}>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
 
                 {/* Move Booking — future sessions only */}
                 {isFuture && (
