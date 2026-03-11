@@ -1205,7 +1205,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                                 <div className={cn("flex flex-wrap gap-2 rounded-md p-1", fieldErrors[`schedule-days-${schedule.id}`] && "ring-1 ring-red-500")}>
                                   {daysOfWeek.map((day) => (
                                     <button key={day.value} type="button" onClick={() => { toggleDay(schedule.id, day.value); clearError(`schedule-days-${schedule.id}`) }}
-                                      className={cn("px-3 py-1 rounded-md text-sm", schedule.days.includes(day.value) ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")}>
+                                      className={cn("px-3 py-1 rounded-md text-sm", schedule.days.includes(day.value) ? "bg-primary/5 border border-primary text-primary" : "bg-gray-100 text-gray-700 hover:bg-gray-200")}>
                                       {day.label}
                                     </button>
                                   ))}
