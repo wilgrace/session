@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   getStripeConnectStatus,
+  syncStripeAccountStatus,
   createStripeConnectAccount,
   createOnboardingLink,
   createDashboardLink,
@@ -71,8 +72,15 @@ function BillingPageContent() {
     setLoading(true)
     setError(null)
 
+    // When returning from Stripe onboarding, sync status directly from Stripe API
+    // to avoid depending on the webhook having already fired, then reload full status
+    if (success) {
+      await syncStripeAccountStatus()
+    }
+    const statusFetcher = getStripeConnectStatus()
+
     const [statusResult, membershipsResult, promoCodesResult, priceOptionsResult] = await Promise.all([
-      getStripeConnectStatus(),
+      statusFetcher,
       getMemberships(),
       getPromotionCodes(),
       getPriceOptions(),
