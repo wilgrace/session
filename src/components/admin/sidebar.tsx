@@ -97,7 +97,7 @@ export function Sidebar({ slug }: SidebarProps) {
       )
     }
 
-    if (hasMultipleOrgs) {
+    if (hasMultipleOrgs || isSuperAdmin) {
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -109,6 +109,17 @@ export function Sidebar({ slug }: SidebarProps) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
+            {isSuperAdmin && (
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`/${slug}/admin/organisations`}
+                  className="cursor-pointer flex items-center gap-2 border-b border-gray-100 mb-1 pb-2"
+                >
+                  <Building2 className="h-4 w-4 opacity-50" />
+                  Organisations
+                </Link>
+              </DropdownMenuItem>
+            )}
             {userOrgs.map((assignment) => (
               <DropdownMenuItem
                 key={assignment.organizationId}
@@ -213,24 +224,6 @@ export function Sidebar({ slug }: SidebarProps) {
             </div>
           )}
 
-          {isSuperAdmin && (
-            <>
-              <div className="border-t border-gray-200 my-2" />
-              <Link
-                href={`/${slug}/admin/organisations`}
-                onClick={onNavigate}
-                className={cn(
-                  "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                  pathname.startsWith(`/${slug}/admin/organisations`)
-                    ? "bg-gray-100 text-primary"
-                    : "text-gray-800 hover:bg-gray-100 hover:text-gray-900",
-                )}
-              >
-                <Building2 className="mr-3 h-5 w-5 opacity-50" />
-                Organisations
-              </Link>
-            </>
-          )}
         </nav>
       </div>
 
