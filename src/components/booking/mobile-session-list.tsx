@@ -34,7 +34,7 @@ function findNextAvailableSessionDate(sessions: SessionTemplate[], afterDate: Da
       // Use timezone-aware date string for instance comparison (same as MobileCalendarView)
       for (const instance of template.instances) {
         const instanceStr = formatLocalDate(new Date(instance.start_time), SAUNA_TIMEZONE)
-        if (instanceStr > afterStr && (!nextDateStr || instanceStr < nextDateStr) && isInstanceAvailable(instance, template.capacity || 10)) {
+        if (instanceStr > afterStr && (!nextDateStr || instanceStr < nextDateStr) && isInstanceAvailable(instance, instance.capacity_override ?? template.capacity ?? 10)) {
           nextDateStr = instanceStr
         }
       }
@@ -133,7 +133,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
 
   const allFull = visibleSessionsForDay.length > 0 && visibleSessionsForDay.every(({ template, instance }) => {
     if (!instance) return false // schedule-based, assume available
-    const totalCapacity = template.capacity || 10
+    const totalCapacity = instance.capacity_override ?? template.capacity ?? 10
     const totalSpotsBooked = instance.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
     return totalSpotsBooked >= totalCapacity
   })
@@ -178,7 +178,7 @@ export function MobileSessionList({ sessions, selectedDate, slug, onDateSelect, 
         // TODO: use price options to determine free sessions
         const isFreeSession = false
         const isHidden = template.visibility === 'hidden'
-        const totalCapacity = template.capacity || 10
+        const totalCapacity = instance?.capacity_override ?? template.capacity ?? 10
         const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
         const availableSpots = totalCapacity - totalSpotsBooked
         const isFull = availableSpots === 0
