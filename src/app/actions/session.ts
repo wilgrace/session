@@ -725,6 +725,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         status,
         cancelled_at,
         cancellation_reason,
+        capacity_override,
         bookings (
           id,
           number_of_spots,
@@ -782,6 +783,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
           };
         }) || [];
 
+        const capacityOverride = (instance as any).capacity_override ?? null
         return {
           id: instance.id,
           start_time: instance.start_time,
@@ -790,6 +792,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
           cancelled_at: instance.cancelled_at,
           cancellation_reason: instance.cancellation_reason,
           template_id: template.id,
+          capacity_override: capacityOverride,
+          effectiveCapacity: capacityOverride ?? template.capacity,
           bookings
         };
       });
