@@ -750,7 +750,7 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
       const templateInstances = (instances as unknown as DBSessionInstance[])?.filter(i => i.template_id === template.id) || []
       const templateOneOffDates = (oneOffDates as DBSessionOneOffDate[])?.filter(d => d.template_id === template.id) || []
 
-      // Group schedules by time
+      // Group schedules by time (deduplicate same day appearing multiple times)
       const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups: Record<string, SessionSchedule>, schedule) => {
         const time = schedule.time?.substring(0, 5)
         if (!groups[time]) {
@@ -765,7 +765,9 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
           }
         }
         const dayName = mapIntToDayString(schedule.day_of_week, true)
-        groups[time].days.push(dayName)
+        if (!groups[time].days.includes(dayName)) {
+          groups[time].days.push(dayName)
+        }
         return groups
       }, {} as Record<string, SessionSchedule>)
 
@@ -1931,7 +1933,7 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
       const templateSchedules = schedules?.filter(s => s.session_template_id === template.id) || []
       const templateInstances = (instances as unknown as DBSessionInstance[])?.filter(i => i.template_id === template.id) || []
 
-      // Group schedules by time
+      // Group schedules by time (deduplicate same day appearing multiple times)
       const scheduleGroups: Record<string, SessionSchedule> = templateSchedules.reduce((groups, schedule) => {
         const time = schedule.time?.substring(0, 5)
         if (!groups[time]) {
@@ -1946,7 +1948,9 @@ export async function getPublicSessions(): Promise<{ data: SessionTemplate[] | n
           }
         }
         const dayName = mapIntToDayString(schedule.day_of_week, true)
-        groups[time].days.push(dayName)
+        if (!groups[time].days.includes(dayName)) {
+          groups[time].days.push(dayName)
+        }
         return groups
       }, {} as Record<string, SessionSchedule>)
 
@@ -2211,7 +2215,9 @@ export async function getPublicSessionsByOrg(organizationId: string): Promise<{ 
           }
         }
         const dayName = mapIntToDayString(schedule.day_of_week, true)
-        groups[time].days.push(dayName)
+        if (!groups[time].days.includes(dayName)) {
+          groups[time].days.push(dayName)
+        }
         return groups
       }, {} as Record<string, SessionSchedule>)
 

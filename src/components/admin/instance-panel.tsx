@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Loader2, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react"
 import { cancelSessionInstance, deleteSessionInstance } from "@/app/actions/session"
-import { getPriceOptions, getInstanceOverrides, updateInstanceCapacity, updateInstancePriceOptions, updateInstanceMembershipOverrides } from "@/app/actions/price-options"
+import { getPriceOptions, getSessionPriceOptions, getInstanceOverrides, updateInstanceCapacity, updateInstancePriceOptions, updateInstanceMembershipOverrides } from "@/app/actions/price-options"
 import { getMemberships } from "@/app/actions/memberships"
 import { useToast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
@@ -65,6 +65,7 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
   const [priceOptions, setPriceOptions] = useState<PriceOption[]>([])
   const [poEnabled, setPoEnabled] = useState<Record<string, boolean>>({})
   const [poHasOverride, setPoHasOverride] = useState<Record<string, boolean>>({})
+  const [poTemplateEnabled, setPoTemplateEnabled] = useState<Record<string, boolean>>({})
   const [poPrices, setPoPrices] = useState<Record<string, string>>({})
   const [poSpaces, setPoSpaces] = useState<Record<string, string>>({})
   const [poEditing, setPoEditing] = useState<Record<string, boolean>>({})
@@ -91,10 +92,11 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
       setPoEditing({})
       setMemEditing({})
       try {
-        const [priceOptsResult, membershipsResult, overridesResult] = await Promise.all([
+        const [priceOptsResult, membershipsResult, overridesResult, sessionPoResult] = await Promise.all([
           getPriceOptions(),
           getMemberships(),
           getInstanceOverrides(session!.id),
+          session!.template?.id ? getSessionPriceOptions(session!.template.id) : Promise.resolve({ success: true, data: [] }),
         ])
 
         const activeOptions = priceOptsResult.success && priceOptsResult.data
@@ -117,7 +119,23 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           const poHasOverrideMap: Record<string, boolean> = {}
           const poPriceMap: Record<string, string> = {}
           const poSpacesMap: Record<string, string> = {}
-          activeOptions.forEach(o => { poEnabledMap[o.id] = true; poHasOverrideMap[o.id] = false })
+          const poTemplateEnabledMap: Record<string, boolean> = {}
+
+          // Determine template-level enabled state for each option (used as inherited default)
+          const sessionPoRows = sessionPoResult.success && sessionPoResult.data ? sessionPoResult.data : []
+          const hasTemplateConfig = sessionPoRows.length > 0
+          const sessionPoMap = new Map(sessionPoRows.map(r => [r.priceOptionId, r]))
+          activeOptions.forEach(o => {
+            const templateRow = sessionPoMap.get(o.id)
+            const templateEnabled = hasTemplateConfig
+              ? (templateRow?.isEnabled ?? false) // not configured for this template = disabled
+              : true // no template config = all org options enabled by default
+            poTemplateEnabledMap[o.id] = templateEnabled
+            poEnabledMap[o.id] = templateEnabled
+            poHasOverrideMap[o.id] = false
+          })
+          setPoTemplateEnabled(poTemplateEnabledMap)
+
           poRows.forEach(r => {
             poEnabledMap[r.priceOptionId] = r.isEnabled ?? true
             poHasOverrideMap[r.priceOptionId] = true
@@ -386,7 +404,7 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
                           <div>
                             {priceOptions.map((option) => {
                               const hasOverride = poHasOverride[option.id] ?? false
-                              const enabled = hasOverride ? (poEnabled[option.id] ?? true) : true
+                              const enabled = hasOverride ? (poEnabled[option.id] ?? true) : (poTemplateEnabled[option.id] ?? true)
                               const priceStr = poPrices[option.id] ?? ""
                               const spacesStr = poSpaces[option.id] ?? ""
                               const isEditing = poEditing[option.id] ?? false
