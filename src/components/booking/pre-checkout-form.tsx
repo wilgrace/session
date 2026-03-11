@@ -131,6 +131,15 @@ export function PreCheckoutForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedPriceOptions])
 
+  // When there are no price options but memberships are available, default non-members
+  // to the membership option so they aren't shown a ghost "Session price" fallback.
+  useEffect(() => {
+    if (!hasPriceOptions && !isActiveMember && memberships.filter(m => m.membership.showOnMembershipPage !== false).length > 0) {
+      setPricingType("membership")
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberships.length, hasPriceOptions, isActiveMember])
+
   // Form state - default to "membership" if user is already a member (and their membership is valid for this session), returning from sign-up, or drop-in is disabled
   const [pricingType, setPricingType] = useState<"drop_in" | "membership">(
     (isActiveMember && !userMembershipDisabled) || defaultToMembership || dropInEnabled === false ? "membership" : "drop_in"
@@ -445,8 +454,12 @@ export function PreCheckoutForm({
                   )
                 })}
 
-                {/* Legacy Drop-in Option — only shown when no price options are configured */}
-                {(!isActiveMember || userMembershipDisabled) && !hasPriceOptions && dropInEnabled !== false && (
+                {/* Legacy Drop-in Option — only shown when no price options are configured.
+                    Hidden for non-members when memberships are available to purchase
+                    (membership-only sessions). Active members with a disabled membership
+                    still see it so they have a way to book. */}
+                {(!isActiveMember || userMembershipDisabled) && !hasPriceOptions && dropInEnabled !== false &&
+                  (isActiveMember || memberships.filter(m => m.membership.showOnMembershipPage !== false).length === 0) && (
           <button
             type="button"
             onClick={() => setPricingType("drop_in")}

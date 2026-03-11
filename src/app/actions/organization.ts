@@ -11,6 +11,7 @@ import { getUserRoleForOrg, getTenantFromHeaders } from '@/lib/tenant-utils';
 export interface OrganizationSettings {
   id: string;
   name: string;
+  shortName: string | null;
   slug: string;
   description: string | null;
   logoUrl: string | null;
@@ -71,6 +72,7 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
       .select(`
         id,
         name,
+        short_name,
         slug,
         description,
         logo_url,
@@ -102,6 +104,7 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
       data: {
         id: data.id,
         name: data.name,
+        shortName: data.short_name ?? null,
         slug: data.slug,
         description: data.description,
         logoUrl: data.logo_url,
@@ -134,6 +137,7 @@ export async function getOrganizationSettings(organizationId?: string): Promise<
 export async function updateOrganizationSettings(params: {
   organizationId: string;
   name?: string;
+  shortName?: string | null;
   description?: string | null;
   slug?: string;
   logoUrl?: string | null;
@@ -205,6 +209,7 @@ export async function updateOrganizationSettings(params: {
     };
 
     if (params.name !== undefined) updateData.name = params.name;
+    if (params.shortName !== undefined) updateData.short_name = params.shortName;
     if (params.description !== undefined) updateData.description = params.description;
     if (params.slug !== undefined) updateData.slug = params.slug;
     if (params.logoUrl !== undefined) updateData.logo_url = params.logoUrl;

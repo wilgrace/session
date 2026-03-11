@@ -25,6 +25,7 @@ async function requireSuperAdmin() {
 export interface OrgRow {
   id: string;
   name: string;
+  shortName: string | null;
   slug: string;
   faviconUrl: string | null;
   logoUrl: string | null;
@@ -41,7 +42,7 @@ export async function listOrganisations(): Promise<{ success: boolean; data?: Or
   const { data: orgs, error } = await supabase
     .from('organizations')
     .select(`
-      id, name, slug, favicon_url, logo_url, created_at,
+      id, name, short_name, slug, favicon_url, logo_url, created_at,
       clerk_users(count),
       stripe_connect_accounts(charges_enabled)
     `)
@@ -55,6 +56,7 @@ export async function listOrganisations(): Promise<{ success: boolean; data?: Or
   const rows: OrgRow[] = (orgs ?? []).map((org: any) => ({
     id: org.id,
     name: org.name,
+    shortName: org.short_name ?? null,
     slug: org.slug,
     faviconUrl: org.favicon_url,
     logoUrl: org.logo_url,
@@ -69,6 +71,7 @@ export async function listOrganisations(): Promise<{ success: boolean; data?: Or
 export async function updateOrganisation(params: {
   id: string;
   name: string;
+  shortName?: string | null;
   slug: string;
 }): Promise<{ success: boolean; error?: string }> {
   const ctx = await requireSuperAdmin();
@@ -92,9 +95,12 @@ export async function updateOrganisation(params: {
     return { success: false, error: 'This slug is already taken.' };
   }
 
+  const updateData: Record<string, any> = { name: params.name, slug: params.slug, updated_at: new Date().toISOString() };
+  if (params.shortName !== undefined) updateData.short_name = params.shortName;
+
   const { error } = await supabase
     .from('organizations')
-    .update({ name: params.name, slug: params.slug, updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq('id', params.id);
 
   if (error) {

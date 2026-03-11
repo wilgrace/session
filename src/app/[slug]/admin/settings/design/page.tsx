@@ -137,7 +137,7 @@ function DesignPageContent() {
             aspectRatio="square"
           />
           <BrandingImageUpload
-            label="Favicon"
+            label="Icon"
             value={faviconUrl}
             onChange={setFaviconUrl}
             description="Browser tab icon. Recommended: 32x32px or 48x48px"
