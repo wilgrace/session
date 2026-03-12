@@ -11,11 +11,12 @@ declare global {
   }
 }
 
-export function FeaturebaseMessenger({ slug }: { slug: string }) {
+export function FeaturebaseMessenger({ slug }: { slug?: string }) {
   const { user } = useUser()
   const [orgName, setOrgName] = useState<string>()
 
   useEffect(() => {
+    if (!slug) return
     async function fetchOrg() {
       const result = await getCurrentUserOrganizations()
       if (result.success && result.data) {

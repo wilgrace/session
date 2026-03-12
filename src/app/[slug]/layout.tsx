@@ -5,6 +5,7 @@ import { SlugProvider } from "@/lib/slug-context"
 import { hexToHSL, getForegroundHSL } from "@/lib/color-utils"
 import { getBaseUrl } from "@/lib/site-config"
 import { SplashWarmer } from "@/components/splash-warmer"
+import { FeaturebaseMessenger } from "@/components/admin/featurebase-messenger"
 
 // iOS device sizes for PWA splash screens (logical pixels × DPR = physical image pixels)
 // Media queries use logical points; image dimensions use physical pixels (w×dpr, h×dpr)
@@ -161,6 +162,7 @@ export default async function SlugLayout({
       <div style={brandStyle}>
         <SplashWarmer />
         {children}
+        <FeaturebaseMessenger slug={slug} />
       </div>
     </SlugProvider>
   )
