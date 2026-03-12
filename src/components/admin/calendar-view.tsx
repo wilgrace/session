@@ -80,8 +80,8 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
     return instanceStart.getTime() === event.start.getTime()
   })
   const totalCapacity = (instance as any)?.effectiveCapacity ?? event.resource.capacity ?? 10
-  // Sum number_of_spots across all bookings for this instance
-  const totalSpotsBooked = instance?.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
+  // Sum number_of_spots across active (non-cancelled) bookings for this instance
+  const totalSpotsBooked = instance?.bookings?.filter((b: any) => !b.cancelled_at).reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0
   const availableSpots = totalCapacity - totalSpotsBooked
 
   // TODO: use price options to determine free sessions
@@ -537,7 +537,7 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
                   const instanceStart = new Date(i.start_time)
                   return instanceStart.getTime() === event.start.getTime()
                 })
-                const totalSpotsBooked = instance?.bookings?.reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
+                const totalSpotsBooked = instance?.bookings?.filter((b: any) => !b.cancelled_at).reduce((sum, b) => sum + (b.number_of_spots || 1), 0) || 0
                 const availableSpots = ((instance as any)?.effectiveCapacity ?? event.resource.capacity ?? 10) - totalSpotsBooked
                 const isFull = availableSpots === 0
 

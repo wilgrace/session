@@ -3541,10 +3541,10 @@ export async function getAdminSessionsForDateRange(
       }
     }
 
-    // Add membership_name to each booking
+    // Add membership_name to each booking, excluding cancelled bookings
     const transformed = (instances || []).map((instance: any) => ({
       ...instance,
-      bookings: (instance.bookings || []).map((booking: any) => ({
+      bookings: (instance.bookings || []).filter((booking: any) => !booking.cancelled_at).map((booking: any) => ({
         ...booking,
         membership_name: membershipNames[booking.user?.id] || null,
       })),
