@@ -104,7 +104,7 @@ export function PriceOptionsList({
         <div>
           <p className="text-lg font-medium text-gray-900">Session Prices</p>
           <p className="text-sm text-gray-500 mt-1">
-            Define ticket types that control how many spaces are booked and at what price.
+            Control how many spaces are booked and at what price.
           </p>
         </div>
         <Button onClick={onCreate} className="gap-2" variant="outline">
@@ -116,7 +116,7 @@ export function PriceOptionsList({
       {ordered.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg">
           <p className="text-sm text-gray-500 mb-4">
-            No prices yet. Create your first ticket type to start taking payments.
+            No prices yet. Create your first price type to start taking payments.
           </p>
           <Button onClick={onCreate} variant="outline" className="gap-2">
             <Plus className="h-4 w-4" />

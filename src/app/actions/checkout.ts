@@ -759,10 +759,10 @@ export async function createEmbeddedCheckoutSession(
       ])
 
       if (!orgOption?.is_active) {
-        return { success: false, error: "Selected ticket type is not available" }
+        return { success: false, error: "Selected price is not available" }
       }
       if (templateOverride?.is_enabled === false) {
-        return { success: false, error: "Selected ticket type is not available for this session" }
+        return { success: false, error: "Selected price is not available for this session" }
       }
 
       priceOptionEffectivePrice = templateOverride?.override_price ?? orgOption.price

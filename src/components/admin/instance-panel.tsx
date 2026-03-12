@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Loader2, AlertTriangle, ChevronDown, ChevronUp, Users } from "lucide-react"
 import { cancelSessionInstance, deleteSessionInstance } from "@/app/actions/session"
 import { getPriceOptions, getSessionPriceOptions, getInstanceOverrides, updateInstanceCapacity, updateInstancePriceOptions, updateInstanceMembershipOverrides } from "@/app/actions/price-options"
 import { getMemberships } from "@/app/actions/memberships"
@@ -34,6 +35,7 @@ interface InstancePanelSession {
   template?: {
     id?: string
     name?: string
+    capacity?: number
   }
 }
 
@@ -47,6 +49,7 @@ interface InstancePanelProps {
 
 export function InstancePanel({ open, session, slug, onClose, onCancelled }: InstancePanelProps) {
   const { toast } = useToast()
+  const router = useRouter()
   const [cancelling, setCancelling] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [reason, setReason] = useState("")
@@ -54,7 +57,9 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
 
   // Instance overrides state
-  const [overridesExpanded, setOverridesExpanded] = useState(false)
+  const [generalExpanded, setGeneralExpanded] = useState(true)
+  const [scheduleExpanded, setScheduleExpanded] = useState(true)
+  const [pricingExpanded, setPricingExpanded] = useState(true)
   const [loadingOverrides, setLoadingOverrides] = useState(false)
   const [savingOverrides, setSavingOverrides] = useState(false)
 
@@ -190,7 +195,7 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
             : null,
         }))
       const poResult = await updateInstancePriceOptions(session.id, poInputs)
-      if (!poResult.success) throw new Error(poResult.error || "Failed to save ticket overrides")
+      if (!poResult.success) throw new Error(poResult.error || "Failed to save price overrides")
 
       // Membership overrides — always save all so disabled state is persisted correctly
       const memInputs = memberships.map((m: Membership) => ({
@@ -271,12 +276,19 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="sm:max-w-[400px] flex flex-col p-0">
+      <SheetContent className="sm:max-w-[625px] flex flex-col p-0">
         {/* Header */}
         <div className="px-6 py-4 border-b pr-12">
           <SheetHeader className="text-left">
+          <SheetDescription className="font-semibold text-foreground text-xl">
+              {format(startDate, "HH:mm")} {endDate && ` – ${format(endDate, "HH:mm")}`}
+              
+              {" · "}
+              {format(startDate, "EEEE, d MMMM")}
+
+            </SheetDescription>
             <div className="flex items-center gap-2 flex-wrap">
-              <SheetTitle className="text-base leading-tight">
+              <SheetTitle className="text-sm text-muted-foreground">
                 {session.template?.name ?? "Session"}
               </SheetTitle>
               {isCancelled && (
@@ -285,12 +297,6 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
                 </Badge>
               )}
             </div>
-            <SheetDescription>
-              {format(startDate, "EEEE, d MMMM yyyy")}
-              {" · "}
-              {format(startDate, "HH:mm")}
-              {endDate && ` – ${format(endDate, "HH:mm")}`}
-            </SheetDescription>
           </SheetHeader>
         </div>
 
@@ -315,10 +321,11 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="w-full text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                    type="button"
+                    className="text-destructive border-destructive hover:bg-destructive/10"
                     disabled={deleting}
                   >
+                    {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                     Delete instance
                   </Button>
                 </AlertDialogTrigger>
@@ -350,298 +357,326 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           )}
 
           {/* Bookings summary */}
-          <div className="space-y-1">
-            <div className="text-sm font-medium">Bookings</div>
-            {confirmedBookings.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No confirmed bookings</div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                {confirmedBookings.length} booking{confirmedBookings.length !== 1 ? "s" : ""} · {confirmedSpots} spot{confirmedSpots !== 1 ? "s" : ""}
+          {confirmedBookings.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+              <div className="flex items-center gap-2 text-amber-800 text-sm">
+                <Users className="h-4 w-4 shrink-0" />
+                <span>{confirmedBookings.length} booking{confirmedBookings.length !== 1 ? "s" : ""} · {confirmedSpots} space{confirmedSpots !== 1 ? "s" : ""}</span>
               </div>
-            )}
-          </div>
-
-          {/* Instance Overrides */}
-          {!isCancelled && (
-            <div className="border rounded-lg overflow-hidden">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-4 py-3 text-left bg-gray-50 text-sm font-medium"
-                onClick={() => setOverridesExpanded(!overridesExpanded)}
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 h-7 text-xs border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:text-amber-900"
+                onClick={() => router.push(`/${slug}/admin/home?date=${format(startDate, "yyyy-MM-dd")}&instance=${session.id}`)}
               >
-                <span>Instance overrides</span>
-                {overridesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
+                View Bookings
+              </Button>
+            </div>
+          )}
 
-              {overridesExpanded && (
-                <div className="px-4 py-3 space-y-4 border-t">
-                  {loadingOverrides ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading overrides…
-                    </div>
-                  ) : (
-                    <>
-                      {/* Capacity override */}
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Capacity</Label>
+          {/* Overrides — only when not cancelled */}
+          {!isCancelled && (
+            <>
+              {loadingOverrides ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* General section */}
+                  <div className="overflow-hidden">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg"
+                      onClick={() => setGeneralExpanded(!generalExpanded)}
+                    >
+                      <span>General</span>
+                      {generalExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    </button>
+                    {generalExpanded && (
+                      <div className="px-4 pb-4 pt-4 space-y-2 flex flex-col">
+                        <Label htmlFor="capacity-override" className="text-sm font-medium">Capacity</Label>
                         <Input
+                          id="capacity-override"
                           type="number"
                           min={1}
                           step={1}
-                          placeholder="Use template default"
                           value={capacityOverride}
                           onChange={(e) => setCapacityOverride(e.target.value)}
-                          className="h-8 text-sm"
+                          className="max-w-xs"
                         />
-                        <p className="text-xs text-muted-foreground">Leave blank to use the template capacity.</p>
+                        <p className="text-sm text-gray-500">
+                          Leave blank to use the default capacity{session.template?.capacity != null ? ` (${session.template.capacity})` : ""}.
+                        </p>
                       </div>
+                    )}
+                  </div>
 
-                      {/* Price option overrides */}
-                      {priceOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Ticket types</Label>
-                          <div>
-                            {priceOptions.map((option) => {
-                              const hasOverride = poHasOverride[option.id] ?? false
-                              const enabled = hasOverride ? (poEnabled[option.id] ?? true) : (poTemplateEnabled[option.id] ?? true)
-                              const priceStr = poPrices[option.id] ?? ""
-                              const spacesStr = poSpaces[option.id] ?? ""
-                              const isEditing = poEditing[option.id] ?? false
-                              const displayPrice = priceStr ? `£${parseFloat(priceStr).toFixed(2)}` : `£${(option.price / 100).toFixed(2)}`
-                              const displaySpaces = spacesStr ? parseInt(spacesStr) : option.spaces
-                              return (
-                                <div key={option.id} className="py-2 space-y-1.5">
-                                  <div className="flex items-center gap-3">
-                                    <p className="flex-1 text-sm font-medium">
-                                      {option.name}
-                                      {!hasOverride && <span className="text-xs text-muted-foreground font-normal ml-1">(inherited)</span>}
-                                    </p>
-                                    {enabled && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setPoEditing(prev => ({ ...prev, [option.id]: !prev[option.id] }))}
-                                        className="text-xs text-primary underline underline-offset-2 hover:no-underline whitespace-nowrap"
-                                      >
-                                        {isEditing ? "Done" : "Edit"}
-                                      </button>
-                                    )}
-                                    <Switch
-                                      checked={enabled}
-                                      onCheckedChange={(checked) => {
-                                        setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
-                                        setPoEnabled(prev => ({ ...prev, [option.id]: checked }))
-                                        if (!checked) setPoEditing(prev => ({ ...prev, [option.id]: false }))
-                                      }}
-                                      className="scale-75"
-                                    />
-                                  </div>
-                                  {enabled && !isEditing && (
-                                    <p className="text-xs text-gray-500">
-                                      {displayPrice} · {displaySpaces} {displaySpaces === 1 ? "space" : "spaces"}
-                                    </p>
+                  {/* Pricing section */}
+                  {(priceOptions.length > 0 || memberships.length > 0) && (
+                    <div className="overflow-hidden">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg"
+                        onClick={() => setPricingExpanded(!pricingExpanded)}
+                      >
+                        <span>Pricing</span>
+                        {pricingExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </button>
+
+                      {pricingExpanded && (
+                        <div className="overflow-hidden pt-4">
+                          {/* Price option overrides */}
+                          {priceOptions.map((option) => {
+                            const hasOverride = poHasOverride[option.id] ?? false
+                            const enabled = hasOverride ? (poEnabled[option.id] ?? true) : (poTemplateEnabled[option.id] ?? true)
+                            const priceStr = poPrices[option.id] ?? ""
+                            const spacesStr = poSpaces[option.id] ?? ""
+                            const isEditing = poEditing[option.id] ?? false
+                            const displayPrice = priceStr ? `£${parseFloat(priceStr).toFixed(2)}` : `£${(option.price / 100).toFixed(2)}`
+                            const displaySpaces = spacesStr ? parseInt(spacesStr) : option.spaces
+                            return (
+                              <div key={option.id} className="px-3 py-2.5 space-y-1.5">
+                                <div className="flex items-center gap-3">
+                                  <p className="flex-1 text-sm font-medium">
+                                    {option.name}
+                                    {!hasOverride && <span className="text-xs text-muted-foreground font-normal ml-1">(inherited)</span>}
+                                  </p>
+                                  {enabled && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPoEditing(prev => ({ ...prev, [option.id]: !prev[option.id] }))}
+                                      className="text-xs text-primary underline underline-offset-2 hover:no-underline whitespace-nowrap"
+                                    >
+                                      {isEditing ? "Done" : "Edit"}
+                                    </button>
                                   )}
-                                  {enabled && isEditing && (
-                                    <div className="space-y-1.5">
-                                      <div className="flex gap-2">
-                                        <div className="relative w-24">
-                                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">£</span>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            placeholder={(option.price / 100).toFixed(2)}
-                                            value={priceStr}
-                                            autoFocus
-                                            onChange={(e) => {
-                                              setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
-                                              setPoPrices(prev => ({ ...prev, [option.id]: e.target.value }))
-                                            }}
-                                            className="pl-5 h-7 text-xs"
-                                          />
-                                        </div>
-                                        <div className="relative w-20">
-                                          <Input
-                                            type="number"
-                                            min="1"
-                                            step="1"
-                                            placeholder={`${option.spaces} space${option.spaces === 1 ? "" : "s"}`}
-                                            value={spacesStr}
-                                            onChange={(e) => {
-                                              setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
-                                              setPoSpaces(prev => ({ ...prev, [option.id]: e.target.value }))
-                                            }}
-                                            className="h-7 text-xs"
-                                          />
-                                        </div>
-                                      </div>
-                                      <p className="text-xs text-gray-400">Overrides the default for this instance only</p>
-                                    </div>
-                                  )}
+                                  <Switch
+                                    checked={enabled}
+                                    onCheckedChange={(checked) => {
+                                      setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
+                                      setPoEnabled(prev => ({ ...prev, [option.id]: checked }))
+                                      if (!checked) setPoEditing(prev => ({ ...prev, [option.id]: false }))
+                                    }}
+                                  />
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Membership overrides */}
-                      {memberships.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Memberships</Label>
-                          <div>
-                            {memberships.map((membership) => {
-                              const enabled = memEnabled[membership.id] ?? true
-                              const priceStr = memPrices[membership.id] ?? ""
-                              const isEditing = memEditing[membership.id] ?? false
-                              return (
-                                <div key={membership.id} className="py-2 space-y-1.5">
-                                  <div className="flex items-center gap-3">
-                                    <p className="flex-1 text-sm font-medium">{membership.name}</p>
-                                    {enabled && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setMemEditing(prev => ({ ...prev, [membership.id]: !prev[membership.id] }))}
-                                        className="text-xs text-primary underline underline-offset-2 hover:no-underline whitespace-nowrap"
-                                      >
-                                        {isEditing ? "Done" : "Edit"}
-                                      </button>
-                                    )}
-                                    <Switch
-                                      checked={enabled}
-                                      onCheckedChange={(checked) => {
-                                        setMemEnabled(prev => ({ ...prev, [membership.id]: checked }))
-                                        if (!checked) setMemEditing(prev => ({ ...prev, [membership.id]: false }))
-                                      }}
-                                      className="scale-75"
-                                    />
-                                  </div>
-                                  {enabled && !isEditing && priceStr && (
-                                    <p className="text-xs text-gray-500">£{parseFloat(priceStr).toFixed(2)}</p>
-                                  )}
-                                  {enabled && isEditing && (
-                                    <div className="space-y-1.5">
-                                      <div className="relative w-28">
+                                {enabled && !isEditing && (
+                                  <p className="text-xs text-gray-500">
+                                    {displayPrice} · {displaySpaces} {displaySpaces === 1 ? "space" : "spaces"}
+                                  </p>
+                                )}
+                                {enabled && isEditing && (
+                                  <div className="space-y-1.5">
+                                    <div className="flex gap-2">
+                                      <div className="relative w-24">
                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">£</span>
                                         <Input
                                           type="number"
                                           min="0"
                                           step="0.01"
-                                          placeholder="Override price"
+                                          placeholder={(option.price / 100).toFixed(2)}
                                           value={priceStr}
                                           autoFocus
-                                          onChange={(e) => setMemPrices(prev => ({ ...prev, [membership.id]: e.target.value }))}
+                                          onChange={(e) => {
+                                            setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
+                                            setPoPrices(prev => ({ ...prev, [option.id]: e.target.value }))
+                                          }}
                                           className="pl-5 h-7 text-xs"
                                         />
                                       </div>
-                                      <p className="text-xs text-gray-400">Overrides the default for this instance only</p>
+                                      <div className="relative w-20">
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          step="1"
+                                          placeholder={`${option.spaces} space${option.spaces === 1 ? "" : "s"}`}
+                                          value={spacesStr}
+                                          onChange={(e) => {
+                                            setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
+                                            setPoSpaces(prev => ({ ...prev, [option.id]: e.target.value }))
+                                          }}
+                                          className="h-7 text-xs"
+                                        />
+                                      </div>
                                     </div>
+                                    <p className="text-xs text-gray-400">Overrides the default for this instance only</p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+
+                          {/* Divider between price options and memberships */}
+                          {priceOptions.length > 0 && memberships.length > 0 && <hr className="my-1" />}
+
+                          {/* Membership overrides */}
+                          {memberships.map((membership) => {
+                            const enabled = memEnabled[membership.id] ?? true
+                            const priceStr = memPrices[membership.id] ?? ""
+                            const isEditing = memEditing[membership.id] ?? false
+                            return (
+                              <div key={membership.id} className="px-3 py-2.5 space-y-1.5">
+                                <div className="flex items-center gap-3">
+                                  <p className="flex-1 text-sm font-medium">{membership.name}</p>
+                                  {enabled && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setMemEditing(prev => ({ ...prev, [membership.id]: !prev[membership.id] }))}
+                                      className="text-xs text-primary underline underline-offset-2 hover:no-underline whitespace-nowrap"
+                                    >
+                                      {isEditing ? "Done" : "Edit"}
+                                    </button>
                                   )}
+                                  <Switch
+                                    checked={enabled}
+                                    onCheckedChange={(checked) => {
+                                      setMemEnabled(prev => ({ ...prev, [membership.id]: checked }))
+                                      if (!checked) setMemEditing(prev => ({ ...prev, [membership.id]: false }))
+                                    }}
+                                  />
                                 </div>
-                              )
-                            })}
-                          </div>
+                                {enabled && !isEditing && priceStr && (
+                                  <p className="text-xs text-gray-500">£{parseFloat(priceStr).toFixed(2)}</p>
+                                )}
+                                {enabled && isEditing && (
+                                  <div className="space-y-1.5">
+                                    <div className="relative w-28">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">£</span>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        placeholder="Override price"
+                                        value={priceStr}
+                                        autoFocus
+                                        onChange={(e) => setMemPrices(prev => ({ ...prev, [membership.id]: e.target.value }))}
+                                        className="pl-5 h-7 text-xs"
+                                      />
+                                    </div>
+                                    <p className="text-xs text-gray-400">Overrides the default for this instance only</p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
-
-                      <Button
-                        size="sm"
-                        onClick={handleSaveOverrides}
-                        disabled={savingOverrides}
-                        className="w-full"
-                      >
-                        {savingOverrides && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Save overrides
-                      </Button>
-                    </>
+                    </div>
                   )}
+
+                  {/* Schedule section */}
+                  {session.template?.id && (
+                    <div className="overflow-hidden">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg"
+                        onClick={() => setScheduleExpanded(!scheduleExpanded)}
+                      >
+                        <span>Schedule</span>
+                        {scheduleExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </button>
+                      {scheduleExpanded && (
+                        <div className="px-4 pb-4 pt-4">
+                          <p className="text-sm text-muted-foreground">
+                            To reschedule or add a new date,{" "}
+                            <a href={templateEditHref} className="underline text-foreground hover:text-primary">
+                              edit the template
+                            </a>
+                            .
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Delete Session */}
+                  <div className="space-y-3 border-t pt-6 mt-2">
+                    <Label className="text-base font-medium">Delete session</Label>
+                    <p className="text-sm text-muted-foreground">
+                      This will cancel the session and notify any attendees. Paid bookings will be refunded. This action cannot be undone.
+                    </p>
+                    <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          type="button"
+                          className="text-destructive border-destructive hover:bg-destructive/10"
+                          disabled={cancelling}
+                        >
+                          {cancelling && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                          Delete session
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete this session?</AlertDialogTitle>
+                          <AlertDialogDescription asChild>
+                            <div className="space-y-3">
+                              {confirmedBookings.length > 0 ? (
+                                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
+                                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                  <span>
+                                    {confirmedBookings.length} booking{confirmedBookings.length !== 1 ? "s" : ""} will be cancelled and refunded where applicable.
+                                  </span>
+                                </div>
+                              ) : (
+                                <p>This session has no confirmed bookings.</p>
+                              )}
+                              <div className="space-y-1.5">
+                                <Label htmlFor="cancel-reason" className="text-sm font-medium text-foreground">
+                                  Reason (optional)
+                                </Label>
+                                <Textarea
+                                  id="cancel-reason"
+                                  placeholder="e.g. Maintenance required, instructor unavailable…"
+                                  value={reason}
+                                  onChange={(e) => setReason(e.target.value)}
+                                  rows={3}
+                                  className="resize-none"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  This will be included in the cancellation email sent to attendees.
+                                </p>
+                              </div>
+                            </div>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={cancelling}>Keep session</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleCancelSession}
+                            disabled={cancelling}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {cancelling ? (
+                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</>
+                            ) : (
+                              "Yes, delete session"
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Template link */}
-          {session.template?.id && (
-            <div className="text-sm text-muted-foreground">
-              To add a new date for this session,{" "}
-              <a
-                href={templateEditHref}
-                className="underline text-foreground hover:text-primary"
-              >
-                edit the template
-              </a>
-              .
-            </div>
-          )}
-
-          {/* Cancel session */}
-          {!isCancelled && (
-            <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
-                  disabled={cancelling}
-                >
-                  Cancel this session
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel this session?</AlertDialogTitle>
-                  <AlertDialogDescription asChild>
-                    <div className="space-y-3">
-                      {confirmedBookings.length > 0 ? (
-                        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
-                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                          <span>
-                            {confirmedBookings.length} booking{confirmedBookings.length !== 1 ? "s" : ""} will be cancelled and refunded where applicable.
-                          </span>
-                        </div>
-                      ) : (
-                        <p>This session has no confirmed bookings.</p>
-                      )}
-                      <div className="space-y-1.5">
-                        <Label htmlFor="cancel-reason" className="text-sm font-medium text-foreground">
-                          Reason (optional)
-                        </Label>
-                        <Textarea
-                          id="cancel-reason"
-                          placeholder="e.g. Maintenance required, instructor unavailable…"
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                          rows={3}
-                          className="resize-none"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          This will be included in the cancellation email sent to attendees.
-                        </p>
-                      </div>
-                    </div>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={cancelling}>Keep session</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleCancelSession}
-                    disabled={cancelling}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    {cancelling ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Cancelling…
-                      </>
-                    ) : (
-                      "Yes, cancel session"
-                    )}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            </>
           )}
         </div>
+
+        {/* Footer */}
+        {!isCancelled && (
+          <div className="border-t bg-gray-50 px-6 py-4 flex justify-between">
+            <Button variant="outline" onClick={onClose} disabled={savingOverrides}>
+              Close
+            </Button>
+            <Button onClick={handleSaveOverrides} disabled={savingOverrides}>
+              {savingOverrides && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save changes
+            </Button>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   )

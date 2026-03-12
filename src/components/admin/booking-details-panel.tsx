@@ -364,7 +364,6 @@ export function BookingDetailsPanel({ open, booking, onClose, onCancel, onCheckI
               <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
                 {/* Booking Details */}
                 <Card className="p-4">
-                  <div className="font-semibold mb-2">Booking Details</div>
                   {sessionName && (
                     <div className="text-sm mb-1 flex items-baseline justify-between gap-2">
                       <span className="font-medium">{sessionName}</span>

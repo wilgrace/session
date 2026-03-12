@@ -69,27 +69,25 @@ export function SessionDetails({
               onClick={onManage}
               className="text-xs"
             >
-              Manage Session
+              Edit
             </Button>
           )}
           {showNavigation && (
             <div className="flex items-center gap-2 justify-center">
               <Button
                 variant="outline"
-                size="icon"
-                className="h-8 w-8"
+                size="sm"
                 onClick={onPrevSession}
                 disabled={!hasPrev}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground hidden md:contents">
                 {currentIndex + 1} / {totalSessions}
               </span>
               <Button
                 variant="outline"
-                size="icon"
-                className="h-8 w-8"
+                size="sm"
                 onClick={onNextSession}
                 disabled={!hasNext}
               >

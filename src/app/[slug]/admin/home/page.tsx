@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { DayPicker } from '@/components/admin/day-picker';
 import { useSessions } from '@/hooks/use-sessions';
 import { addDays, startOfDay, format, endOfDay, isToday } from 'date-fns';
@@ -21,10 +21,26 @@ export default function AdminHomePage() {
   const params = useParams();
   const slug = params.slug as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [today] = useState(() => startOfDay(new Date()));
-  const [dayOffset, setDayOffset] = useState(0);
+  const [dayOffset, setDayOffset] = useState(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam) {
+      const parsed = startOfDay(new Date(dateParam + 'T00:00:00'));
+      const diff = Math.floor((parsed.getTime() - startOfDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
+      if (diff > 0) return Math.min(Math.floor(diff / 7) * 7, NUM_DAYS - 7);
+    }
+    return 0;
+  });
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam) {
+      const parsed = startOfDay(new Date(dateParam + 'T00:00:00'));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return startOfDay(new Date());
+  });
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [instancePanelOpen, setInstancePanelOpen] = useState(false);
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
@@ -129,12 +145,19 @@ export default function AdminHomePage() {
   }, []);
 
   // Set initial session index based on current time (runs once when sessions first load)
+  // If ?instance= param is present, prefer that instance
   useEffect(() => {
     if (!hasSetInitialSession && sessionsForDay.length > 0) {
-      setSelectedSessionIndex(findClosestSessionIndex(sessionsForDay));
+      const instanceParam = searchParams.get('instance');
+      if (instanceParam) {
+        const idx = sessionsForDay.findIndex((s: any) => s.id === instanceParam);
+        setSelectedSessionIndex(idx !== -1 ? idx : findClosestSessionIndex(sessionsForDay));
+      } else {
+        setSelectedSessionIndex(findClosestSessionIndex(sessionsForDay));
+      }
       setHasSetInitialSession(true);
     }
-  }, [sessionsForDay, hasSetInitialSession, findClosestSessionIndex]);
+  }, [sessionsForDay, hasSetInitialSession, findClosestSessionIndex, searchParams]);
 
   // Reset session index when day changes
   const handleSelectDay = useCallback((date: Date) => {
