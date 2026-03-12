@@ -8,6 +8,7 @@ import { SessionForm } from "@/components/admin/session-form"
 import { InstancePanel } from "@/components/admin/instance-panel"
 import { SessionTemplate } from "@/types/session"
 import { Calendar } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 
 
 const CalendarView = dynamic(
@@ -21,6 +22,7 @@ interface CalendarPageProps {
 }
 
 export function CalendarPage({ initialSessions, defaultSessionImageUrl }: CalendarPageProps) {
+  const { toast } = useToast()
   const [sessions, setSessions] = useState(initialSessions)
   const [showSessionForm, setShowSessionForm] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionTemplate | null>(null)
@@ -109,6 +111,7 @@ export function CalendarPage({ initialSessions, defaultSessionImageUrl }: Calend
             }}
             onCreateSession={handleCreateSession}
             onSelectInstance={handleSelectInstance}
+            onInstanceNotFound={() => toast({ title: "Session not found", description: "No instance could be found for this event.", variant: "destructive" })}
             showControls={false}
           />
         </div>
