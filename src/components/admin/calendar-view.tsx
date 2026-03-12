@@ -338,7 +338,9 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
   const timeRange = calculateTimeRange()
 
   const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    onCreateSession(start, end)
+    if (!onSelectInstance) {
+      onCreateSession(start, end)
+    }
   }
 
   const handleSelectEvent = (event: CalendarEvent) => {
@@ -351,6 +353,8 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
         onSelectInstance(matchingInstance.id, event.resource, event.start)
         return
       }
+      console.warn('[CalendarView] No instance found for event at', event.start, '— template:', event.resource.name)
+      return
     }
     onEditSession(event.resource)
   }

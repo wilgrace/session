@@ -140,6 +140,7 @@ export const sessionInstances = pgTable('session_instances', {
   organizationId: text('organization_id').references(() => organizations.id),
   templateId: uuid('template_id').notNull().references(() => sessionTemplates.id, { onDelete: 'cascade' }),
   scheduleId: uuid('schedule_id').references(() => sessionSchedules.id), // which recurring schedule generated this (null for one-off)
+  oneOffDateId: uuid('one_off_date_id').references(() => sessionOneOffDates.id, { onDelete: 'set null' }), // which one-off date generated this (null for recurring)
   startTime: timestamp('start_time', { withTimezone: true }).notNull(),
   endTime: timestamp('end_time', { withTimezone: true }).notNull(),
   status: text('status').notNull().default('scheduled'), // 'scheduled' | 'cancelled'
@@ -154,7 +155,6 @@ export const sessionInstances = pgTable('session_instances', {
   capacityOverride: integer('capacity_override'), // null = inherit from schedule → template
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  clerkUserId: text('clerk_user_id'),
 }, (table) => ({
   uniqueTemplateStartTime: unique().on(table.templateId, table.startTime),
 }));
