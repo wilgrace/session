@@ -31,6 +31,7 @@ async function getAuthenticatedUser() {
 const createSupabaseClient = createSupabaseServerClient;
 
 interface OneOffDateParam {
+  id?: string             // present when the row has been inserted into session_one_off_dates
   date: string            // YYYY-MM-DD
   time: string            // HH:MM
   duration_minutes: number | null
@@ -52,6 +53,7 @@ function buildInstancesFromOneOffDates(
     return {
       template_id: templateId,
       organization_id: organizationId,
+      one_off_date_id: d.id ?? null,
       start_time: formatISO(startUTC),
       end_time: formatISO(endUTC),
       status: 'scheduled',
@@ -292,7 +294,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         // Image field
         image_url: params.image_url,
         // Calendar display color
-        event_color: params.event_color || '#3b82f6',
+        event_color: params.event_color || 'blue',
         include_in_filter: params.include_in_filter ?? true,
       })
       .select()
@@ -344,7 +346,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
 
     // Create one-off dates and their instances synchronously (for non-recurring templates)
     if (params.one_off_dates && params.one_off_dates.length > 0) {
-      const { error: datesError } = await supabase
+      const { data: insertedDates, error: datesError } = await supabase
         .from("session_one_off_dates")
         .insert(params.one_off_dates.map(d => ({
           template_id: data.id,
@@ -353,6 +355,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
           time: d.time,
           duration_minutes: d.duration_minutes,
         })))
+        .select('id, date, time, duration_minutes')
 
       if (datesError) {
         return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
@@ -363,7 +366,7 @@ export async function createSessionTemplate(params: CreateSessionTemplateParams)
         data.id,
         organizationId,
         params.duration_minutes,
-        params.one_off_dates
+        insertedDates ?? []
       )
       await supabase.from("session_instances").insert(instanceRows)
     }
@@ -720,6 +723,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
       .select(`
         id,
         template_id,
+        schedule_id,
+        one_off_date_id,
         start_time,
         end_time,
         status,
@@ -788,6 +793,8 @@ export async function getSessions(organizationId?: string): Promise<{ data: Sess
         const capacityOverride = (instance as any).capacity_override ?? null
         return {
           id: instance.id,
+          schedule_id: (instance as any).schedule_id ?? null,
+          one_off_date_id: (instance as any).one_off_date_id ?? null,
           start_time: instance.start_time,
           end_time: instance.end_time,
           status: instance.status,
@@ -1401,7 +1408,7 @@ export async function updateSessionWithSchedules(params: {
 
     // Insert only newly added one-off dates (unchanged ones stay in DB)
     if (addedOneOffDates.length > 0) {
-      const { error: datesError } = await supabase
+      const { data: insertedDates, error: datesError } = await supabase
         .from("session_one_off_dates")
         .insert(addedOneOffDates.map(d => ({
           template_id: params.templateId,
@@ -1410,6 +1417,7 @@ export async function updateSessionWithSchedules(params: {
           time: d.time,
           duration_minutes: d.duration_minutes,
         })))
+        .select('id, date, time, duration_minutes')
 
       if (datesError) {
         return { success: false, error: `Failed to create one-off dates: ${datesError.message}` }
@@ -1421,7 +1429,7 @@ export async function updateSessionWithSchedules(params: {
         params.templateId,
         template.organization_id ?? '',
         params.template.duration_minutes ?? 75,
-        addedOneOffDates
+        insertedDates ?? []
       )
       await supabase.from("session_instances").upsert(instanceRows, {
         onConflict: 'template_id,start_time',

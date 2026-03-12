@@ -52,6 +52,7 @@ interface CalendarViewProps {
   onCreateSession: (start: Date, end: Date) => void
   onDeleteSession?: (session: SessionTemplate) => void
   onSelectInstance?: (instanceId: string, template: SessionTemplate, instanceStart: Date) => void
+  onInstanceNotFound?: () => void
   showControls?: boolean
 }
 
@@ -118,7 +119,7 @@ const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
 type SortDirection = "asc" | "desc" | null
 type SortColumn = "name" | "schedule" | "capacity" | "status" | null
 
-export function CalendarView({ sessions, onEditSession, onCreateSession, onDeleteSession, onSelectInstance, showControls = true }: CalendarViewProps) {
+export function CalendarView({ sessions, onEditSession, onCreateSession, onDeleteSession, onSelectInstance, onInstanceNotFound, showControls = true }: CalendarViewProps) {
   const { view, setView, date, setDate } = useCalendarView()
   const [currentView, setCurrentView] = useState<View>('week')
   const [isMobile, setIsMobile] = useState(false)
@@ -338,7 +339,9 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
   const timeRange = calculateTimeRange()
 
   const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    onCreateSession(start, end)
+    if (!onSelectInstance) {
+      onCreateSession(start, end)
+    }
   }
 
   const handleSelectEvent = (event: CalendarEvent) => {
@@ -351,6 +354,9 @@ export function CalendarView({ sessions, onEditSession, onCreateSession, onDelet
         onSelectInstance(matchingInstance.id, event.resource, event.start)
         return
       }
+      console.warn('[CalendarView] No instance found for event at', event.start, '— template:', event.resource.name)
+      onInstanceNotFound?.()
+      return
     }
     onEditSession(event.resource)
   }

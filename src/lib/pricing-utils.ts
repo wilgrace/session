@@ -322,12 +322,15 @@ export function resolvePriceOptions(params: {
     const templateRow = sessionOverrideMap.get(option.id)
     const instanceRow = instanceOverrideMap.get(option.id)
 
-    // Template-level enable check
-    if (hasTemplateConfig && templateRow && !templateRow.isEnabled) continue
-    if (hasTemplateConfig && !templateRow) continue // not configured for this template
-
-    // Instance-level enable check (explicit false = disabled)
+    // Instance-level enable check takes full priority over template config
     if (instanceRow?.isEnabled === false) continue
+    if (instanceRow?.isEnabled === true) {
+      // Explicitly enabled at instance level — skip template checks
+    } else {
+      // No instance override — apply template-level checks
+      if (hasTemplateConfig && templateRow && !templateRow.isEnabled) continue
+      if (hasTemplateConfig && !templateRow) continue // not configured for this template
+    }
 
     const effectivePrice = resolveEffectivePriceOptionPrice(option, templateRow, instanceRow)
     const effectiveSpaces = resolveEffectivePriceOptionSpaces(option, templateRow)

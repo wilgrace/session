@@ -299,6 +299,7 @@ serveWithoutAuth(async (req) => {
         const instancesToInsert: Array<{
           template_id: string;
           schedule_id: string | null;
+          one_off_date_id?: string | null;
           start_time: string;
           end_time: string;
           status: string;
@@ -385,6 +386,7 @@ serveWithoutAuth(async (req) => {
               instancesToInsert.push({
                 template_id: template.id,
                 schedule_id: null,
+                one_off_date_id: entry.id,
                 start_time: startTimeISO,
                 end_time: formatISO(instanceEndTimeUTC),
                 status: "scheduled",
