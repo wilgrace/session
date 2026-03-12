@@ -68,6 +68,8 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
 
   // Price option overrides
   const [priceOptions, setPriceOptions] = useState<PriceOption[]>([])
+  const [instancePricingType, setInstancePricingType] = useState<'free' | 'paid'>('paid')
+  const [isTemplateFree, setIsTemplateFree] = useState(false)
   const [poEnabled, setPoEnabled] = useState<Record<string, boolean>>({})
   const [poHasOverride, setPoHasOverride] = useState<Record<string, boolean>>({})
   const [poTemplateEnabled, setPoTemplateEnabled] = useState<Record<string, boolean>>({})
@@ -129,17 +131,31 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           // Determine template-level enabled state for each option (used as inherited default)
           const sessionPoRows = sessionPoResult.success && sessionPoResult.data ? sessionPoResult.data : []
           const hasTemplateConfig = sessionPoRows.length > 0
+          // Template is free if it has been saved with no price option rows but org has active options
+          const templateIsFree = !hasTemplateConfig && activeOptions.length > 0
+          setIsTemplateFree(templateIsFree)
           const sessionPoMap = new Map(sessionPoRows.map(r => [r.priceOptionId, r]))
           activeOptions.forEach(o => {
             const templateRow = sessionPoMap.get(o.id)
             const templateEnabled = hasTemplateConfig
               ? (templateRow?.isEnabled ?? false) // not configured for this template = disabled
-              : true // no template config = all org options enabled by default
+              : !templateIsFree // free template = all disabled; no config = all enabled
             poTemplateEnabledMap[o.id] = templateEnabled
             poEnabledMap[o.id] = templateEnabled
             poHasOverrideMap[o.id] = false
           })
           setPoTemplateEnabled(poTemplateEnabledMap)
+
+          // Detect instance-level pricing type from existing instance overrides
+          const allInstanceOptionsDisabled = poRows.length > 0 && poRows.every(r => r.isEnabled === false)
+          const anyInstanceOptionEnabled = poRows.some(r => r.isEnabled === true)
+          let detectedPricingType: 'free' | 'paid'
+          if (poRows.length > 0) {
+            detectedPricingType = allInstanceOptionsDisabled && !anyInstanceOptionEnabled ? 'free' : 'paid'
+          } else {
+            detectedPricingType = templateIsFree ? 'free' : 'paid'
+          }
+          setInstancePricingType(detectedPricingType)
 
           poRows.forEach(r => {
             poEnabledMap[r.priceOptionId] = r.isEnabled ?? true
@@ -181,10 +197,19 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
       const capResult = await updateInstanceCapacity(session.id, capNum && capNum >= 1 ? capNum : null)
       if (!capResult.success) throw new Error(capResult.error || "Failed to save capacity")
 
-      // Price option overrides — only save options that have an explicit override row
-      const poInputs = priceOptions
-        .filter(o => poHasOverride[o.id])
-        .map(o => ({
+      // Price option overrides
+      let poInputs: { priceOptionId: string; isEnabled: boolean; overridePrice: number | null; overrideSpaces: number | null }[]
+      if (instancePricingType === 'free') {
+        // Explicitly mark all options disabled so the booking flow shows no pricing
+        poInputs = priceOptions.map(o => ({
+          priceOptionId: o.id,
+          isEnabled: false,
+          overridePrice: null,
+          overrideSpaces: null,
+        }))
+      } else if (isTemplateFree) {
+        // Template is free but instance is overridden to paid — save all with their current state
+        poInputs = priceOptions.map(o => ({
           priceOptionId: o.id,
           isEnabled: poEnabled[o.id] ?? true,
           overridePrice: poPrices[o.id] && parseFloat(poPrices[o.id]) >= 0
@@ -194,6 +219,21 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
             ? parseInt(poSpaces[o.id])
             : null,
         }))
+      } else {
+        // Template is paid — only save options that have an explicit override row
+        poInputs = priceOptions
+          .filter(o => poHasOverride[o.id])
+          .map(o => ({
+            priceOptionId: o.id,
+            isEnabled: poEnabled[o.id] ?? true,
+            overridePrice: poPrices[o.id] && parseFloat(poPrices[o.id]) >= 0
+              ? Math.round(parseFloat(poPrices[o.id]) * 100)
+              : null,
+            overrideSpaces: poSpaces[o.id] && parseInt(poSpaces[o.id]) >= 1
+              ? parseInt(poSpaces[o.id])
+              : null,
+          }))
+      }
       const poResult = await updateInstancePriceOptions(session.id, poInputs)
       if (!poResult.success) throw new Error(poResult.error || "Failed to save price overrides")
 
@@ -427,8 +467,31 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
 
                       {pricingExpanded && (
                         <div className="overflow-hidden pt-4">
-                          {/* Price option overrides */}
-                          {priceOptions.map((option) => {
+                          {/* Free / Paid toggle */}
+                          {priceOptions.length > 0 && (
+                            <div className="px-3 pb-3 flex items-center gap-3">
+                              <span className="text-sm font-medium flex-1 text-muted-foreground">Pricing type</span>
+                              <div className="flex rounded-md border overflow-hidden text-xs">
+                                <button
+                                  type="button"
+                                  className={`px-3 py-1.5 ${instancePricingType === 'free' ? 'bg-primary text-primary-foreground' : 'hover:bg-gray-50'}`}
+                                  onClick={() => setInstancePricingType('free')}
+                                >
+                                  Free
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`px-3 py-1.5 border-l ${instancePricingType === 'paid' ? 'bg-primary text-primary-foreground' : 'hover:bg-gray-50'}`}
+                                  onClick={() => setInstancePricingType('paid')}
+                                >
+                                  Paid
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Price option overrides — only shown when paid */}
+                          {instancePricingType === 'paid' && priceOptions.map((option) => {
                             const hasOverride = poHasOverride[option.id] ?? false
                             const enabled = hasOverride ? (poEnabled[option.id] ?? true) : (poTemplateEnabled[option.id] ?? true)
                             const priceStr = poPrices[option.id] ?? ""
@@ -508,7 +571,7 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
                           })}
 
                           {/* Divider between price options and memberships */}
-                          {priceOptions.length > 0 && memberships.length > 0 && <hr className="my-1" />}
+                          {instancePricingType === 'paid' && priceOptions.length > 0 && memberships.length > 0 && <hr className="my-1" />}
 
                           {/* Membership overrides */}
                           {memberships.map((membership) => {

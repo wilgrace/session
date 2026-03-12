@@ -1256,12 +1256,15 @@ export async function updateSessionWithSchedules(params: {
       ).map(r => r.start_time)
     )
 
-    // Fetch existing future one-off instances (schedule_id IS NULL = one-off)
+    // Fetch existing future one-off instances.
+    // Use one_off_date_id IS NOT NULL — more reliable than schedule_id IS NULL because
+    // legacy recurring instances (created before the schedule_id column existed) also have
+    // schedule_id = NULL and would otherwise be incorrectly treated as one-off instances.
     const { data: existingOneOffInstances } = await supabase
       .from('session_instances')
       .select('id, start_time')
       .eq('template_id', params.templateId)
-      .is('schedule_id', null)
+      .not('one_off_date_id', 'is', null)
       .neq('status', 'cancelled')
       .gt('start_time', new Date().toISOString())
 
