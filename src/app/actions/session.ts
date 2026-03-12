@@ -1236,6 +1236,10 @@ export async function updateSessionWithSchedules(params: {
       )
       .map(r => r.id)
 
+    console.log('[updateSessionWithSchedules] existingSchedules:', existingSchedules)
+    console.log('[updateSessionWithSchedules] newScheduleRows:', newScheduleRows)
+    console.log('[updateSessionWithSchedules] removedOrChangedScheduleIds:', removedOrChangedScheduleIds)
+
     // New param rows not present in DB → need to be inserted
     const addedScheduleRows = newScheduleRows.filter(nr =>
       !(existingSchedules ?? []).some(dbRow =>
@@ -1268,9 +1272,14 @@ export async function updateSessionWithSchedules(params: {
       .neq('status', 'cancelled')
       .gt('start_time', new Date().toISOString())
 
+    console.log('[updateSessionWithSchedules] newOneOffStartTimes:', [...newOneOffStartTimes])
+    console.log('[updateSessionWithSchedules] existingOneOffInstances:', existingOneOffInstances?.map(i => ({ id: i.id, start_time: i.start_time })))
+
     const removedOneOffInstanceIds = (existingOneOffInstances ?? [])
       .filter(inst => !newOneOffStartTimes.has(inst.start_time))
       .map(inst => inst.id)
+
+    console.log('[updateSessionWithSchedules] removedOneOffInstanceIds:', removedOneOffInstanceIds)
 
     // DB one-off date rows no longer in new params (to delete from session_one_off_dates)
     // normalizeTime on both sides: Supabase returns TIME as "HH:MM:SS", form sends "HH:MM"
