@@ -133,6 +133,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
   const [generalExpanded, setGeneralExpanded] = useState(!template)
   const [scheduleExpanded, setScheduleExpanded] = useState(true)
   const [paymentExpanded, setPaymentExpanded] = useState(true)
+  const [visibilityExpanded, setVisibilityExpanded] = useState(true)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [pendingDeleteScheduleId, setPendingDeleteScheduleId] = useState<string | null>(null)
   const [pendingDeleteDateId, setPendingDeleteDateId] = useState<string | null>(null)
@@ -478,9 +479,9 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         const anyPriceEnabled = activePriceOptionIds.some(id => priceOptionEnabled[id])
         const anyMembershipEnabled = activeMemIds.some(id => membershipEnabled[id])
         if (activePriceOptionIds.length === 0 && activeMemIds.length === 0) {
-          errors.pricingOptions = "Add ticket types in Billing to accept payments"
+          errors.pricingOptions = "Add prices in Billing to accept payments"
         } else if (!anyPriceEnabled && !anyMembershipEnabled) {
-          errors.pricingOptions = "At least one ticket type or membership must be enabled"
+          errors.pricingOptions = "At least one price or membership must be enabled"
         }
       }
     }
@@ -969,7 +970,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
       <SheetContent className="sm:max-w-[625px] overflow-y-auto p-0">
         <div className="sticky top-0 bg-white z-20 px-6 py-4 border-b pr-12">
           <SheetHeader>
-            <SheetTitle className="text-xl">{template ? "Edit Session" : "New Session"}</SheetTitle>
+            <SheetTitle className="text-xl">{template ? "Edit session template" : "New session"}</SheetTitle>
             <SheetDescription>
               {template ? "Any changes will update every instance of this session." : "Add a new session to your calendar."}
             </SheetDescription>
@@ -998,7 +999,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="name" className="text-sm font-medium">
-                      Session Name <span className="text-red-500">*</span>
+                      Session name <span className="text-red-500">*</span>
                     </Label>
                   </div>
                   <Input
@@ -1054,7 +1055,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 {/* Booking Instructions - moved from Payment section */}
                 <div className="space-y-2">
                   <Label htmlFor="bookingInstructions" className="text-sm font-medium">
-                    Booking Instructions
+                    Booking instructions
                   </Label>
                   <RichTextEditor
                     value={bookingInstructions}
@@ -1075,7 +1076,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 {/* Event Color */}
                 <div className="space-y-2">
                   <Label htmlFor="eventColor" className="text-sm font-medium">
-                    Calendar Event Color
+                    Calendar event color
                   </Label>
                   <Select value={eventColor} onValueChange={(value: EventColorKey) => setEventColor(value)}>
                     <SelectTrigger className="w-full">
@@ -1122,12 +1123,6 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
 
             {scheduleExpanded && (
               <div className="px-4 pb-4 pt-4 space-y-4">
-                {/* Warning banner when editing template with instances */}
-                {template && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Changes to schedules will regenerate future instances. Sessions with existing bookings won&apos;t be affected until cancelled individually.
-                  </div>
-                )}
 
                 {/* Repeat section */}
                 {showRepeatSection && (
@@ -1176,7 +1171,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                           </Popover>
                         </div>
                         <div className="space-y-2">
-                          <Label>End Date (Optional)</Label>
+                          <Label>End Date (optional)</Label>
                           <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
                             <PopoverTrigger asChild>
                               <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !recurrenceEndDate && "text-muted-foreground")}>
@@ -1191,7 +1186,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                         </div>
                       </div>
                       {/* Time blocks */}
-                      <div className="space-y-3">
+                      <div className="space-y-6">
                         {schedules.map((schedule, idx) => (
                           <div key={schedule.id}>
                             {idx > 0 && <hr className="border-gray-100 mb-3" />}
@@ -1224,7 +1219,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                                 <div className={cn("flex flex-wrap gap-2 rounded-md p-1", fieldErrors[`schedule-days-${schedule.id}`] && "ring-1 ring-red-500")}>
                                   {daysOfWeek.map((day) => (
                                     <button key={day.value} type="button" onClick={() => { toggleDay(schedule.id, day.value); clearError(`schedule-days-${schedule.id}`) }}
-                                      className={cn("px-3 py-1 rounded-md text-sm", schedule.days.includes(day.value) ? "bg-primary/5 border border-primary text-primary" : "bg-gray-100 text-gray-700 hover:bg-gray-200")}>
+                                      className={cn("px-3 py-1 rounded-md text-sm", schedule.days.includes(day.value) ? "bg-primary/5 border border-primary text-primary" : "border hover:bg-gray-200")}>
                                       {day.label}
                                     </button>
                                   ))}
@@ -1246,9 +1241,10 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                         ))}
                       </div>
                     </div>
-                    <div className="bg-gray-50 border-t">
-                      <Button type="button" variant="ghost" onClick={addSchedule} className="w-full py-3 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-none">
-                        <Plus className="mr-1 h-3 w-3" /> Add time
+
+                    <div className="p-4 space-y-4">
+                      <Button type="button" variant="secondary" size="lg" onClick={addSchedule} className="w-full">
+                        <Plus className="mr-2 h-3 w-3" /> Add time
                       </Button>
                     </div>
                   </div>
@@ -1257,11 +1253,16 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 {/* Dates section */}
                 {showDatesSection && (
                   <>
-                    <div className="border rounded-lg p-4 space-y-3">
+                    <div className="border rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between bg-gray-50 px-4 py-3 border-b">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-gray-500" /> One-off
+                      </span>
+                    </div>
                       {oneOffDates.map((item, idx) => (
                         <div key={item.id}>
                           {idx > 0 && <hr className="border-gray-100 mb-3" />}
-                          <div className="space-y-3">
+                          <div className="p-4 space-y-4">
                             <div className="flex items-center justify-between">
                               <Label className="text-sm font-medium">Date <span className="text-red-500">*</span></Label>
                               {pendingDeleteDateId === item.id ? (
@@ -1275,7 +1276,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                                   Clear?
                                 </Button>
                               ) : (
-                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-red-500" onClick={() => setPendingDeleteDateId(item.id)}>
+                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500" onClick={() => setPendingDeleteDateId(item.id)}>
                                   <X className="h-4 w-4" />
                                 </Button>
                               )}
@@ -1306,10 +1307,12 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                           </div>
                         </div>
                       ))}
+                      <div className="p-4 space-y-4">
+                        <Button type="button" variant="secondary" size="lg" className="w-full" onClick={addOneOffDate}>
+                          <Plus className="mr-2 h-3 w-3" /> Add date
+                        </Button>
+                      </div>
                     </div>
-                    <Button type="button" variant="outline" size="lg" className="w-full" onClick={addOneOffDate}>
-                      <CalendarDays className="mr-2 h-3 w-3" /> Add Single Date
-                    </Button>
                   </>
                 )}
 
@@ -1319,13 +1322,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                 {/* Add section buttons */}
                 <div className="flex gap-4 flex-col" id="schedule">
                   {!showRepeatSection && (
-                    <Button type="button" variant="outline" size="lg" onClick={handleAddRepeatSection}>
-                      <RefreshCw className="mr-2 h-3 w-3" /> Add Repeat Schedule
+                    <Button type="button" variant="secondary" size="lg" onClick={handleAddRepeatSection}>
+                      <RefreshCw className="mr-2 h-3 w-3" /> Add repeat schedule
                     </Button>
                   )}
                   {!showDatesSection && (
-                    <Button type="button" variant="outline" size="lg" onClick={handleAddDatesSection}>
-                      <CalendarDays className="mr-2 h-3 w-3" /> Add Single Date
+                    <Button type="button" variant="secondary" size="lg" onClick={handleAddDatesSection}>
+                      <CalendarDays className="mr-2 h-3 w-3" /> Add one-offs
                     </Button>
                   )}
                 </div>
@@ -1518,11 +1521,11 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
                       {priceOptions.filter(o => o.isActive).length === 0 && !loadingPriceOptions && (
                         <div className="px-3 py-2.5">
                           <p className="text-sm text-gray-500 italic">
-                            No ticket types configured.{' '}
+                            No prices configured.{' '}
                             <Link href={`/${slug}/admin/billing`} className="text-primary underline underline-offset-2">
-                              Add ticket types in Billing
+                              Add prices in Billing
                             </Link>
-                            {' '}to control per-ticket pricing.
+                            {' '}to control per-session pricing.
                           </p>
                         </div>
                       )}
@@ -1615,120 +1618,153 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
           </div>
 
           {/* Status Section */}
-          <div className="rounded-lg overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50">
-              <span className="font-medium text-sm">Visibility</span>
-            </div>
-            <div className="px-4 py-4 space-y-4">
-              <Select value={visibility} onValueChange={(value: 'open' | 'hidden' | 'closed') => setVisibility(value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-4 w-4" />
-                      <span>Open</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="hidden">
-                    <div className="flex items-center gap-2">
-                      <EyeOff className="h-4 w-4" />
-                      <span>Hidden</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="closed">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4" />
-                      <span>Closed</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="overflow-hidden">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-4 py-3 text-left font-medium bg-gray-50 text-sm rounded-lg"
+              onClick={() => setVisibilityExpanded(!visibilityExpanded)}
+            >
+              <span>Visibility</span>
+              {visibilityExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </button>
 
-              {visibility === 'open' && (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Can be found and booked from the public calendar.
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Include in calendar filter</p>
-                      <p className="text-sm text-muted-foreground">
-                        Let users filter the calendar by this session type.
-                      </p>
-                    </div>
-                    <Switch checked={includeInFilter} onCheckedChange={setIncludeInFilter} />
+            {visibilityExpanded && (
+              <div className="px-4 pb-4">
+                <div className="space-y-2 py-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <Card
+                      className={cn(
+                        "relative cursor-pointer border rounded-lg",
+                        visibility === "open" ? "border-primary bg-primary/5" : "border-gray-200",
+                      )}
+                      onClick={() => setVisibility("open")}
+                    >
+                      <CardContent className="p-3 flex flex-col items-center gap-1.5 text-center">
+                        <Eye className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium text-sm">Public</span>
+                        {visibility === "open" && (
+                          <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-primary text-white flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-2 w-2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card
+                      className={cn(
+                        "relative cursor-pointer border rounded-lg",
+                        visibility === "hidden" ? "border-primary bg-primary/5" : "border-gray-200",
+                      )}
+                      onClick={() => setVisibility("hidden")}
+                    >
+                      <CardContent className="p-3 flex flex-col items-center gap-1.5 text-center">
+                        <EyeOff className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium text-sm">Hidden</span>
+                        {visibility === "hidden" && (
+                          <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-primary text-white flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-2 w-2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card
+                      className={cn(
+                        "relative cursor-pointer border rounded-lg",
+                        visibility === "closed" ? "border-primary bg-primary/5" : "border-gray-200",
+                      )}
+                      onClick={() => setVisibility("closed")}
+                    >
+                      <CardContent className="p-3 flex flex-col items-center gap-1.5 text-center">
+                        <Lock className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium text-sm">Closed</span>
+                        {visibility === "closed" && (
+                          <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-primary text-white flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-2 w-2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
-                </>
-              )}
-              {visibility === 'hidden' && (
-                <p className="text-sm text-muted-foreground">
-                  The public won&apos;t find the session, but a link can be shared privately and the session booked as normal. Use this setting to host private or restricted sessions.
-                </p>
-              )}
-              {visibility === 'closed' && (
-                <p className="text-sm text-muted-foreground">
-                  Cannot be found or booked.
-                </p>
-              )}
-            </div>
-          </div>
 
-          {/* Delete Session */}
-          {template && (
-            <div className="space-y-3">
-              <Label className="text-base font-medium text-destructive">
-                Delete Session
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                This will permanently delete the session template, all scheduled
-                instances, and any associated bookings. This action cannot be
-                undone.
-              </p>
-              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    type="button"
-                    className="text-destructive border-destructive hover:bg-destructive/10"
-                    disabled={loading || deleting}
-                  >
-                    {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Delete Session
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete session?</AlertDialogTitle>
-                    <AlertDialogDescription asChild>
-                      <div className="space-y-2">
-                        <p>
-                          This will permanently delete &ldquo;{name}&rdquo; and all its scheduled instances. This action cannot be undone.
+                  {visibility === 'open' && (
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Include in calendar filter</p>
+                        <p className="text-sm text-muted-foreground">
+                          Let users filter the calendar by this session type.
                         </p>
-                        {(() => {
-                          const activeBookings = (template?.instances ?? []).flatMap(i =>
-                            (i.bookings ?? []).filter(b => !b.status || b.status === 'confirmed' || b.status === 'completed')
-                          )
-                          return activeBookings.length > 0 ? (
-                            <p className="font-medium text-destructive">
-                              {activeBookings.length} active booking{activeBookings.length !== 1 ? 's' : ''} will be cancelled and refunded.
-                            </p>
-                          ) : null
-                        })()}
                       </div>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
+                      <Switch checked={includeInFilter} onCheckedChange={setIncludeInFilter} />
+                    </div>
+                  )}
+                  {visibility === 'hidden' && (
+                    <p className="text-sm text-muted-foreground pt-1">
+                      The public won&apos;t find the session, but a link can be shared privately and the session booked as normal.
+                    </p>
+                  )}
+                  {visibility === 'closed' && (
+                    <p className="text-sm text-muted-foreground pt-1">
+                      Cannot be found or booked.
+                    </p>
+                  )}
+                </div>
+
+                {/* Delete Session */}
+                {template && (
+                  <div className="space-y-3 border-t pt-6 mt-2">
+                    <Label className="text-base font-medium">
+                      Delete session template
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      This will permanently delete the session template, all scheduled
+                      instances, and any associated bookings. This action cannot be
+                      undone.
+                    </p>
+                    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          type="button"
+                          className="text-destructive border-destructive hover:bg-destructive/10"
+                          disabled={loading || deleting}
+                        >
+                          {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                          Delete template
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete session?</AlertDialogTitle>
+                          <AlertDialogDescription asChild>
+                            <div className="space-y-2">
+                              <p>
+                                This will permanently delete &ldquo;{name}&rdquo; and all its scheduled instances. This action cannot be undone.
+                              </p>
+                              {(() => {
+                                const activeBookings = (template?.instances ?? []).flatMap(i =>
+                                  (i.bookings ?? []).filter(b => !b.status || b.status === 'confirmed' || b.status === 'completed')
+                                )
+                                return activeBookings.length > 0 ? (
+                                  <p className="font-medium text-destructive">
+                                    {activeBookings.length} active booking{activeBookings.length !== 1 ? 's' : ''} will be cancelled and refunded.
+                                  </p>
+                                ) : null
+                              })()}
+                            </div>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Sticky Footer */}
           <div className="sticky bottom-0 bg-gray-50 border-t px-6 py-4 -mx-6 -mb-4">

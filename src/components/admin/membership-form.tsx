@@ -208,7 +208,7 @@ export function MembershipForm({
         <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b">
           <SheetHeader>
             <SheetTitle className="text-xl">
-              {membership ? "Edit Membership" : "Create Membership"}
+              {membership ? "Edit membership" : "Create membership"}
             </SheetTitle>
             <SheetDescription>
               {membership
@@ -391,7 +391,7 @@ export function MembershipForm({
           {/* Signing Up */}
           <div className="space-y-4 border-t pt-4">
             <div>
-              <Label className="text-base font-medium">Signing Up</Label>
+              <Label className="text-base font-medium">Visibility</Label>
             </div>
 
             {/* On the members page toggle */}

@@ -112,11 +112,11 @@ export function PriceOptionForm({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="mb-6">
-          <SheetTitle>{priceOption ? "Edit Price" : "Create Price"}</SheetTitle>
+      <SheetContent className="w-full sm:max-w-[625px] overflow-y-auto">
+        <SheetHeader className="mb-6 pb-6 border-b">
+          <SheetTitle className="text-xl">{priceOption ? "Edit price" : "Create price"}</SheetTitle>
           <SheetDescription>
-            Define a ticket type with a price and number of spaces it consumes.
+            Define a price type and number of spaces it takes up.
           </SheetDescription>
         </SheetHeader>
 
@@ -145,8 +145,9 @@ export function PriceOptionForm({
             />
           </div>
 
+
           {/* Price */}
-          <div className="space-y-1.5">
+          <div className="space-y-4 border-t pt-4">
             <Label htmlFor="po-price">Price (£)</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">£</span>
@@ -160,12 +161,12 @@ export function PriceOptionForm({
               />
             </div>
             {fieldErrors.price && <p className="text-xs text-red-500">{fieldErrors.price}</p>}
-            <p className="text-xs text-gray-500">Set 0 for a free ticket type.</p>
+            <p className="text-xs text-gray-500">Set 0 for a free price.</p>
           </div>
 
           {/* Spaces */}
           <div className="space-y-1.5">
-            <Label htmlFor="po-spaces">Spaces consumed</Label>
+            <Label htmlFor="po-spaces">Spaces used</Label>
             <Input
               id="po-spaces"
               type="number"
@@ -177,23 +178,16 @@ export function PriceOptionForm({
             />
             {fieldErrors.spaces && <p className="text-xs text-red-500">{fieldErrors.spaces}</p>}
             <p className="text-xs text-gray-500">
-              How many capacity slots this ticket consumes. Use 1 for standard, higher for group options like Private Hire.
+              How many capacity slots this price users. Use 1 for standard, or match your total capacity for Private Hire.
             </p>
           </div>
 
-          {/* Include in filter */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label>Include in calendar filter</Label>
-              <p className="text-xs text-gray-500">
-                Let users filter the calendar by sessions that have this ticket type available.
-              </p>
+          <div className="space-y-4 border-t pt-4">
+              <Label className="text-base font-medium">Visibility</Label>
             </div>
-            <Switch checked={includeInFilter} onCheckedChange={setIncludeInFilter} />
-          </div>
 
-          {/* Active */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
+            {/* Active */}
+            <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label>Active</Label>
               <p className="text-xs text-gray-500">
@@ -203,14 +197,25 @@ export function PriceOptionForm({
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
 
+          {/* Include in filter */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Include in calendar filter</Label>
+              <p className="text-xs text-gray-500">
+                Let users filter the calendar by sessions that have this price available.
+              </p>
+            </div>
+            <Switch checked={includeInFilter} onCheckedChange={setIncludeInFilter} />
+          </div>
+
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button onClick={handleSubmit} disabled={loading} className="flex-1">
+          <div className="flex justify-between pt-6 border-t">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={loading} className="">
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {priceOption ? "Save Changes" : "Create Price"}
-            </Button>
-            <Button variant="outline" onClick={onClose} disabled={loading}>
-              Cancel
             </Button>
           </div>
         </div>
