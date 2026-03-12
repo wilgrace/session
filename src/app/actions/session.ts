@@ -1270,14 +1270,19 @@ export async function updateSessionWithSchedules(params: {
       .map(inst => inst.id)
 
     // DB one-off date rows no longer in new params (to delete from session_one_off_dates)
-    const newOneOffDateKeys = new Set((params.one_off_dates ?? []).map(d => `${d.date}|${d.time}`))
+    // normalizeTime on both sides: Supabase returns TIME as "HH:MM:SS", form sends "HH:MM"
+    const newOneOffDateKeys = new Set(
+      (params.one_off_dates ?? []).map(d => `${d.date}|${normalizeTime(d.time)}`)
+    )
     const removedOneOffDateIds = (existingOneOffDates ?? [])
-      .filter(d => !newOneOffDateKeys.has(`${d.date}|${d.time}`))
+      .filter(d => !newOneOffDateKeys.has(`${d.date}|${normalizeTime(d.time)}`))
       .map(d => d.id)
 
     // New one-off dates not already in DB → need to be inserted
     const addedOneOffDates = (params.one_off_dates ?? []).filter(d =>
-      !(existingOneOffDates ?? []).some(dbD => dbD.date === d.date && dbD.time === d.time)
+      !(existingOneOffDates ?? []).some(
+        dbD => dbD.date === d.date && normalizeTime(dbD.time) === normalizeTime(d.time)
+      )
     )
 
     // --- Only check/cancel bookings on instances that are actually being removed/changed ---

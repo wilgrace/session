@@ -557,7 +557,7 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         const originalOneOffDates = (template.one_off_dates ?? []).map((d: any) => ({
           date: d.date,
           time: d.time,
-          duration: d.duration_minutes ?? null,
+          duration: d.duration_minutes ?? durationMinutes ?? null,
         })).sort((a: any, b: any) => (a.date + a.time).localeCompare(b.date + b.time))
 
         const currentOneOffDates = oneOffDatesParam.map((d: any) => ({
