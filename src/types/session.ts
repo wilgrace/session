@@ -79,6 +79,7 @@ export interface SessionInstance {
     id: string
     number_of_spots: number
     status?: string
+    cancelled_at?: string | null
     user: {
       clerk_user_id: string
     }

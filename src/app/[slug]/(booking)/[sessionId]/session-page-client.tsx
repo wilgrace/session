@@ -42,7 +42,7 @@ interface SessionPageClientProps {
 function calculateSpotsRemaining(session: SessionTemplate, currentUserSpots: number = 0): number {
   const totalSpotsBooked =
     (session.instances?.reduce((total, instance) => {
-      return total + (instance.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
+      return total + (instance.bookings?.filter(b => !b.cancelled_at).reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
     }, 0) || 0) + currentUserSpots
 
   // Use instance-level capacity override if present, otherwise fall back to template capacity
