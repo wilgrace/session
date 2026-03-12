@@ -1236,10 +1236,6 @@ export async function updateSessionWithSchedules(params: {
       )
       .map(r => r.id)
 
-    console.log('[updateSessionWithSchedules] existingSchedules:', existingSchedules)
-    console.log('[updateSessionWithSchedules] newScheduleRows:', newScheduleRows)
-    console.log('[updateSessionWithSchedules] removedOrChangedScheduleIds:', removedOrChangedScheduleIds)
-
     // New param rows not present in DB → need to be inserted
     const addedScheduleRows = newScheduleRows.filter(nr =>
       !(existingSchedules ?? []).some(dbRow =>
@@ -1250,14 +1246,15 @@ export async function updateSessionWithSchedules(params: {
     )
 
     // Compute the UTC start_times that the new one-off dates will produce.
-    // Any existing one-off instance whose start_time is absent from this set will be removed.
+    // Normalize via new Date().toISOString() so that formatISO's "Z" suffix and Supabase's
+    // "+00:00" suffix both resolve to the same canonical string before Set comparison.
     const newOneOffStartTimes = new Set(
       buildInstancesFromOneOffDates(
         params.templateId,
         template.organization_id ?? '',
         params.template.duration_minutes ?? 75,
         params.one_off_dates ?? []
-      ).map(r => r.start_time)
+      ).map(r => new Date(r.start_time).toISOString())
     )
 
     // Fetch existing future one-off instances.
@@ -1272,14 +1269,9 @@ export async function updateSessionWithSchedules(params: {
       .neq('status', 'cancelled')
       .gt('start_time', new Date().toISOString())
 
-    console.log('[updateSessionWithSchedules] newOneOffStartTimes:', [...newOneOffStartTimes])
-    console.log('[updateSessionWithSchedules] existingOneOffInstances:', existingOneOffInstances?.map(i => ({ id: i.id, start_time: i.start_time })))
-
     const removedOneOffInstanceIds = (existingOneOffInstances ?? [])
-      .filter(inst => !newOneOffStartTimes.has(inst.start_time))
+      .filter(inst => !newOneOffStartTimes.has(new Date(inst.start_time).toISOString()))
       .map(inst => inst.id)
-
-    console.log('[updateSessionWithSchedules] removedOneOffInstanceIds:', removedOneOffInstanceIds)
 
     // DB one-off date rows no longer in new params (to delete from session_one_off_dates)
     // normalizeTime on both sides: Supabase returns TIME as "HH:MM:SS", form sends "HH:MM"
