@@ -125,7 +125,7 @@ function MoveBookingBody({
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground shrink-0">
-                    {option.available_spots} spot{option.available_spots !== 1 ? 's' : ''} left
+                    {option.available_spots} space{option.available_spots !== 1 ? 's' : ''} left
                   </div>
                 </button>
               ))}

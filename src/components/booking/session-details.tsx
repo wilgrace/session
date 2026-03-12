@@ -34,7 +34,7 @@ export function SessionDetails({
   // Calculate total spots booked, including current user's spots
   const totalSpotsBooked =
     (session.instances?.reduce((total, instance) => {
-      return total + (instance.bookings?.reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
+      return total + (instance.bookings?.filter(b => !b.cancelled_at).reduce((sum, booking) => sum + (booking.number_of_spots || 1), 0) || 0)
     }, 0) || 0) + currentUserSpots
 
   // Resolve effective capacity: instance override → template default

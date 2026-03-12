@@ -1571,6 +1571,16 @@ export async function deleteSchedule(scheduleId: string): Promise<DeleteSchedule
       return { success: false, error: "Unauthorized: You can only delete schedules for your own templates" }
     }
 
+    // Delete instances generated from this schedule
+    const { error: instancesError } = await supabase
+      .from("session_instances")
+      .delete()
+      .eq("schedule_id", scheduleId)
+
+    if (instancesError) {
+      return { success: false, error: instancesError.message }
+    }
+
     // Delete the specific schedule
     const { error } = await supabase
       .from("session_schedules")
@@ -3208,6 +3218,7 @@ export async function getPublicSessionById(
           bookings (
             id,
             number_of_spots,
+            cancelled_at,
             user:clerk_users!user_id (
               id,
               clerk_user_id
@@ -3224,7 +3235,7 @@ export async function getPublicSessionById(
       }
 
       if (!instanceError && instanceData) {
-        // Transform to match expected format
+        // Transform to match expected format, excluding cancelled bookings
         const transformedInstance = {
           id: instanceData.id,
           template_id: instanceData.template_id,
@@ -3232,7 +3243,7 @@ export async function getPublicSessionById(
           end_time: instanceData.end_time,
           status: instanceData.status,
           capacity_override: instanceData.capacity_override ?? null,
-          bookings: (instanceData.bookings || []).map((booking: any) => ({
+          bookings: (instanceData.bookings || []).filter((booking: any) => !booking.cancelled_at).map((booking: any) => ({
             id: booking.id,
             number_of_spots: booking.number_of_spots || 1,
             user: {
