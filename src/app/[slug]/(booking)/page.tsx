@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { auth } from "@clerk/nextjs/server"
 import { BookingConfirmationToast } from "@/components/booking/booking-confirmation-toast"
 import { getTenantFromHeaders, getTenantOrganization, canAccessAdminForOrg, getOrganizationBySlug } from "@/lib/tenant-utils"
+import { updateUserOrganization } from "@/app/actions/clerk"
 import type { SessionTemplate } from "@/types/session"
 
 interface BookingPageProps {
@@ -86,6 +87,12 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   }
 
   const { userId } = await auth()
+
+  // Silently reassign users who landed on /sign-up by mistake and are still in the
+  // unassigned sentinel org. No-op for users already correctly assigned.
+  if (userId) {
+    await updateUserOrganization(userId, tenant.organizationId)
+  }
 
   // Only fast fetches block the initial render
   const [organization, isAdmin, membershipsResult] = await Promise.all([
