@@ -28,8 +28,6 @@ export function FeaturebaseMessenger({ slug }: { slug?: string }) {
   }, [slug])
 
   useEffect(() => {
-    if (!user) return
-
     const win = window
 
     if (typeof win.Featurebase !== "function") {
@@ -41,11 +39,13 @@ export function FeaturebaseMessenger({ slug }: { slug?: string }) {
 
     win.Featurebase("boot", {
       appId: "698b4b040772a51956c84f4f",
-      email: user.primaryEmailAddress?.emailAddress,
-      name: user.fullName,
-      userId: user.id,
-      organization: orgName,
-      createdAt: user.createdAt?.toISOString(),
+      ...(user && {
+        email: user.primaryEmailAddress?.emailAddress,
+        name: user.fullName,
+        userId: user.id,
+        organization: orgName,
+        createdAt: user.createdAt?.toISOString(),
+      }),
       theme: "light",
       language: "en",
     })

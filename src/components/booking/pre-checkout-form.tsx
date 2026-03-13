@@ -261,7 +261,15 @@ export function PreCheckoutForm({
       return
     }
 
-    if (result.exists && !result.isGuestAccount) {
+    if (result.isMigratedUser) {
+      // Imported user with no Clerk account — open sign-up directly
+      openSignUp({
+        initialEmail: email,
+        organizationId,
+        contextMessage: "Your bookings have been imported — create an account to access them.",
+        onComplete: () => setEmailValidation({ valid: true }),
+      })
+    } else if (result.exists && !result.isGuestAccount) {
       // Registered user - prompt sign in
       setEmailValidation({ valid: false, requiresSignIn: true })
     } else {
