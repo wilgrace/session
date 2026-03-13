@@ -188,6 +188,7 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
         <BookingHeader
           isAdmin={isAdmin}
           slug={slug}
+          organizationId={tenant.organizationId}
           organizationName={organization?.name}
           logoUrl={organization?.logoUrl}
           hasHeaderImage={hasHeaderImage}

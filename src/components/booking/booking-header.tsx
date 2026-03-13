@@ -13,6 +13,7 @@ import { UserDropdown } from "@/components/booking/user-dropdown"
 interface BookingHeaderProps {
   isAdmin: boolean
   slug: string
+  organizationId?: string
   organizationName?: string | null
   logoUrl?: string | null
   hasHeaderImage?: boolean
@@ -26,6 +27,7 @@ interface BookingHeaderProps {
 export function BookingHeader({
   isAdmin,
   slug,
+  organizationId,
   organizationName,
   logoUrl,
   hasHeaderImage = false,
@@ -65,7 +67,7 @@ export function BookingHeader({
               {homepageUrl && (
                 <a href={homepageUrl} target="_blank" rel="noopener noreferrer" className={cn("font-medium py-2 flex gap-1 hover:opacity-70 transition-opacity", (showMembersButton || hasHeaderImage) && "hidden md:flex")}>
                   <HouseIcon className="h-7 w-7 md:h-5 md:w-5 md:opacity-50" />
-                  <span className="hidden md:block">Home</span>
+                  <span>Home</span>
                 </a>
               )}
               {instagramUrl && (
@@ -136,7 +138,7 @@ export function BookingHeader({
           </SignedIn>
           <SignedOut>
             <Button
-              onClick={() => openSignIn()}
+              onClick={() => openSignIn({ organizationId })}
               size="default"
               className="rounded-md hover:opacity-90 text-base py-2 px-4"
             >

@@ -6,13 +6,10 @@ import { useAuthOverlay } from "@/hooks/use-auth-overlay"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { checkClerkUserSynced } from "@/app/actions/session"
 import { ensureClerkUser, updateUserOrganization } from "@/app/actions/clerk"
-import { checkEmailExists } from "@/app/actions/checkout"
 import { checkWaiverAgreement } from "@/app/actions/waivers"
 import { getCommunitySurveyEnabled } from "@/app/actions/organization"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CommunityProfileOverlay } from "./community-profile-overlay"
@@ -69,13 +66,6 @@ export function AuthOverlay() {
   // Ref to prevent duplicate sync attempts (useEffect can re-run when clerkUser reference changes)
   const syncStartedRef = useRef(false)
 
-  // Email-first step for sign-in mode
-  const [emailCheckInput, setEmailCheckInput] = useState("")
-  const [emailCheckError, setEmailCheckError] = useState<string | null>(null)
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false)
-  // Once email is confirmed, we proceed to the Clerk component with it pre-filled
-  const [checkedEmail, setCheckedEmail] = useState<string | null>(null)
-
   // Reset state when overlay opens/closes
   useEffect(() => {
     if (!isOpen) {
@@ -83,10 +73,6 @@ export function AuthOverlay() {
       setSyncError(null)
       setAuthCompleted(false)
       syncStartedRef.current = false
-      setEmailCheckInput("")
-      setEmailCheckError(null)
-      setIsCheckingEmail(false)
-      setCheckedEmail(null)
     }
   }, [isOpen])
 
@@ -228,38 +214,6 @@ export function AuthOverlay() {
     }
   }
 
-  // Handle email-first step for sign-in mode
-  const handleEmailCheck = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const email = emailCheckInput.trim()
-    if (!email) return
-
-    setEmailCheckError(null)
-    setIsCheckingEmail(true)
-
-    const result = await checkEmailExists(email)
-    setIsCheckingEmail(false)
-
-    if (!result.success) {
-      setEmailCheckError("Something went wrong. Please try again.")
-      return
-    }
-
-    if (result.isMigratedUser) {
-      // Imported user — switch to sign-up with context message
-      useAuthOverlay.getState().openSignUp({
-        initialEmail: email,
-        contextMessage: "Your bookings have been imported — create an account to access them.",
-        onComplete: useAuthOverlay.getState().onComplete,
-        organizationId: useAuthOverlay.getState().organizationId,
-      })
-      return
-    }
-
-    // Real Clerk user or unknown — proceed to Clerk SignIn with email pre-filled
-    setCheckedEmail(email)
-  }
-
   // If showing waiver overlay, render that first
   if (showWaiverOverlay && pendingWaiver) {
     return (
@@ -304,49 +258,25 @@ export function AuthOverlay() {
     const currentUrl = typeof window !== "undefined" ? window.location.href : undefined
 
     if (mode === 'sign-in') {
-      // If an email was passed directly (e.g. from a context-aware caller) skip the check step
-      const prefilledEmail = initialEmail || checkedEmail
-
-      if (!prefilledEmail) {
-        // Email-first step: collect email before opening Clerk
-        return (
-          <form onSubmit={handleEmailCheck} className="space-y-4 w-full">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold">Sign in</h2>
-              <p className="text-sm text-muted-foreground">Enter your email to continue</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="signin-email">Email address</Label>
-              <Input
-                id="signin-email"
-                type="email"
-                placeholder="you@example.com"
-                value={emailCheckInput}
-                onChange={(e) => setEmailCheckInput(e.target.value)}
-                autoFocus
-                required
-              />
-              {emailCheckError && (
-                <div className="flex items-center gap-2 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                  <span>{emailCheckError}</span>
-                </div>
-              )}
-            </div>
-            <Button type="submit" className="w-full" disabled={isCheckingEmail}>
-              {isCheckingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue"}
-            </Button>
-          </form>
-        )
-      }
-
       return (
-        <SignIn
-          routing="hash"
-          forceRedirectUrl={currentUrl}
-          initialValues={{ emailAddress: prefilledEmail }}
-          appearance={clerkSignInAppearance}
-        />
+        <div className="w-full">
+          <SignIn
+            routing="hash"
+            forceRedirectUrl={currentUrl}
+            initialValues={{ emailAddress: initialEmail || "" }}
+            appearance={clerkSignInAppearance}
+          />
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <button
+              type="button"
+              onClick={() => useAuthOverlay.getState().openSignUp({ organizationId })}
+              className="font-medium text-primary hover:underline"
+            >
+              Create one
+            </button>
+          </p>
+        </div>
       )
     }
 
