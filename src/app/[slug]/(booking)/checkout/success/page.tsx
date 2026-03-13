@@ -148,7 +148,7 @@ export default function CheckoutSuccessPage() {
                       {format(startTime, "h:mm a")}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {template.duration_minutes} minutes
+                      {Math.round((new Date(booking.session_instances.end_time).getTime() - new Date(booking.session_instances.start_time).getTime()) / 60000)} minutes
                     </p>
                   </div>
                 </div>

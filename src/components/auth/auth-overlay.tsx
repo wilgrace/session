@@ -30,6 +30,17 @@ const clerkAppearance = {
   },
 }
 
+// Sign-in appearance hides the "Don't have an account? Sign up" footer link.
+// The /sign-up page is for new org admins, not booking customers — customers
+// sign up via the booking flow which calls openSignUp() with org context.
+const clerkSignInAppearance = {
+  ...clerkAppearance,
+  elements: {
+    ...clerkAppearance.elements,
+    footerAction: "hidden",
+  },
+}
+
 export function AuthOverlay() {
   const {
     isOpen,
@@ -250,7 +261,7 @@ export function AuthOverlay() {
         <SignIn
           routing="hash"
           forceRedirectUrl={currentUrl}
-          appearance={clerkAppearance}
+          appearance={clerkSignInAppearance}
         />
       )
     }

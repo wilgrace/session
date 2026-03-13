@@ -692,6 +692,19 @@ CalendarView.Toggle = function ViewToggle() {
     <div className="inline-flex rounded-md border border-gray-200 text-sm overflow-hidden">
       <button
         type="button"
+        onClick={() => setView("calendar")}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 transition-colors",
+          view === "calendar"
+            ? "bg-primary/5 text-primary font-medium"
+            : "bg-white text-gray-500 hover:bg-gray-50"
+        )}
+      >
+        <Calendar className="h-4 w-4" />
+        Calendar
+      </button>
+      <button
+        type="button"
         onClick={() => setView("list")}
         className={cn(
           "flex items-center gap-1.5 px-3 py-1.5 border-r border-gray-200 transition-colors",
@@ -702,19 +715,6 @@ CalendarView.Toggle = function ViewToggle() {
       >
         <List className="h-4 w-4" />
         Templates
-      </button>
-      <button
-        type="button"
-        onClick={() => setView("calendar")}
-        className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 transition-colors",
-          view === "calendar"
-            ? "bg-primary/5 text-primary font-medium"
-            : "bg-white text-gray-500 hover:bg-gray-50"
-        )}
-      >
-        <Calendar className="h-4 w-4" />
-        Instances
       </button>
     </div>
   )

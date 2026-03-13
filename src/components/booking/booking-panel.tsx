@@ -295,7 +295,11 @@ export function BookingPanel({
         <div className="flex items-center gap-2 font-medium md:hidden text-muted-foreground">
           <span>
             {session.name}
-            {session.duration_minutes ? ` (${session.duration_minutes} minutes)` : ""}
+            {(() => {
+              const inst = session.instances?.find(i => new Date(i.start_time).getTime() === startTime.getTime())
+              const mins = inst ? Math.round((new Date(inst.end_time).getTime() - new Date(inst.start_time).getTime()) / 60000) : session.duration_minutes
+              return mins ? ` (${mins} minutes)` : ""
+            })()}
           </span>
         </div>
         <div className="flex items-center gap-2 font-medium">
