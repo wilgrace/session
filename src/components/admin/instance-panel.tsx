@@ -208,10 +208,12 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           overrideSpaces: null,
         }))
       } else if (isTemplateFree) {
-        // Template is free but instance is overridden to paid — save all with their current state
+        // Template is free but instance is overridden to paid — save all options.
+        // Use the explicitly-set enabled state if the user toggled it, otherwise default to true
+        // (the template default is false/unset, so poEnabled was initialised to false — don't use that).
         poInputs = priceOptions.map(o => ({
           priceOptionId: o.id,
-          isEnabled: poEnabled[o.id] ?? true,
+          isEnabled: poHasOverride[o.id] ? poEnabled[o.id] : true,
           overridePrice: poPrices[o.id] && parseFloat(poPrices[o.id]) >= 0
             ? Math.round(parseFloat(poPrices[o.id]) * 100)
             : null,
@@ -237,14 +239,22 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
       const poResult = await updateInstancePriceOptions(session.id, poInputs)
       if (!poResult.success) throw new Error(poResult.error || "Failed to save price overrides")
 
-      // Membership overrides — always save all so disabled state is persisted correctly
-      const memInputs = memberships.map((m: Membership) => ({
-        membershipId: m.id,
-        isEnabled: memEnabled[m.id] ?? true,
-        overridePrice: memPrices[m.id] && parseFloat(memPrices[m.id]) >= 0
-          ? Math.round(parseFloat(memPrices[m.id]) * 100)
-          : null,
-      }))
+      // Membership overrides — only save rows that differ from the template default.
+      // A membership is at its default when it's enabled AND has no price override.
+      // Returning to default removes the override row, re-inheriting template settings.
+      const memInputs = memberships
+        .filter((m: Membership) => {
+          const isEnabled = memEnabled[m.id] ?? true
+          const hasPriceOverride = !!(memPrices[m.id] && memPrices[m.id] !== '')
+          return !isEnabled || hasPriceOverride
+        })
+        .map((m: Membership) => ({
+          membershipId: m.id,
+          isEnabled: memEnabled[m.id] ?? true,
+          overridePrice: memPrices[m.id] && parseFloat(memPrices[m.id]) >= 0
+            ? Math.round(parseFloat(memPrices[m.id]) * 100)
+            : null,
+        }))
       const memResult = await updateInstanceMembershipOverrides(session.id, memInputs)
       if (!memResult.success) throw new Error(memResult.error || "Failed to save membership overrides")
 
@@ -518,7 +528,10 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
                                   <Switch
                                     checked={enabled}
                                     onCheckedChange={(checked) => {
-                                      setPoHasOverride(prev => ({ ...prev, [option.id]: true }))
+                                      // If toggling back to template default with no price override, clear the override
+                                      const matchesTemplate = checked === (poTemplateEnabled[option.id] ?? true)
+                                      const hasPriceOverride = !!(poPrices[option.id])
+                                      setPoHasOverride(prev => ({ ...prev, [option.id]: !matchesTemplate || hasPriceOverride }))
                                       setPoEnabled(prev => ({ ...prev, [option.id]: checked }))
                                       if (!checked) setPoEditing(prev => ({ ...prev, [option.id]: false }))
                                     }}
@@ -573,8 +586,8 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
                           {/* Divider between price options and memberships */}
                           {instancePricingType === 'paid' && priceOptions.length > 0 && memberships.length > 0 && <hr className="my-1" />}
 
-                          {/* Membership overrides */}
-                          {memberships.map((membership) => {
+                          {/* Membership overrides — hidden when instance is FREE */}
+                          {instancePricingType === 'paid' && memberships.map((membership) => {
                             const enabled = memEnabled[membership.id] ?? true
                             const priceStr = memPrices[membership.id] ?? ""
                             const isEditing = memEditing[membership.id] ?? false

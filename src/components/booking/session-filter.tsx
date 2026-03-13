@@ -78,7 +78,7 @@ export function SessionFilter({
           {label}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-2" align="end">
+      <PopoverContent className="w-72 p-2" align="end">
         <div className="space-y-1">
           <button
             type="button"

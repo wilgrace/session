@@ -15,8 +15,6 @@ import { CalendarDays, CalendarOff, Users, Layers } from "lucide-react"
 import { Button } from '@/components/ui/button';
 import { getSessions } from '@/app/actions/session';
 
-const NUM_DAYS = 14;
-
 export default function AdminHomePage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -28,7 +26,7 @@ export default function AdminHomePage() {
     if (dateParam) {
       const parsed = startOfDay(new Date(dateParam + 'T00:00:00'));
       const diff = Math.floor((parsed.getTime() - startOfDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
-      if (diff > 0) return Math.min(Math.floor(diff / 7) * 7, NUM_DAYS - 7);
+      if (diff > 0) return Math.floor(diff / 7) * 7;
     }
     return 0;
   });
@@ -224,7 +222,7 @@ export default function AdminHomePage() {
         isCollapsed={isCollapsed}
         onCollapseToggle={() => setIsCollapsed((v) => !v)}
         onPrev={() => setDayOffset((o) => Math.max(0, o - 7))}
-        onNext={() => setDayOffset((o) => Math.min(NUM_DAYS - 7, o + 7))}
+        onNext={() => setDayOffset((o) => o + 7)}
         sessionsByDay={sessionsByDay}
         selectedSessionId={currentSession?.id}
         onSelectSession={handleSelectSession}

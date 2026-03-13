@@ -212,7 +212,7 @@ export function PreCheckoutForm({
   const dropInPrice = hasPriceOptions ? effectiveUnitPrice : 0
   const memberPrice = selectedMembershipPrice
   const person1Price = (pricingType === "membership" || isActiveMember) ? memberPrice : dropInPrice
-  const additionalPersonPrice = hasPriceOptions ? 0 : dropInPrice
+  const additionalPersonPrice = hasPriceOptions ? effectiveUnitPrice : dropInPrice
   const additionalPeople = hasPriceOptions ? Math.max(0, quantity - 1) : Math.max(0, derivedSpots - 1)
 
   // Calculate session subtotal
@@ -612,7 +612,7 @@ export function PreCheckoutForm({
             </div>
             {isNewMembership && !guestNeedsAccountForMembership && (
               <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
-                Memberships are individual. Complete this purchase first to book for a group.
+                Memberships are individual. Checkout first to book for a group.
               </p>
             )}
           </div>

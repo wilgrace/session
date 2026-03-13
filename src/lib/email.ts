@@ -168,7 +168,7 @@ export async function sendBookingConfirmationEmail(
     const dateStr = formatInTimeZone(startTime, timezone, 'EEEE d MMMM yyyy');
     const timeStr = formatInTimeZone(startTime, timezone, 'HH:mm');
     const endTimeStr = formatInTimeZone(endTime, timezone, 'HH:mm');
-    const durationStr = `${sessionTemplate.duration_minutes} min`;
+    const durationStr = `${Math.round((endTime.getTime() - startTime.getTime()) / 60000)} min`;
     const amountStr = booking.amount_paid != null
       ? `£${(booking.amount_paid / 100).toFixed(2)}`
       : 'Free';

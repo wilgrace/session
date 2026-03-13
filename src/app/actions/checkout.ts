@@ -370,9 +370,11 @@ export async function createCheckoutSession(
                 weekday: "long",
                 day: "numeric",
                 month: "long",
+                timeZone: template.timezone ?? "Europe/London",
               })} at ${startTime.toLocaleTimeString("en-GB", {
                 hour: "2-digit",
                 minute: "2-digit",
+                timeZone: template.timezone ?? "Europe/London",
               })}`,
             },
             unit_amount: 0, // TODO: use price options
@@ -743,7 +745,8 @@ export async function createEmbeddedCheckoutSession(
     let priceOptionEffectivePrice: number | null = null
     const priceOptionQuantity = params.quantity ?? 1
     if (params.priceOptionId && !isNewMembership) {
-      const [{ data: orgOption }, { data: templateOverride }] = await Promise.all([
+      const startTime = new Date(params.startTime)
+      const [{ data: orgOption }, { data: templateOverride }, { data: existingInstance }] = await Promise.all([
         supabase
           .from("price_options")
           .select("price, is_active, name")
@@ -756,16 +759,42 @@ export async function createEmbeddedCheckoutSession(
           .eq("session_template_id", params.sessionTemplateId)
           .eq("price_option_id", params.priceOptionId)
           .maybeSingle(),
+        supabase
+          .from("session_instances")
+          .select("id")
+          .eq("template_id", params.sessionTemplateId)
+          .eq("start_time", startTime.toISOString())
+          .maybeSingle(),
       ])
+
+      // Check instance-level override if instance exists
+      let instanceOverride: { is_enabled: boolean | null; override_price: number | null } | null = null
+      if (existingInstance) {
+        const { data } = await supabase
+          .from("instance_price_options")
+          .select("is_enabled, override_price")
+          .eq("session_instance_id", existingInstance.id)
+          .eq("price_option_id", params.priceOptionId)
+          .maybeSingle()
+        instanceOverride = data
+      }
 
       if (!orgOption?.is_active) {
         return { success: false, error: "Selected price is not available" }
       }
-      if (templateOverride?.is_enabled === false) {
+
+      // Instance-level override takes full priority over template-level
+      if (instanceOverride?.is_enabled === false) {
         return { success: false, error: "Selected price is not available for this session" }
       }
+      if (instanceOverride?.is_enabled !== true) {
+        // No instance override — fall back to template-level check
+        if (templateOverride?.is_enabled === false) {
+          return { success: false, error: "Selected price is not available for this session" }
+        }
+      }
 
-      priceOptionEffectivePrice = templateOverride?.override_price ?? orgOption.price
+      priceOptionEffectivePrice = instanceOverride?.override_price ?? templateOverride?.override_price ?? orgOption.price
     }
 
     // Calculate pricing breakdown
@@ -879,9 +908,11 @@ export async function createEmbeddedCheckoutSession(
               weekday: "long",
               day: "numeric",
               month: "long",
+              timeZone: template.timezone ?? "Europe/London",
             })} at ${startTime.toLocaleTimeString("en-GB", {
               hour: "2-digit",
               minute: "2-digit",
+              timeZone: template.timezone ?? "Europe/London",
             })}`,
           },
           unit_amount: priceBreakdown.person1Price,
@@ -894,9 +925,11 @@ export async function createEmbeddedCheckoutSession(
         weekday: "long",
         day: "numeric",
         month: "long",
+        timeZone: template.timezone ?? "Europe/London",
       })} at ${startTime.toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: template.timezone ?? "Europe/London",
       })}`
       lineItems.push({
         price_data: {
@@ -922,9 +955,11 @@ export async function createEmbeddedCheckoutSession(
               weekday: "long",
               day: "numeric",
               month: "long",
+              timeZone: template.timezone ?? "Europe/London",
             })} at ${startTime.toLocaleTimeString("en-GB", {
               hour: "2-digit",
               minute: "2-digit",
+              timeZone: template.timezone ?? "Europe/London",
             })}`,
           },
           unit_amount: priceBreakdown.person1Price,
