@@ -5,6 +5,12 @@ import type { Waiver } from '@/lib/db/schema'
 
 type AuthMode = 'sign-in' | 'sign-up' | null
 
+interface OrgBranding {
+  logoUrl?: string
+  brandColor?: string
+  brandTextColor?: string
+}
+
 interface AuthOverlayStore {
   isOpen: boolean
   mode: AuthMode
@@ -15,12 +21,14 @@ interface AuthOverlayStore {
   showWaiverOverlay: boolean
   pendingWaiver: Waiver | null
   organizationId?: string
+  orgBranding?: OrgBranding
 
   openSignIn: (options?: { onComplete?: () => void; organizationId?: string; initialEmail?: string }) => void
   openSignUp: (options?: { initialEmail?: string; contextMessage?: string; onComplete?: () => void; organizationId?: string }) => void
   close: () => void
   setShowProfileOverlay: (show: boolean) => void
   setShowWaiverOverlay: (show: boolean, waiver?: Waiver | null) => void
+  setOrgBranding: (branding: OrgBranding | undefined) => void
   triggerOnComplete: () => void
 }
 
@@ -34,6 +42,7 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
   showWaiverOverlay: false,
   pendingWaiver: null,
   organizationId: undefined,
+  orgBranding: undefined,
 
   openSignIn: (options) => set({
     isOpen: true,
@@ -73,6 +82,8 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
     showWaiverOverlay: show,
     pendingWaiver: waiver,
   }),
+
+  setOrgBranding: (branding) => set({ orgBranding: branding }),
 
   triggerOnComplete: () => {
     const { onComplete, mode } = get()

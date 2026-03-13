@@ -54,8 +54,36 @@ export function AuthOverlay() {
     setShowWaiverOverlay,
     pendingWaiver,
     organizationId,
+    orgBranding,
     triggerOnComplete
   } = useAuthOverlay()
+
+  // Build org-branded Clerk appearance — merges base styles with org logo and brand colour.
+  // Falls back to generic primary colours when no branding is configured.
+  const brandedAppearance = {
+    ...clerkAppearance,
+    ...(orgBranding?.logoUrl ? { layout: { logoImageUrl: orgBranding.logoUrl } } : {}),
+    ...(orgBranding?.brandColor || orgBranding?.brandTextColor
+      ? {
+          variables: {
+            colorPrimary: orgBranding.brandColor,
+            colorTextOnPrimaryBackground: orgBranding.brandTextColor,
+          },
+        }
+      : {}),
+  }
+  const brandedSignInAppearance = {
+    ...clerkSignInAppearance,
+    ...(orgBranding?.logoUrl ? { layout: { logoImageUrl: orgBranding.logoUrl } } : {}),
+    ...(orgBranding?.brandColor || orgBranding?.brandTextColor
+      ? {
+          variables: {
+            colorPrimary: orgBranding.brandColor,
+            colorTextOnPrimaryBackground: orgBranding.brandTextColor,
+          },
+        }
+      : {}),
+  }
   const isMobile = useIsMobile()
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser()
 
@@ -264,7 +292,7 @@ export function AuthOverlay() {
             routing="hash"
             forceRedirectUrl={currentUrl}
             initialValues={{ emailAddress: initialEmail || "" }}
-            appearance={clerkSignInAppearance}
+            appearance={brandedSignInAppearance}
           />
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
@@ -294,7 +322,7 @@ export function AuthOverlay() {
             initialValues={{
               emailAddress: initialEmail || "",
             }}
-            appearance={clerkAppearance}
+            appearance={brandedAppearance}
           />
         </>
       )

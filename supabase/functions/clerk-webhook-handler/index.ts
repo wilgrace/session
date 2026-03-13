@@ -118,8 +118,14 @@ Deno.serve(async (req) => {
         const userData = event.data as ClerkUserEventData;
         const primaryEmail = userData.email_addresses?.[0]?.email_address;
         const defaultOrgIdFromEnv = Deno.env.get('DEFAULT_ORGANIZATION_ID');
-        if (!defaultOrgIdFromEnv) {
-          console.error('CRITICAL: DEFAULT_ORGANIZATION_ID environment variable is not set!');
+        // Use the dedicated unassigned sentinel org if configured, otherwise fall back to default org.
+        // The sentinel org is a holding pen — users are moved to the correct org by the auth overlay
+        // or silently on the booking page. Lost customers (who signed up at /sign-up by mistake)
+        // are detected by their org_id matching UNASSIGNED_ORGANIZATION_ID.
+        const unassignedOrgId = Deno.env.get('UNASSIGNED_ORGANIZATION_ID');
+        const holdingPenOrgId = unassignedOrgId ?? defaultOrgIdFromEnv;
+        if (!holdingPenOrgId) {
+          console.error('CRITICAL: Neither UNASSIGNED_ORGANIZATION_ID nor DEFAULT_ORGANIZATION_ID is set!');
           return new Response('Server Configuration Error: Default organization not set', { status: 500 });
         }
         if (!primaryEmail) {
@@ -148,9 +154,9 @@ Deno.serve(async (req) => {
           if (userData.last_name !== null) upgradeData.last_name = userData.last_name;
 
           // For migrated users (e.g. from Acuity), preserve their org assignment.
-          // For all other placeholder users, reset to the default org (normal flow).
+          // For all other placeholder users, reset to the holding pen org (normal flow).
           if (!existingClerkUser.migrated_from) {
-            upgradeData.organization_id = defaultOrgIdFromEnv;
+            upgradeData.organization_id = holdingPenOrgId;
           } else {
             // Clear the migration flag now that they have a real Clerk account
             upgradeData.migrated_from = null;
@@ -198,7 +204,9 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        // If not found in clerk_users table, create new clerk user
+        // If not found in clerk_users table, create new clerk user assigned to the holding pen org.
+        // They will be moved to the correct org by the auth overlay (booking customers) or
+        // by completing the onboarding wizard (new org admins).
         const { data: newUser, error: insertError } = await supabaseAdmin
           .from('clerk_users')
           .insert({
@@ -206,7 +214,7 @@ Deno.serve(async (req) => {
             email: primaryEmail,
             first_name: userData.first_name,
             last_name: userData.last_name,
-            organization_id: defaultOrgIdFromEnv,
+            organization_id: holdingPenOrgId,
             role: 'user',
           })
           .select()

@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { checkOnboardingStatus } from '@/app/actions/onboarding';
 import { OnboardingClient } from './onboarding-client';
+import { LostCustomerScreen } from './lost-customer-screen';
 
 export const metadata = {
   title: 'Set up your organisation – Session',
@@ -23,6 +24,10 @@ export default async function OnboardingPage() {
 
   if (status.status === 'customer' && status.slug) {
     redirect(`/${status.slug}`);
+  }
+
+  if (status.status === 'lost_customer') {
+    return <LostCustomerScreen />;
   }
 
   return <OnboardingClient />;

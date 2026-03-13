@@ -11,6 +11,14 @@ export default async function SignUpPage({
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="flex flex-col items-center">
+        <div className="mb-5 max-w-[400px] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">Trying to book a session?</p>
+          <p className="mt-1">
+            You don&apos;t need to sign up here. Your provider will have sent you a booking link —
+            it looks like <span className="font-mono text-xs">bookasession.org/their-name</span>.
+            Visit that link to create an account and book directly.
+          </p>
+        </div>
         <SignUp
           routing="path"
           path="/sign-up"

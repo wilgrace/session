@@ -575,12 +575,20 @@ async function updateUserOrganization(clerkUserId: string, organizationId: strin
   try {
     const supabase = createSupabaseClient()
     const defaultOrgId = process.env.DEFAULT_ORGANIZATION_ID
+    const unassignedOrgId = process.env.UNASSIGNED_ORGANIZATION_ID
+    // Accept moves from both the sentinel unassigned org (new flow) and the legacy default org
+    // (old flow, before UNASSIGNED_ORGANIZATION_ID was introduced).
+    const holdingPenIds = [defaultOrgId, unassignedOrgId].filter(Boolean) as string[]
+
+    if (holdingPenIds.length === 0) {
+      return { success: false, error: "No holding pen org IDs configured" }
+    }
 
     const { error } = await supabase
       .from("clerk_users")
       .update({ organization_id: organizationId })
       .eq("clerk_user_id", clerkUserId)
-      .eq("organization_id", defaultOrgId) // only assign if still on default org (newly created)
+      .in("organization_id", holdingPenIds) // only reassign if still in a holding pen org
 
     if (error) {
       return { success: false, error: error.message }

@@ -22,7 +22,7 @@ I understand that this organisation reserves the right to refuse entry if they h
 
 This is a default waiver. Please review and update this text to reflect your facility's specific rules and any legal requirements applicable to your business.`;
 
-export type OnboardingStatus = 'complete' | 'incomplete' | 'unauthenticated' | 'customer';
+export type OnboardingStatus = 'complete' | 'incomplete' | 'unauthenticated' | 'customer' | 'lost_customer';
 
 /**
  * Check whether the currently authenticated user has completed onboarding.
@@ -75,6 +75,14 @@ export async function checkOnboardingStatus(): Promise<{
 
     // Regular user in a non-default org → booking customer, not a tenant admin
     if (user.role === 'user' && user.organization_id !== defaultOrgId) {
+      const unassignedOrgId = process.env.UNASSIGNED_ORGANIZATION_ID;
+
+      // User is in the sentinel "unassigned" org — they signed up at /sign-up by mistake.
+      // Show the wayfinding screen so they can find their org's booking page.
+      if (unassignedOrgId && user.organization_id === unassignedOrgId) {
+        return { status: 'lost_customer' };
+      }
+
       const { data: org } = await supabase
         .from('organizations')
         .select('slug')
