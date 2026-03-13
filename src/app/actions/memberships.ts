@@ -1105,8 +1105,8 @@ export async function getBookingMembershipPricingData(params: {
   try {
     const supabase = createSupabaseServerClient()
 
-    // Get visible memberships (and instance overrides if instanceId provided) in parallel
-    const [membershipsResult, pricesResult, instanceOverridesData] = await Promise.all([
+    // Get visible memberships, session price options (to detect free sessions), and instance overrides in parallel
+    const [membershipsResult, pricesResult, instanceOverridesData, sessionPriceOptsData] = await Promise.all([
       getVisibleMemberships(params.organizationId),
       getSessionMembershipPrices(params.sessionTemplateId),
       params.sessionInstanceId
@@ -1115,7 +1115,31 @@ export async function getBookingMembershipPricingData(params: {
             .select("membership_id, is_enabled, override_price")
             .eq("session_instance_id", params.sessionInstanceId)
         : Promise.resolve({ data: [] }),
+      supabase
+        .from("session_price_options")
+        .select("price_option_id, is_enabled")
+        .eq("session_template_id", params.sessionTemplateId),
     ])
+
+    // Detect if session is free: all session_price_options rows are explicitly disabled
+    const sessionPriceOptRows = (sessionPriceOptsData as { data: { price_option_id: string; is_enabled: boolean | null }[] | null }).data ?? []
+    const sessionIsFree = sessionPriceOptRows.length > 0 && sessionPriceOptRows.every(r => r.is_enabled === false)
+
+    // If session is free, return empty memberships immediately
+    if (sessionIsFree) {
+      return {
+        success: true,
+        data: {
+          memberships: [],
+          userMembershipId: null,
+          userMembershipDisabled: false,
+          userMembershipName: null,
+          memberPrice: 0,
+          monthlyMembershipPrice: null,
+          isActiveMember: false,
+        },
+      }
+    }
 
     if (!membershipsResult.success || !membershipsResult.data) {
       return { success: false, error: membershipsResult.error || "Failed to fetch memberships" }
