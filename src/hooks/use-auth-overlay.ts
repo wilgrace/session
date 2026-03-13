@@ -9,14 +9,15 @@ interface AuthOverlayStore {
   isOpen: boolean
   mode: AuthMode
   initialEmail?: string
+  contextMessage?: string
   onComplete?: () => void
   showProfileOverlay: boolean
   showWaiverOverlay: boolean
   pendingWaiver: Waiver | null
   organizationId?: string
 
-  openSignIn: (options?: { onComplete?: () => void; organizationId?: string }) => void
-  openSignUp: (options?: { initialEmail?: string; onComplete?: () => void; organizationId?: string }) => void
+  openSignIn: (options?: { onComplete?: () => void; organizationId?: string; initialEmail?: string }) => void
+  openSignUp: (options?: { initialEmail?: string; contextMessage?: string; onComplete?: () => void; organizationId?: string }) => void
   close: () => void
   setShowProfileOverlay: (show: boolean) => void
   setShowWaiverOverlay: (show: boolean, waiver?: Waiver | null) => void
@@ -27,6 +28,7 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
   isOpen: false,
   mode: null,
   initialEmail: undefined,
+  contextMessage: undefined,
   onComplete: undefined,
   showProfileOverlay: false,
   showWaiverOverlay: false,
@@ -36,7 +38,8 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
   openSignIn: (options) => set({
     isOpen: true,
     mode: 'sign-in',
-    initialEmail: undefined,
+    initialEmail: options?.initialEmail,
+    contextMessage: undefined,
     onComplete: options?.onComplete,
     organizationId: options?.organizationId,
   }),
@@ -45,6 +48,7 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
     isOpen: true,
     mode: 'sign-up',
     initialEmail: options?.initialEmail,
+    contextMessage: options?.contextMessage,
     onComplete: options?.onComplete,
     organizationId: options?.organizationId,
   }),
@@ -54,6 +58,7 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
       isOpen: false,
       mode: null,
       initialEmail: undefined,
+      contextMessage: undefined,
       onComplete: undefined,
       showProfileOverlay: false,
       showWaiverOverlay: false,
@@ -82,6 +87,7 @@ export const useAuthOverlay = create<AuthOverlayStore>((set, get) => ({
       isOpen: false,
       mode: null,
       initialEmail: undefined,
+      contextMessage: undefined,
       onComplete: undefined,
       showProfileOverlay: false,
       showWaiverOverlay: false,

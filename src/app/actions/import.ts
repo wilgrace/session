@@ -325,11 +325,11 @@ async function sendMigrationNotificationEmails(
         ${buildDetailRow("Date", formattedDate)}
         ${buildDetailRow("Time", formattedTime)}
       </table>
-      ${buildCtaButton(sessionUrl, "View your booking", org.button_color ?? "#6c47ff", org.button_text_color ?? "#ffffff")}
+      ${buildCtaButton(createAccountUrl, "Create your account", org.button_color ?? "#6c47ff", org.button_text_color ?? "#ffffff")}
       <p style="margin-top:20px;font-size:14px;color:#6b7280">
-        Don't have an account?
-        <a href="${createAccountUrl}" style="color:${org.button_color ?? "#6c47ff"}">Create one here</a>
-        to manage your bookings.
+        Create a free account to view and manage your bookings.
+        Already have an account?
+        <a href="${sessionUrl}" style="color:${org.button_color ?? "#6c47ff"}">View your booking</a>.
       </p>
     `
 

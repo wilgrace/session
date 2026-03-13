@@ -36,6 +36,7 @@ export interface EmailCheckResult {
   success: boolean
   exists: boolean
   isGuestAccount: boolean
+  isMigratedUser: boolean
   error?: string
 }
 
@@ -75,23 +76,29 @@ export async function checkEmailExists(
 
     if (error) {
       console.error("Error checking email:", error)
-      return { success: false, exists: false, isGuestAccount: false, error: error.message }
+      return { success: false, exists: false, isGuestAccount: false, isMigratedUser: false, error: error.message }
     }
 
     if (!user) {
-      return { success: true, exists: false, isGuestAccount: false }
+      return { success: true, exists: false, isGuestAccount: false, isMigratedUser: false }
+    }
+
+    // Migrated/imported users have null clerk_user_id — they need to sign up, not sign in
+    if (user.clerk_user_id === null) {
+      return { success: true, exists: true, isGuestAccount: false, isMigratedUser: true }
     }
 
     // Check if it's a guest account (clerk_user_id starts with "guest_")
     const isGuestAccount = user.clerk_user_id.startsWith("guest_")
 
-    return { success: true, exists: true, isGuestAccount }
+    return { success: true, exists: true, isGuestAccount, isMigratedUser: false }
   } catch (error) {
     console.error("Error in checkEmailExists:", error)
     return {
       success: false,
       exists: false,
       isGuestAccount: false,
+      isMigratedUser: false,
       error: error instanceof Error ? error.message : "Unknown error",
     }
   }
