@@ -131,10 +131,18 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           // Determine template-level enabled state for each option (used as inherited default)
           const sessionPoRows = sessionPoResult.success && sessionPoResult.data ? sessionPoResult.data : []
           const hasTemplateConfig = sessionPoRows.length > 0
-          // Template is free if it has been saved with no price option rows but org has active options
-          const templateIsFree = !hasTemplateConfig && activeOptions.length > 0
-          setIsTemplateFree(templateIsFree)
           const sessionPoMap = new Map(sessionPoRows.map(r => [r.priceOptionId, r]))
+
+          // Template is free when:
+          // - All active options have is_enabled=false rows (canonical signal, written by new FREE save)
+          // - No config rows at all but org has active options (legacy: old FREE save wrote empty array)
+          const allTemplateOptionsDisabled =
+            hasTemplateConfig &&
+            activeOptions.length > 0 &&
+            activeOptions.every(o => sessionPoMap.get(o.id)?.isEnabled === false)
+          const templateIsFree = allTemplateOptionsDisabled || (!hasTemplateConfig && activeOptions.length > 0)
+          setIsTemplateFree(templateIsFree)
+
           activeOptions.forEach(o => {
             const templateRow = sessionPoMap.get(o.id)
             const templateEnabled = hasTemplateConfig
@@ -146,12 +154,19 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           })
           setPoTemplateEnabled(poTemplateEnabledMap)
 
-          // Detect instance-level pricing type from existing instance overrides
-          const allInstanceOptionsDisabled = poRows.length > 0 && poRows.every(r => r.isEnabled === false)
+          // Detect instance-level pricing type.
+          // FREE only when ALL active options have explicit disabled rows at instance level
+          // (checks count parity, not just that existing rows are disabled).
+          // This prevents a partially-disabled-options state from incorrectly showing as FREE.
           const anyInstanceOptionEnabled = poRows.some(r => r.isEnabled === true)
+          const allInstanceOptionsDisabled =
+            activeOptions.length > 0 &&
+            activeOptions.every(o => poRows.some(r => r.priceOptionId === o.id && r.isEnabled === false))
           let detectedPricingType: 'free' | 'paid'
-          if (poRows.length > 0) {
-            detectedPricingType = allInstanceOptionsDisabled && !anyInstanceOptionEnabled ? 'free' : 'paid'
+          if (anyInstanceOptionEnabled) {
+            detectedPricingType = 'paid'
+          } else if (allInstanceOptionsDisabled) {
+            detectedPricingType = 'free'
           } else {
             detectedPricingType = templateIsFree ? 'free' : 'paid'
           }

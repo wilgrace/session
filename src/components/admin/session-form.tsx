@@ -404,12 +404,18 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
             setMembershipPrices(priceMap)
           }
 
-          // For existing templates, determine pricingType purely from saved rows.
-          // Has rows → Paid. No rows → Free (was deliberately saved as free).
-          const hasSavedRows =
-            (sessionPriceOptsResult.success && (sessionPriceOptsResult.data?.length ?? 0) > 0) ||
-            (membershipPricesResult.success && (membershipPricesResult.data?.length ?? 0) > 0)
-          setPricingType(hasSavedRows ? 'paid' : 'free')
+          // For existing templates, determine pricingType from saved rows.
+          // FREE is signalled by all active options having is_enabled=false rows (canonical signal).
+          // No rows at all → also FREE (legacy: was saved as free before this was changed).
+          // Any row with is_enabled=true, or membership rows → PAID.
+          const priceRows = sessionPriceOptsResult.success ? (sessionPriceOptsResult.data ?? []) : []
+          const membershipRows = membershipPricesResult.success ? (membershipPricesResult.data ?? []) : []
+          const allPriceOptionsDisabled =
+            priceRows.length > 0 &&
+            activeOptions.every(o => priceRows.some(r => r.priceOptionId === o.id && !r.isEnabled))
+          const hasPaidPriceConfig = priceRows.length > 0 && !allPriceOptionsDisabled
+          const hasPaidConfig = hasPaidPriceConfig || membershipRows.length > 0
+          setPricingType(hasPaidConfig ? 'paid' : 'free')
         } else {
           // New session: all enabled, no overrides
           const optEnabledMap: Record<string, boolean> = {}
@@ -714,7 +720,16 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         })
         await updateSessionPriceOptions(templateId, priceOptionSettings)
       } else {
-        await updateSessionPriceOptions(templateId, [])
+        // Explicitly disable all active price options to signal "free" to the booking flow.
+        // An empty array is indistinguishable from "never configured" (legacy templates), so
+        // we write is_enabled=false rows that resolvePriceOptions will see and return nothing.
+        const activePriceOpts = priceOptions.filter(o => o.isActive)
+        await updateSessionPriceOptions(templateId, activePriceOpts.map(o => ({
+          priceOptionId: o.id,
+          isEnabled: false,
+          overridePrice: null,
+          overrideSpaces: null,
+        })))
       }
 
       // Save per-session membership settings (enabled state + optional price override)
@@ -822,7 +837,13 @@ export function SessionForm({ open, onClose, template, initialTimeSlot, defaultS
         })
         await updateSessionPriceOptions(template!.id, priceOptionSettings)
       } else {
-        await updateSessionPriceOptions(template!.id, [])
+        const activePriceOpts = priceOptions.filter(o => o.isActive)
+        await updateSessionPriceOptions(template!.id, activePriceOpts.map(o => ({
+          priceOptionId: o.id,
+          isEnabled: false,
+          overridePrice: null,
+          overrideSpaces: null,
+        })))
       }
 
       // Save membership prices
