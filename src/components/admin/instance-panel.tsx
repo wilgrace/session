@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, AlertTriangle, ChevronDown, ChevronUp, Users } from "lucide-react"
 import { cancelSessionInstance, deleteSessionInstance } from "@/app/actions/session"
 import { getPriceOptions, getSessionPriceOptions, getInstanceOverrides, updateInstanceCapacity, updateInstancePriceOptions, updateInstanceMembershipOverrides } from "@/app/actions/price-options"
-import { getMemberships } from "@/app/actions/memberships"
+import { getMemberships, getSessionMembershipPrices } from "@/app/actions/memberships"
 import { useToast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import type { PriceOption } from "@/lib/db/schema"
@@ -99,11 +99,12 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
       setPoEditing({})
       setMemEditing({})
       try {
-        const [priceOptsResult, membershipsResult, overridesResult, sessionPoResult] = await Promise.all([
+        const [priceOptsResult, membershipsResult, overridesResult, sessionPoResult, sessionMemPricesResult] = await Promise.all([
           getPriceOptions(),
           getMemberships(),
           getInstanceOverrides(session!.id),
           session!.template?.id ? getSessionPriceOptions(session!.template.id) : Promise.resolve({ success: true, data: [] }),
+          session!.template?.id ? getSessionMembershipPrices(session!.template.id) : Promise.resolve({ success: true, data: [] }),
         ])
 
         const activeOptions = priceOptsResult.success && priceOptsResult.data
@@ -183,10 +184,18 @@ export function InstancePanel({ open, session, slug, onClose, onCancelled }: Ins
           setPoPrices(poPriceMap)
           setPoSpaces(poSpacesMap)
 
-          // Membership overrides — always track all memberships
+          // Membership overrides — initialize from template state, then apply instance overrides
           const memEnabledMap: Record<string, boolean> = {}
           const memPriceMap: Record<string, string> = {}
-          activeMemberships.forEach((m: Membership) => { memEnabledMap[m.id] = true })
+          // Build template-level membership enabled map (for inheritance)
+          const templateMemRows = sessionMemPricesResult.success && sessionMemPricesResult.data ? sessionMemPricesResult.data : []
+          const templateMemMap = new Map(templateMemRows.map((r: { membershipId: string; isEnabled: boolean | null }) => [r.membershipId, r]))
+          const hasTemplateMemConfig = templateMemRows.length > 0
+          activeMemberships.forEach((m: Membership) => {
+            const templateRow = templateMemMap.get(m.id) as { membershipId: string; isEnabled: boolean | null } | undefined
+            // If template has config, inherit its enabled state; otherwise default to enabled
+            memEnabledMap[m.id] = hasTemplateMemConfig ? (templateRow?.isEnabled ?? false) : true
+          })
           memRows.forEach(r => {
             memEnabledMap[r.membershipId] = r.isEnabled ?? true
             if (r.overridePrice != null) memPriceMap[r.membershipId] = (r.overridePrice / 100).toFixed(2)

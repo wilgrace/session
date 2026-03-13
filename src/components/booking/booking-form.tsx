@@ -118,9 +118,10 @@ export function BookingForm({
   const [pendingFreeSubmit, setPendingFreeSubmit] = useState(false)
   const [pendingFreeFormData, setPendingFreeFormData] = useState<CheckoutFormData | null>(null)
 
-  // TODO: use price options to determine if this is a paid session
-  // For now treat all sessions as potentially paid (non-edit mode)
-  const isPaidSession = !isEditMode
+  // A session is paid if it has any enabled price options or any available memberships
+  const hasPriceOptions = (resolvedPriceOptions?.length ?? 0) > 0
+  const hasMemberships = (memberships?.length ?? 0) > 0
+  const isPaidSession = !isEditMode && (hasPriceOptions || hasMemberships)
 
   // NOTE: All hooks must be called before any conditional returns
   // The BookingPanel return is moved below this useEffect to comply with React's rules of hooks
