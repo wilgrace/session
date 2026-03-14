@@ -103,9 +103,75 @@ function extractMetaContent(html: string, patterns: RegExp[]): string | undefine
   return undefined;
 }
 
-/** Find the src (or data-src for lazy images) of the first large-looking image. */
-function findHeroImage(html: string, baseUrl: string): string | undefined {
-  // Try common hero container patterns first
+const BG_URL_RE = /background(?:-image)?\s*:\s*url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i;
+const HERO_KEYWORDS_RE = /(?:hero|banner|cover|jumbotron|slider|intro|masthead|splash)/i;
+const WIDE_TAGS_RE = /^(?:section|header|main|article|figure)$/i;
+
+/**
+ * Extract background-image URLs from CSS rules whose selectors mention hero/section keywords.
+ * Also used for the "next section" — broad selector match covers first + second sections.
+ */
+function extractBgImageFromCssRules(css: string, baseUrl: string): string | undefined {
+  const ruleRe = /([^{}]+)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = ruleRe.exec(css)) !== null) {
+    const selector = m[1];
+    const body = m[2];
+    if (!HERO_KEYWORDS_RE.test(selector) && !/\bsection\b|\bheader\b/.test(selector)) continue;
+    const urlMatch = body.match(BG_URL_RE);
+    if (urlMatch?.[1] && !urlMatch[1].startsWith('data:')) return resolveUrl(urlMatch[1], baseUrl);
+  }
+  return undefined;
+}
+
+/**
+ * Find a background-image URL from hero/section containers.
+ * Priority:
+ *   1. Inline style on section/header/article or any element with a hero keyword in class/id,
+ *      where the element is inherently wide (block tag) or has explicit width >= 400px.
+ *   2. <style> block CSS rules targeting hero/section selectors.
+ */
+function findHeroBgImage(html: string, baseUrl: string): string | undefined {
+  // 1. Inline style on wide/hero elements
+  const elementRe = /<(section|header|main|article|div|figure)\b([^>]*)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = elementRe.exec(html)) !== null) {
+    const tag = m[1];
+    const attrs = m[2];
+    const className = attrs.match(/class=["']([^"']+)["']/i)?.[1] ?? '';
+    const idName = attrs.match(/id=["']([^"']+)["']/i)?.[1] ?? '';
+    const style = attrs.match(/style=["']([^"']+)["']/i)?.[1] ?? '';
+
+    const styleWidth = parseInt(style.match(/width\s*:\s*(\d+)px/i)?.[1] ?? '0');
+    const attrWidth = parseInt(attrs.match(/\bwidth=["']?(\d+)/i)?.[1] ?? '0');
+    const explicitWidth = styleWidth || attrWidth;
+
+    const isWide =
+      WIDE_TAGS_RE.test(tag) ||
+      HERO_KEYWORDS_RE.test(className) ||
+      HERO_KEYWORDS_RE.test(idName) ||
+      explicitWidth >= 400;
+    if (!isWide) continue;
+
+    const urlMatch = style.match(BG_URL_RE);
+    if (urlMatch?.[1] && !urlMatch[1].startsWith('data:')) {
+      return resolveUrl(urlMatch[1], baseUrl);
+    }
+  }
+
+  // 2. <style> blocks targeting hero/section selectors
+  const styleBlockRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  while ((m = styleBlockRe.exec(html)) !== null) {
+    const url = extractBgImageFromCssRules(m[1], baseUrl);
+    if (url) return url;
+  }
+
+  return undefined;
+}
+
+/** Find the src (or data-src for lazy images) of the first large img tag. */
+function findHeroImgTag(html: string, baseUrl: string): string | undefined {
+  // Images nested in hero containers
   const heroPatterns = [
     /class="[^"]*(?:hero|banner|cover|jumbotron|header-image|wp-block-cover)[^"]*"[^>]*>(?:(?!<\/section|<\/div|<\/header).)*?<img[^>]+(?:src|data-src)=["']([^"']+)["']/is,
     /id="[^"]*(?:hero|banner|header)[^"]*"[^>]*>(?:(?!<\/section|<\/div).)*?<img[^>]+(?:src|data-src)=["']([^"']+)["']/is,
@@ -116,17 +182,14 @@ function findHeroImage(html: string, baseUrl: string): string | undefined {
     if (url && !url.startsWith('data:')) return resolveUrl(url, baseUrl);
   }
 
-  // Fall back to first img with explicit large dimensions or a wide srcset
+  // Any img with explicit width >= 600 or height >= 400
   const imgRe = /<img([^>]+)>/gi;
   let m: RegExpExecArray | null;
   while ((m = imgRe.exec(html)) !== null) {
     const attrs = m[1];
-    const widthMatch = attrs.match(/\bwidth=["']?(\d+)/i);
-    const heightMatch = attrs.match(/\bheight=["']?(\d+)/i);
-    const w = widthMatch ? parseInt(widthMatch[1]) : 0;
-    const h = heightMatch ? parseInt(heightMatch[1]) : 0;
+    const w = parseInt(attrs.match(/\bwidth=["']?(\d+)/i)?.[1] ?? '0');
+    const h = parseInt(attrs.match(/\bheight=["']?(\d+)/i)?.[1] ?? '0');
     if (w >= 600 || h >= 400) {
-      // Prefer data-src (lazy-loaded) then src
       const src = attrs.match(/\bdata-src=["']([^"']+)["']/i)?.[1]
         ?? attrs.match(/\bsrc=["']([^"']+)["']/i)?.[1];
       if (src && !src.startsWith('data:') && /\.(jpe?g|png|webp|gif)/i.test(src)) {
@@ -137,7 +200,62 @@ function findHeroImage(html: string, baseUrl: string): string | undefined {
   return undefined;
 }
 
-/** Extract the first non-boring color from inline <style> blocks. */
+/**
+ * Extract background-color from CSS rules.
+ * Priority: selector containing "primary" → any button/anchor/link selector.
+ */
+function extractButtonColorFromCss(css: string): string | undefined {
+  const bgColorRe = /background(?:-color)?\s*:\s*(#[0-9a-f]{3,8})\b/i;
+  let primaryColor: string | undefined;
+  let buttonColor: string | undefined;
+
+  const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = ruleRe.exec(css)) !== null) {
+    const selector = m[1];
+    const body = m[2];
+    const bgMatch = body.match(bgColorRe);
+    if (!bgMatch) continue;
+    const hex = normalizeHex(bgMatch[1]);
+    if (!hex || isBoringColor(hex)) continue;
+
+    if (!primaryColor && /primary/i.test(selector)) { primaryColor = hex; continue; }
+    if (!buttonColor && /\b(?:button|\.btn\b|a\b)/i.test(selector)) buttonColor = hex;
+  }
+  return primaryColor ?? buttonColor;
+}
+
+/**
+ * Find background-color from inline styles on HTML elements.
+ * Priority: element with "primary" in class → any <button> or <a>.
+ */
+function findInlineButtonColor(html: string): string | undefined {
+  const bgColorRe = /background(?:-color)?\s*:\s*(#[0-9a-f]{3,8})\b/i;
+
+  // Elements with "primary" in class (style attr in either order)
+  const primaryPatterns = [
+    /<[^>]+class=["'][^"']*primary[^"']*["'][^>]+style=["']([^"']+)["'][^>]*>/gi,
+    /<[^>]+style=["']([^"']+)["'][^>]+class=["'][^"']*primary[^"']*["'][^>]*>/gi,
+  ];
+  for (const re of primaryPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const hex = normalizeHex(m[1].match(bgColorRe)?.[1] ?? '');
+      if (hex && !isBoringColor(hex)) return hex;
+    }
+  }
+
+  // Any <button> or <a> with inline background-color
+  const btnRe = /<(?:button|a)\b[^>]+style=["']([^"']+)["'][^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = btnRe.exec(html)) !== null) {
+    const hex = normalizeHex(m[1].match(bgColorRe)?.[1] ?? '');
+    if (hex && !isBoringColor(hex)) return hex;
+  }
+  return undefined;
+}
+
+/** Extract the first non-boring CSS-variable color from inline <style> blocks. */
 function extractInlineStyleColor(html: string): string | undefined {
   const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
   let m: RegExpExecArray | null;
@@ -148,8 +266,19 @@ function extractInlineStyleColor(html: string): string | undefined {
   return undefined;
 }
 
-/** Fetch up to 100 KB of a stylesheet and look for brand colors. */
-async function fetchStylesheetColor(cssUrl: string): Promise<string | undefined> {
+/** Extract the first button/primary color from inline <style> blocks. */
+function extractInlineButtonColor(html: string): string | undefined {
+  const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = styleRe.exec(html)) !== null) {
+    const color = extractButtonColorFromCss(m[1]);
+    if (color) return color;
+  }
+  return undefined;
+}
+
+/** Fetch up to 100 KB of a stylesheet; try CSS variables then button colors. */
+async function fetchStylesheetColors(cssUrl: string): Promise<{ cssVar?: string; button?: string }> {
   try {
     const ctrl = new AbortController();
     setTimeout(() => ctrl.abort(), 3000);
@@ -157,7 +286,7 @@ async function fetchStylesheetColor(cssUrl: string): Promise<string | undefined>
       signal: ctrl.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BookASession/1.0)' },
     });
-    if (!res.ok || !res.body) return undefined;
+    if (!res.ok || !res.body) return {};
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -171,9 +300,9 @@ async function fetchStylesheetColor(cssUrl: string): Promise<string | undefined>
       bytes += value.length;
       if (bytes >= MAX) { reader.cancel(); break; }
     }
-    return extractColorFromCss(css);
+    return { cssVar: extractColorFromCss(css), button: extractButtonColorFromCss(css) };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -265,12 +394,13 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Header / session image ──
-  // 1. og:image
+  // Priority: background-image on hero/section elements → og:image → large <img> tag
+  const heroBgSrc = findHeroBgImage(html, pageUrl);
   const ogImage = extractMetaContent(html, [
     /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
   ]);
-  const heroSrc = ogImage ?? findHeroImage(html, pageUrl);
+  const heroSrc = heroBgSrc ?? ogImage ?? findHeroImgTag(html, pageUrl);
   if (heroSrc) {
     const uploaded = await proxyUpload(heroSrc, userId, 'hero', supabase);
     if (uploaded) {
@@ -280,6 +410,19 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Brand color ──
+  // Fetch the first non-font stylesheet once so we can try both CSS vars and button colors.
+  let sheetColors: { cssVar?: string; button?: string } = {};
+  const cssHref = extractMetaContent(html, [
+    /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/i,
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']stylesheet["']/i,
+  ]);
+  if (cssHref) {
+    const cssUrl = resolveUrl(cssHref, pageUrl);
+    if (!/fonts\.googleapis\.com/.test(cssUrl)) {
+      sheetColors = await fetchStylesheetColors(cssUrl);
+    }
+  }
+
   // 1. theme-color meta
   const themeColor = extractMetaContent(html, [
     /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i,
@@ -289,26 +432,16 @@ export async function GET(req: NextRequest) {
     const hex = normalizeHex(themeColor.trim());
     if (hex && !isBoringColor(hex)) data.brandColor = hex;
   }
-
-  // 2. Inline <style> blocks
-  if (!data.brandColor) {
-    data.brandColor = extractInlineStyleColor(html);
-  }
-
-  // 3. First linked stylesheet
-  if (!data.brandColor) {
-    const cssHref = extractMetaContent(html, [
-      /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/i,
-      /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']stylesheet["']/i,
-    ]);
-    if (cssHref) {
-      const cssUrl = resolveUrl(cssHref, pageUrl);
-      // Skip Google Fonts or other font-only sheets
-      if (!/fonts\.googleapis\.com/.test(cssUrl)) {
-        data.brandColor = await fetchStylesheetColor(cssUrl);
-      }
-    }
-  }
+  // 2. CSS variables in inline <style> blocks
+  if (!data.brandColor) data.brandColor = extractInlineStyleColor(html);
+  // 3. CSS variables in linked stylesheet
+  if (!data.brandColor) data.brandColor = sheetColors.cssVar;
+  // 4. Button/primary background-color in inline <style> blocks
+  if (!data.brandColor) data.brandColor = extractInlineButtonColor(html);
+  // 5. Button/primary background-color in linked stylesheet
+  if (!data.brandColor) data.brandColor = sheetColors.button;
+  // 6. Inline background-color on primary/button/anchor elements in the HTML
+  if (!data.brandColor) data.brandColor = findInlineButtonColor(html);
 
   const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
   return NextResponse.json({ success: true, data: clean });
