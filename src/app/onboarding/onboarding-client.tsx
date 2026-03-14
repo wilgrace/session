@@ -90,12 +90,6 @@ export function OnboardingClient() {
     if (homepageUrl && !isValidUrl(homepageUrl)) {
       return 'Homepage must be a valid URL (e.g. https://example.com).';
     }
-    if (instagramUrl && !isValidUrl(instagramUrl)) {
-      return 'Instagram URL must be a valid URL.';
-    }
-    if (facebookUrl && !isValidUrl(facebookUrl)) {
-      return 'Facebook URL must be a valid URL.';
-    }
     return null;
   }
 
@@ -119,6 +113,8 @@ export function OnboardingClient() {
           if (d.faviconUrl && !faviconUrl)         setFaviconUrl(d.faviconUrl);
           if (d.headerImageUrl && !headerImageUrl) setHeaderImageUrl(d.headerImageUrl);
           if (d.defaultSessionImageUrl && !defaultSessionImageUrl) setDefaultSessionImageUrl(d.defaultSessionImageUrl);
+          if (d.instagramUrl && !instagramUrl) setInstagramUrl(d.instagramUrl);
+          if (d.facebookUrl && !facebookUrl) setFacebookUrl(d.facebookUrl);
           if (d.brandColor) {
             if (!brandColor || brandColor === '#6c47ff') setBrandColor(d.brandColor);
             // Auto-derive text colour from luminance
@@ -273,36 +269,6 @@ export function OnboardingClient() {
                   </p>
                 </div>
 
-                {/* Social links */}
-                <div className="space-y-2">
-                  <Label>Social links <span className="text-gray-400">(optional)</span></Label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <InstagramIcon />
-                        <span className="text-sm text-gray-600">Instagram</span>
-                      </div>
-                      <Input
-                        type="url"
-                        value={instagramUrl}
-                        onChange={(e) => setInstagramUrl(e.target.value)}
-                        placeholder="https://instagram.com/..."
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <FacebookIcon />
-                        <span className="text-sm text-gray-600">Facebook</span>
-                      </div>
-                      <Input
-                        type="url"
-                        value={facebookUrl}
-                        onChange={(e) => setFacebookUrl(e.target.value)}
-                        placeholder="https://facebook.com/..."
-                      />
-                    </div>
-                  </div>
-                </div>
               </CardContent>
 
               <CardFooter className="flex items-center justify-between pt-4 border-t">
@@ -357,6 +323,37 @@ export function OnboardingClient() {
                     placeholder="Tell customers a bit about what you offer"
                     rows={3}
                   />
+                </div>
+
+                {/* Social links */}
+                <div className="space-y-2">
+                  <Label>Social links <span className="text-gray-400">(optional)</span></Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <InstagramIcon />
+                        <span className="text-sm text-gray-600">Instagram</span>
+                      </div>
+                      <Input
+                        type="url"
+                        value={instagramUrl}
+                        onChange={(e) => setInstagramUrl(e.target.value)}
+                        placeholder="https://instagram.com/..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FacebookIcon />
+                        <span className="text-sm text-gray-600">Facebook</span>
+                      </div>
+                      <Input
+                        type="url"
+                        value={facebookUrl}
+                        onChange={(e) => setFacebookUrl(e.target.value)}
+                        placeholder="https://facebook.com/..."
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Images */}
