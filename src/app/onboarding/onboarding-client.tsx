@@ -20,6 +20,7 @@ export function OnboardingClient() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
   const [submitting, setSubmitting] = useState(false);
+  const [isScraping, setIsScraping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Step 1 fields
@@ -98,13 +99,43 @@ export function OnboardingClient() {
     return null;
   }
 
-  function handleNextStep() {
+  async function handleNextStep() {
     const validationError = validateStep1();
     if (validationError) {
       setError(validationError);
       return;
     }
     setError(null);
+
+    if (homepageUrl.trim()) {
+      setIsScraping(true);
+      try {
+        const res = await fetch(`/api/scrape-brand?url=${encodeURIComponent(homepageUrl.trim())}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          const d = json.data;
+          if (d.description && !description)       setDescription(d.description);
+          if (d.logoUrl && !logoUrl)               setLogoUrl(d.logoUrl);
+          if (d.faviconUrl && !faviconUrl)         setFaviconUrl(d.faviconUrl);
+          if (d.headerImageUrl && !headerImageUrl) setHeaderImageUrl(d.headerImageUrl);
+          if (d.defaultSessionImageUrl && !defaultSessionImageUrl) setDefaultSessionImageUrl(d.defaultSessionImageUrl);
+          if (d.brandColor) {
+            if (!brandColor || brandColor === '#6c47ff') setBrandColor(d.brandColor);
+            // Auto-derive text colour from luminance
+            const hex = d.brandColor.replace('#', '');
+            const r = parseInt(hex.slice(0, 2), 16) / 255;
+            const g = parseInt(hex.slice(2, 4), 16) / 255;
+            const b = parseInt(hex.slice(4, 6), 16) / 255;
+            const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if (!brandTextColor || brandTextColor === '#ffffff') {
+              setBrandTextColor(lum > 0.5 ? '#1a1a1a' : '#ffffff');
+            }
+          }
+        }
+      } catch { /* non-blocking — proceed regardless */ }
+      setIsScraping(false);
+    }
+
     setStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -227,18 +258,6 @@ export function OnboardingClient() {
                   </p>
                 </div>
 
-                {/* Description */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="description">Description <span className="text-gray-400">(optional)</span></Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Tell customers a bit about what you offer"
-                    rows={3}
-                  />
-                </div>
-
                 {/* Homepage */}
                 <div className="space-y-1.5">
                   <Label htmlFor="homepageUrl">Homepage <span className="text-gray-400">(optional)</span></Label>
@@ -293,9 +312,18 @@ export function OnboardingClient() {
                 >
                   Back to sign up
                 </a>
-                <Button onClick={handleNextStep}>
-                  Continue
-                  <ChevronRight className="ml-1.5 h-4 w-4" />
+                <Button onClick={handleNextStep} disabled={isScraping}>
+                  {isScraping ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      Fetching brand…
+                    </>
+                  ) : (
+                    <>
+                      Continue
+                      <ChevronRight className="ml-1.5 h-4 w-4" />
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </>
@@ -318,6 +346,18 @@ export function OnboardingClient() {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
+
+                {/* Description */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="description">Description <span className="text-gray-400">(optional)</span></Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Tell customers a bit about what you offer"
+                    rows={3}
+                  />
+                </div>
 
                 {/* Images */}
                 <div className="grid gap-6 sm:grid-cols-2">

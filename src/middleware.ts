@@ -22,6 +22,7 @@ const BYPASS_PATHS = [
   '/terms-of-service',
   '/privacy-policy',
   '/.well-known',
+  '/unassigned', // sentinel org slug — must never be routable as a booking page
 ];
 
 // Static file extensions to bypass
