@@ -14,11 +14,13 @@
 -- either lost customers (wayfinded to the correct org) or new org admins
 -- (continue through the onboarding wizard).
 
+-- 'unassigned' is a reserved internal slug — it has no sessions and is never shown
+-- to real users. It is also added to BYPASS_PATHS in middleware to prevent routing.
 INSERT INTO organizations (id, name, slug, created_at, updated_at)
 VALUES (
   'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   'Unassigned',
-  NULL,
+  'unassigned',
   now(),
   now()
 )
