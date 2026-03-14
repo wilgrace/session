@@ -84,6 +84,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['metascraper', 'metascraper-logo', 'metascraper-image', '@metascraper/helpers', 're2'],
   eslint: {
     ignoreDuringBuilds: true,
   },
